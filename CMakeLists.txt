@@ -376,7 +376,9 @@ if(WIN32 AND CMAKE_BUILD_TYPE STREQUAL "Release")
             "Vulkan loader not locally detected; using Windows/system Vulkan loader at runtime")
     endif()
 
-    add_custom_command(TARGET fable_2 POST_BUILD
+    # This target runs even when fable_2.exe is up to date: Vulkan may have
+    # been freshly rebuilt without any game source changes.
+    add_custom_target(fable_2_renderer_staging
         COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/stage_launcher_renderers.py"
             ${FABLE2_RENDERER_STAGE_ARGS}
@@ -391,6 +393,7 @@ if(WIN32 AND CMAKE_BUILD_TYPE STREQUAL "Release")
             "$<TARGET_FILE_DIR:fable_2>/fable2-uncapped.cmd"
         COMMENT "Staging validated, backend-specific Windows runtime/plugin pairs"
         VERBATIM)
+    add_dependencies(fable_2 fable_2_renderer_staging)
 endif()
 
 # --- Vulkan renderer: Stage 1 smoke test ----------------------------------
