@@ -49,7 +49,15 @@ def build_identity(source, build, backend, configuration, runtime, plugin):
     version = subprocess.check_output(
         [compiler, "--version"], text=True, errors="replace"
     ).splitlines()[0].strip()
+    # Capture any applied working-tree patch (including local SDK changes),
+    # rather than relying on a HEAD SHA that doesn't change after git apply.
+    diff = subprocess.check_output(
+        ["git", "-C", str(source), "diff", "--binary", "HEAD"]
+    )
     return {
+        "worktree_diff_sha256": hashlib.sha256(diff).hexdigest(),
+        "sdk_use_d3d12": values.get("REXGLUE_USE_D3D12", "").upper(),
+        "sdk_use_vulkan": values.get("REXGLUE_USE_VULKAN", "").upper(),
         "schema": 1,
         "backend": backend,
         "configuration": configuration,
