@@ -9,7 +9,8 @@ from pathlib import Path
 import shutil
 from renderer_provenance import digest
 
-REQUIRED = ("sdk_commit", "patch_sha256", "compiler", "compiler_version",
+REQUIRED = ("sdk_commit", "patch_sha256", "worktree_diff_sha256",
+            "compiler", "compiler_version",
             "configuration", "runtime_sha256", "plugin_sha256", "backend")
 
 
@@ -23,6 +24,10 @@ def checked_source(root, backend):
             raise ValueError(f"{meta_path} missing {field}")
     if meta["backend"] != backend or meta["configuration"] != "Release":
         raise ValueError(f"{backend}: wrong backend/configuration in {meta_path}")
+    if meta.get("sdk_use_d3d12") not in ("ON", "TRUE", "1") or (
+        backend == "vulkan" and meta.get("sdk_use_vulkan") not in ("ON", "TRUE", "1")
+    ):
+        raise ValueError(f"{backend}: SDK was not built with the required renderer")
     runtime, plugin = (root / "bin" / name for name in
                        ("rexruntime.dll", "rexgpu-xenos.dll"))
     for path, field in ((runtime, "runtime_sha256"), (plugin, "plugin_sha256")):
@@ -65,7 +70,8 @@ def main():
         vulkan_manifest = args.vulkan_sdk / "renderer-sdk-provenance.json"
         if vulkan_manifest.is_file():
             vulkan, vruntime, vplugin = checked_source(args.vulkan_sdk, "vulkan")
-            for key in ("sdk_commit", "patch_sha256", "compiler", "compiler_version"):
+            for key in ("sdk_commit", "patch_sha256", "worktree_diff_sha256",
+                        "compiler", "compiler_version"):
                 if vulkan[key] != d3d12[key]:
                     raise ValueError(f"Vulkan and D3D12 differ in {key}; rebuild "
                                      "Vulkan with tools/build_sdk_vulkan.cmd")
