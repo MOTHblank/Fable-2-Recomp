@@ -30,7 +30,7 @@ try {
     if ($pair.backend -ne $Backend -or $pair.configuration -ne "Release") {
         throw "Incorrect renderer backend/configuration in $manifestPath"
     }
-    foreach ($field in @("sdk_commit", "patch_sha256", "compiler", "compiler_version")) {
+    foreach ($field in @("sdk_commit", "patch_sha256", "worktree_diff_sha256", "compiler", "compiler_version")) {
         if (-not $pair.$field -or $pair.$field -ne $base.$field) {
             throw "Incompatible SDK $field for $Backend. Rebuild both SDK renderer variants."
         }
@@ -80,6 +80,15 @@ try {
     $process = Start-Process -FilePath (Join-Path $session "fable_2.exe") -WorkingDirectory $session -ArgumentList $args -Wait -PassThru
     $code = $process.ExitCode
 
+    # Preserve newly created user config next to the normal game executable.
+    foreach ($name in @("fable_2.toml", "fable2_config.toml")) {
+        $source = Join-Path $session $name
+        $destination = Join-Path $root $name
+        if ((Test-Path -LiteralPath $source) -and
+            -not (Test-Path -LiteralPath $destination)) {
+            Copy-Item -LiteralPath $source -Destination $destination
+        }
+    }
     # Logs written directly beside the exe are copied out before cleanup.
     foreach ($name in @("fable2_func_trace.log", "fable2_func_summary.log",
                          "fps_probe.log", "fable2_state_probe.log")) {
@@ -96,12 +105,20 @@ try {
     if ($session -and (Test-Path -LiteralPath $session)) {
         # Remove the *junctions*, not their shared contents. rmdir without /s
         # on a Windows junction unlinks it safely; only then delete the tree.
+        $unremovedJunction = $false
         foreach ($folder in @("saves", "cache", "logs")) {
             $junction = Join-Path $session $folder
             if (Test-Path -LiteralPath $junction) {
                 & cmd.exe /d /c "rmdir `"$junction`"" 2>$null | Out-Null
+                if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $junction)) {
+                    $unremovedJunction = $true
+                }
             }
         }
-        Remove-Item -LiteralPath $session -Recurse -Force -ErrorAction SilentlyContinue
+        if ($unremovedJunction) {
+            [Console]::Error.WriteLine("Could not unlink session junctions; preserving session folder: $session")
+        } else {
+            Remove-Item -LiteralPath $session -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 }
