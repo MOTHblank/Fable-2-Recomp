@@ -177,6 +177,12 @@ movement since the previous poll is converted into stick deflection, so you
 | `--mouse_look <bool>` | Enable/disable mouse look (default `true`) |
 | `--mouse_look_scale <n>` | Sensitivity: right-stick units per pixel of mouse movement (default `256`; larger = more sensitive) |
 
+The mouse always uses the game's native right-stick camera handling.
+The retired `direct_mouse_look` and `mouse_look_legacy_orbit` modes and
+related orbit tuning keys are not supported; remove them from older config
+files. Use `mouse_look` and `mouse_look_scale` instead. Camera telemetry
+(`mouse_look_camera_diag` / `mouse_look_camera_dump`) remains available.
+
 The defaults come from `[input] mouse_look` / `[input] mouse_look_scale` in
 `fable2_config.toml` (edit there to change them permanently), the command
 line overrides per launch, and both cvars are hot-reloadable from the in-game
@@ -324,6 +330,15 @@ rate. To remove the feature: delete the `target_precompile_headers` block in
 CMakeLists.txt + `src/core/fable2_func_trace.h` and rebuild.
 
 
+
+## Allocator watcher (opt-in diagnostic)
+
+The guest-allocator table watcher used to investigate main-menu startup races
+is **not included by default** in Debug or Release builds. To compile it in
+for a diagnostic build, configure CMake with `-DFABLE2_ALLOC_WATCH=ON`.
+Only enabled builds start its background polling thread; it accepts a stop
+request and joins at shutdown, before guest memory is destroyed. Do not enable
+this for ordinary gameplay or performance measurements.
 
 ## Remote control (automated input channel)
 
