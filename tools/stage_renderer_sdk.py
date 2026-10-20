@@ -7,11 +7,9 @@ OFFICIAL_SDK/bin/rexglue.exe with its original runtime, not OUTPUT/bin/rexglue.e
 Only SDK files are copied; game dumps and saves are never packaged.
 """
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import shutil
-import subprocess
 
 
 def main():
@@ -50,15 +48,15 @@ def main():
             shutil.copy2(native / name, output / "bin" / name)
     for name in ("rex_app.cpp", "windowed_app_main_sdl.cpp"):
         shutil.copy2(source / "src/ui" / name, output / "share/rexglue" / name)
-    revision = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
-    provenance = {
-        "configuration": args.configuration,
-        "sdk_commit": revision,
-        "codegen_tool": str(official / "bin/rexglue.exe"),
-        "note": "Native headers, integration sources and DLLs must stay matched. Official tool uses its own runtime.",
-        "runtime_sha256": hashlib.sha256((native / f"{runtime}.dll").read_bytes()).hexdigest(),
-        "plugin_sha256": hashlib.sha256((native / f"{plugin}.dll").read_bytes()).hexdigest(),
-    }
+    # Record the same source, patch fingerprint and compiler identity as
+    # the Vulkan builder, so launch-time selection can reject stale pairs.
+    from renderer_provenance import build_identity
+    provenance = build_identity(
+        source, build, "d3d12", args.configuration,
+        native / f"{runtime}.dll", native / f"{plugin}.dll"
+    )
+    provenance["codegen_tool"] = str(official / "bin/rexglue.exe")
+    provenance["note"] = "Native SDK headers and runtime/plugin must match; codegen uses the official tool."
     (output / "renderer-sdk-provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
     print(f"Matched native SDK staged at {output}")
     print(f"Configure host with -DFABLE2_CODEGEN_TOOL={official / 'bin/rexglue.exe'}")
