@@ -1,18 +1,8 @@
-// fable_2 - Direct mouse-to-camera look (shared host/guest state)
+// fable_2 - Camera diagnostic guest-memory helpers.
 //
-// Separates the mouse from the keyboard->gamepad mapping. Instead of writing
-// mouse movement into the synthetic pad's right stick (which the game then
-// integrates at a fixed stick rate), the host input driver accumulates the raw
-// cursor displacement here (src/input/keyboard_gamepad.h) and a mid-asm hook in
-// the active camera's per-frame update (fable2_hook_direct_mouse_look in
-// src/core/fable2_hooks.cpp) drains it once per frame and applies it directly
-// to the camera orientation. The result is a desktop-FPS style "move the mouse
-// that far, turn the camera that far" feel with no rate cap.
-//
-// Threading: the input driver (host/SDK input poll) only ever ADDS to the
-// accumulators; the guest camera hook only ever EXCHANGES them to zero. A delta
-// can be split across two consecutive drains by a poll that lands between them,
-// which is sub-perceptual and self-corrects.
+// Mouse input uses the native right-stick pipeline in keyboard_gamepad.h.
+// The camera hook uses these helpers only for opt-in field diagnostics.
+// Older delta/orbit helpers remain for research, but are not active inputs.
 #pragma once
 
 #include <cmath>
