@@ -59,3 +59,11 @@ add_compile_options($<$<CONFIG:RELEASE>:-g>)
 add_link_options(-Xlinker /DEBUG)
 
 add_subdirectory(${REXGLUE_SDK_SOURCE} "${CMAKE_BINARY_DIR}/sdk")
+
+# Expensive GPU readbacks and TEMPDIAG rendering telemetry are available only
+# in explicitly opted-in Debug configurations. Release never compiles them.
+option(FABLE2_VULKAN_DIAGNOSTICS "Enable blocking Vulkan diagnostics in Debug builds" OFF)
+if(FABLE2_VULKAN_DIAGNOSTICS)
+    target_compile_definitions(rexgpu-xenos PRIVATE "$<$<CONFIG:Debug>:FABLE2_VULKAN_DIAGNOSTICS=1>")
+    target_compile_definitions(rexruntime PRIVATE "$<$<CONFIG:Debug>:FABLE2_VULKAN_DIAGNOSTICS=1>")
+endif()
