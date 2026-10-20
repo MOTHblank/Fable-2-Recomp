@@ -107,6 +107,23 @@ def main():
                  f"Restore the base with: git -C {source} checkout {SDK_PIN}")
         print(f"SDK revision {head} already carries all runtime fixes (baked in).")
 
+    # Apply the pipeline warmup follow-up to both the clean source pin and
+    # fork revisions with the original runtime fixes already baked in.
+    warmup_name = "rexglue-sdk-pipeline-warmup.patch"
+    warmup_patch = patch_directory / warmup_name
+    if not warmup_patch.is_file():
+        fail(f"SDK patch file is missing: {warmup_patch}")
+    warmup_state = patch_state(source, warmup_patch)
+    if warmup_state == "clean":
+        git(source, "apply", str(warmup_patch))
+        print(f"Applied: {warmup_name}")
+    elif warmup_state == "applied":
+        print(f"Already applied: {warmup_name}")
+    else:
+        detail = git(source, "apply", "--check", str(warmup_patch),
+                     check=False).stderr.strip()
+        fail(f"SDK patch {warmup_name} conflicts with local edits:\\n{detail}")
+
     if not args.skip_dependencies:
         # libmspack is either a submodule gitlink (base pin and older fork
         # commits) or plain vendored files (newer fork commits). Only the
