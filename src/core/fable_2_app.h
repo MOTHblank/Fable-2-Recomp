@@ -26,7 +26,9 @@
 #include <windows.h>
 #endif
 
+#ifdef FABLE2_ALLOC_WATCH
 #include "alloc_watch.h"
+#endif
 #include "dir_manifest_heal.h"
 #include "fable2_address_scan.h"
 #include "fable2_config.h"
@@ -73,6 +75,9 @@ rex::ui::Presenter* GetWindowPresenter(rex::ui::Window* w) {
 }  // namespace
 
 class Fable2App : public rex::ReXApp {
+#ifdef FABLE2_ALLOC_WATCH
+  std::jthread alloc_watch_thread_;
+#endif
  public:
   using rex::ReXApp::ReXApp;
 
@@ -184,6 +189,7 @@ class Fable2App : public rex::ReXApp {
     // plugin); read the last snapshot and expose it as FrameStats so the
     // overlay's "Guest: X FPS (Y ms)" line works on every runtime build.
 
+    // Optional allocator investigation: built only with -DFABLE2_ALLOC_WATCH=ON.
     // Background monitor for the table-zeroing / init-ordering bug. Runs on a
     // SEPARATE OS thread with hardcoded stable addresses (no recompiled probe
     // dependency), so it does not perturb the recompiled hot path that the
@@ -191,7 +197,8 @@ class Fable2App : public rex::ReXApp {
     // and distinguishes:
     //   (A) table valid then zeroed  -> "HEAD WENT NULL" after "FIRST VALID"
     //   (B) never valid (consumer first) -> only "null" ever, no "FIRST VALID"
-    std::thread([]() {
+#ifdef FABLE2_ALLOC_WATCH
+    alloc_watch_thread_ = std::jthread([](std::stop_token stop) {
       using namespace fable2::allocwatch;
       const uintptr_t base = kGuestBase;  // 0x100000000, stable
       auto t0 = std::chrono::steady_clock::now();
@@ -251,7 +258,7 @@ class Fable2App : public rex::ReXApp {
       bool first_valid = false;
       bool ever_valid = false;
       int null_samples = 0;
-      while (true) {
+      while (!stop.stop_requested()) {
         uint32_t tbl, flag, head;
         if (!safe_sample(tbl, flag, head)) {
           std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -282,7 +289,8 @@ class Fable2App : public rex::ReXApp {
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
       }
-    }).detach();
+    });
+#endif  // FABLE2_ALLOC_WATCH
 
     SetGuestFrameStats([]() {
       rex::ui::FrameStats stats;
@@ -376,14 +384,17 @@ class Fable2App : public rex::ReXApp {
 #endif  // FABLE2_REMOTE_CONTROL
   }
 
-#ifdef FABLE2_REMOTE_CONTROL
-  // Stop the state classifier thread, then the remote control server threads,
-  // before anything else tears down.
+  // Join any diagnostic thread before the guest memory arena is destroyed.
   void OnShutdown() override {
+#ifdef FABLE2_ALLOC_WATCH
+    alloc_watch_thread_.request_stop();
+    if (alloc_watch_thread_.joinable()) alloc_watch_thread_.join();
+#endif
+#ifdef FABLE2_REMOTE_CONTROL
     fable2::stateprobe::stop();
     remote_server_.Stop();
+#endif
   }
-#endif  // FABLE2_REMOTE_CONTROL
   // Apply the game patches (see src/core/fable2_patches.h) once the SDK has
   // decrypted default.xex into the guest arena, before the module launches.
   // Each patch is switched on by a [patches] key in fable2_config.toml

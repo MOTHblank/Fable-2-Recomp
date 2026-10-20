@@ -120,6 +120,13 @@ target_compile_definitions(fable_2 PRIVATE
     FABLE2_NATIVE_SDK="$<IF:$<BOOL:${FABLE2_CODEGEN_TOOL}>,source-built,external>"
     $<$<PLATFORM_ID:Windows>:_CRT_SECURE_NO_WARNINGS>)
 
+# Allocator table watcher is a crash-investigation diagnostic, not gameplay.
+# Explicit opt-in (OFF for Debug and Release, including shipping binaries).
+option(FABLE2_ALLOC_WATCH "Enable the polling guest-allocator diagnostic watcher" OFF)
+if(FABLE2_ALLOC_WATCH)
+    target_compile_definitions(fable_2 PRIVATE FABLE2_ALLOC_WATCH)
+endif()
+
 # Remote control server (AI input channel) is a debug-only tool: it opens a
 # localhost TCP port and injects guest input, so it must NOT ship in Release /
 # RelWithDebInfo builds (players shouldn't see a hidden input channel, and it's
