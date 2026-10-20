@@ -493,20 +493,19 @@ for code generation but is never published with this repository.
 
 Manual/advanced setup (normally not needed):
 
-```
-tools\setup_sdk.cmd      # fetch the prebuilt SDK only (what build.cmd auto-runs)
-tools\setup_sdk_src.cmd  # fetch the SDK SOURCE for the Vulkan plugin: clones
-                         # rexglue/rexglue-sdk at the pinned commit
-                         # (f5337cdc), pins its submodules to the SHAs in
-                         # thirdparty/rexglue-sdk-submodule-pins.txt, and
-                         # applies thirdparty/rexglue-sdk-local.patch. LONG
-                         # (several GB).
-git                     # only needed for setup_sdk_src.cmd
+```bat
+tools\setup_sdk.cmd      rem Download the official codegen SDK package.
+tools\setup_sdk_src.cmd  rem Initialize the pinned thirdparty\rexglue-sdk
+                         rem submodule and prepare the same tracked patches
+                         rem used by build_runtime_sdk.cmd.
 ```
 
-The build also accepts explicit overrides if you keep the SDK elsewhere:
-`cmake -DREXGLUE_SDK_ROOT=<prebuilt SDK root> -DREXGLUE_SDK_SOURCE=<SDK source>`
-(`build.cmd` sets `REXGLUE_SDK_ROOT`/`REXGLUE_SDK_SOURCE` from its own search).
+Both backend builders use the **one pinned source tree** at
+`thirdparty/rexglue-sdk`, prepared by `tools/prepare_runtime_sdk.py`.
+The official binary SDK is retained only for its compatible codegen tool;
+`build.cmd` selects matching source-built native headers, libraries and
+renderer DLLs. No independent `rexglue-sdk-src` checkout or obsolete
+`rexglue-sdk-local.patch` application is required.
 
 - Toolchain: the `win-amd64-debug` preset (Ninja + clang) by default. The SDK's public headers use clang builtins (`__builtin_bswap32`, `__VA_OPT__`), so plain MSVC `cl` cannot compile the generated code — a `win-msvc-debug` preset exists but only works for targets that don't compile `generated/`.
 - **Release builds:** `build.cmd` defaults to the `win-amd64-debug` preset (`-O0`, `out\build\win-amd64-debug`). Pass the `-release` flag (short form: `-r`) to select the `win-amd64-release` preset (`-O3`, `out\build\win-amd64-release`):
@@ -522,12 +521,9 @@ The build also accepts explicit overrides if you keep the SDK elsewhere:
 
 ## Vulkan renderer
 
-The goal is a Vulkan rendering path for the game (the SDK's Windows GPU plugin only ships a
-D3D12 Xenos backend; the SDK's own Vulkan backend lives in `rexglue-sdk-src/src/graphics/vulkan/`
-but is not compiled into the shipped plugin). Per the project constraint, all Vulkan work lives in
-this repo. The SDK source itself is built as stock upstream **plus this
-project's tracked local patch** (`thirdparty/rexglue-sdk-local.patch` —
-see below); the upstream repo is never forked or pushed to.
+The SDK ships a D3D12 Xenos plugin by default on Windows; its Vulkan backend
+is built separately from this project's pinned, patched source submodule at
+`thirdparty/rexglue-sdk`. The Vulkan build enables both renderer backends.
 
 **Stage 1 — foundation (DONE, verified).** A self-contained Vulkan pipeline that creates a window,
 inits Vulkan, and presents a clear color, proving the whole stack on a real GPU:
@@ -554,46 +550,44 @@ Key implementation notes (hard-won):
   the driver fault in `vkCmdBeginRenderPass`).
 - Vendored Khronos headers live in `thirdparty/vulkan` + `thirdparty/vk_video` (Vulkan 1.3.282).
 
-**Stage 2 — render the game via Vulkan (in progress).** The SDK's Vulkan backend is a complete,
-~1.4 MB renderer compiled into `rexgpu-xenos` only when `REXGLUE_USE_VULKAN=ON` (OFF by default on
-Windows). Rather than re-implementing it, we build the SDK source **plus the
-project's local patch** (`thirdparty/rexglue-sdk-local.patch`) into a Vulkan GPU
-plugin and load it via the `gpu_plugin` mechanism, so the renderer can be **swapped at launch, no
-rebuild of the game**:
+**Stage 2 — render the game via Vulkan (in progress).** Both the
+D3D12 and Vulkan builds use the pinned, patched SDK source and produce
+independent runtime/plugin snapshots. The Windows launcher checks provenance
+and SHA-256 hashes before running each pair:
 
-```
-tools\build_sdk_vulkan.cmd     # builds the SDK source with REXGLUE_USE_VULKAN=ON
-                               # (auto-fetches it first via tools\setup_sdk_src.cmd:
-                               # clone at the pinned commit + submodule pins +
-                               # thirdparty\rexglue-sdk-local.patch, into
-                               # thirdparty\rexglue-sdk-src) -> the plugin lands
-                               # in <SDK source>\out\win-amd64\Release\rexgpu-xenos.dll
+```bat
+build.cmd -release fable_2       rem Build the game and matched D3D12 SDK.
+tools\build_sdk_vulkan.cmd      rem Build and snapshot the Vulkan-enabled SDK.
+build.cmd -release fable_2       rem Stage both verified pairs, even if exe is unchanged.
+
+out\build\win-amd64-release\fable2.cmd          rem D3D12 (default).
+out\build\win-amd64-release\fable2.cmd vulkan   rem Vulkan.
 ```
 
-The SDK source is the stock `rexglue/rexglue-sdk` repo **plus this project's
-local modifications** (`thirdparty/rexglue-sdk-local.patch`: the main-menu
-crash fix in `exception_handler_win.cpp` + `xmemory.cpp`, and the Vulkan/
-FPS instrumentation — see `docs/main_menu_crash_fix.md` and the patch
-header). `tools/setup_sdk_src.cmd` reproduces that exact tree from the
-tracked patch + submodule pins, so the source never has to live outside
-this repo.
+The D3D12 pair is taken from
+`out/tooling/runtime-sdk/win-amd64/bin`; Vulkan is independently captured at
+`out/tooling/vulkan-sdk/win-amd64/bin` **immediately after its build**. Unlike
+the old approach, neither pair is read from the SDK's shared `source/out`
+directory during game staging. The executable's `renderers/d3d12` and
+`renderers/vulkan` directories each hold the matching DLLs and a
+`renderer-pair.json` with the SDK commit, applied patch fingerprint, compiler
+identity, configuration and DLL hashes.
 
-Two plugins are staged next to the exe, selected by the `gpu_plugin` argument:
+`fable2.cmd` launches from a uniquely named, temporary instance directory,
+rather than overwriting `rexruntime.dll` or `rexgpu-xenos.dll` next to the
+main executable. The game uses the original game-content root; saves, cache,
+and log directories are linked to the main game directory. This prevents
+concurrent renderer selections from replacing DLLs underneath one another.
+The direct `fable_2.exe` entry point remains the normal D3D12 configuration.
 
-```
-out\build\win-amd64-release\fable_2.exe --gpu_plugin=xenos           # D3D12 (default; prebuilt plugin)
-out\build\win-amd64-release\fable_2.exe --gpu_plugin=xenos-vulkan    # Vulkan (source-built plugin)
-```
-
-- `rexgpu-xenos.dll` is the prebuilt D3D12 plugin (staged by `GPU_PLUGINS xenos`).
-- `rexgpu-xenos-vulkan.dll` is the source-built plugin (staged by CMake from the SDK build tree,
-  Release-only). `Fable2App::OnPreSetup` loads it with `LoadGpuPlugin("xenos-vulkan", "vulkan")`,
-  forcing the Vulkan backend (the plugin is compiled with both; the default `"any"` would pick D3D12).
-- The source plugin must match the game's runtime: the Release source plugin imports `rexruntime.dll`,
-  so it is staged for the Release game only (the Debug game links `rexruntimed.dll`).
-- The SDK source location is resolved relative to this repo (`thirdparty/rexglue-sdk-src`,
-  or a sibling `..\rexglue-sdk-src` for pre-existing setups) and can be overridden with
-  `-DREXGLUE_SDK_SOURCE=<path>`.
+Vulkan is optional. If its SDK snapshot has not been built, D3D12 still
+stages, and selecting Vulkan fails with an actionable error. If
+`vulkan-1.dll` is not locally detected, no invalid CMake copy command is
+generated; Windows can resolve its driver-installed loader instead.
+The older `fable2.cmd prebuilt` mode is deliberately disabled because the
+current source-built host does not have a verified ABI match to that runtime.
+`fable2-uncapped.cmd` and `fable2-functrace.cmd` continue to call the
+backend-selecting launcher.
 
 ## Manifest highlights (fable_2_manifest.toml)
 
