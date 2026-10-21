@@ -134,6 +134,20 @@ game recreates it with defaults on launch if it is ever missing. Loaded in
 
 
 
+## Adaptive button prompts (experimental)
+
+The recomp can replace supported inline Xbox button markup in **writable game
+UI strings** with labels taken from the current keyboard/mouse bindings.
+`--ui_prompt_mode auto` (the default) follows the most recently active
+keyboard/mouse or physical controller; `keyboard` forces key labels, and
+`controller` always preserves the original Xbox prompts. The matching
+runtime SDK is required for automatic switching.
+
+This is an early, reversible text-markup substitution, **not yet universal**:
+prompts rendered from prebuilt graphics, cached layouts, or different markup
+may remain Xbox-styled. See [Button prompt implementation and
+limitations](docs/BUTTON_PROMPTS.md).
+
 ## Keyboard controls
 
 The game normally reads a controller through the Xbox 360 `XamInputGetState`
