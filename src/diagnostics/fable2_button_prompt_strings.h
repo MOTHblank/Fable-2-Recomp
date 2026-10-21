@@ -63,8 +63,16 @@ inline std::u16string Rewrite(std::u16string_view original, const KeyLabels& key
       const std::string& label = keys[tag_keys[k]];
       if (label.empty() || label.size() > 5 ||
           original.substr(i, tags[k].size()) != tags[k]) continue;
+      // Preserve the full seven-character length of <a_img>. Fable II
+      // sometimes retains a separate string-length field while laying out
+      // UI; the old shorter replacement inserted an early NUL and could
+      // leave cached layout state inconsistent with the source length.
+      const size_t pad_left = (5 - label.size()) / 2;
+      const size_t pad_right = 5 - label.size() - pad_left;
       result += u'[';
+      result.append(pad_left, u' ');
       for (char c : label) result += static_cast<char16_t>(c);
+      result.append(pad_right, u' ');
       result += u']';
       i += tags[k].size();
       substituted = true;
