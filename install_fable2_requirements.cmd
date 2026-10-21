@@ -3,7 +3,8 @@ setlocal EnableExtensions DisableDelayedExpansion
 title Fable 2 Recompiled - Install Build Requirements
 
 rem Installs the Windows build requirements for MOTHblank/Fable-2-Recomp.
-rem Run normally (auto-elevates) or use --verify for a read-only check.
+rem Run normally (auto-elevates), --verify to check, or --skip-llvm to continue.
+rem LLVM uses an interactive installer so Windows can show progress and prompts.
 rem Requires Windows 10/11 x64, internet access, and WinGet / App Installer.
 rem Does NOT download game files, clone the repo, or build the project.
 
@@ -12,7 +13,9 @@ set "PATH=%ProgramFiles%\LLVM\bin;%ProgramFiles%\CMake\bin;%ProgramFiles%\Git\cm
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 set "VSSETUP=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\setup.exe"
 
+set "SKIP_LLVM=0"
 if /i "%~1"=="--verify" goto :VerifyOnly
+if /i "%~1"=="--skip-llvm" set "SKIP_LLVM=1"
 fltmc >nul 2>&1
 if errorlevel 1 goto :Elevate
 
@@ -23,6 +26,7 @@ echo.
 echo This will install missing development tools using WinGet.
 echo Visual Studio Build Tools can require several GB of downloads.
 echo No game files will be downloaded or modified.
+echo LLVM installation will be visible instead of running silently.
 echo.
 
 where winget.exe >nul 2>&1
@@ -37,7 +41,12 @@ set "FAILED=0"
 call :EnsureTool "Git" "git.exe" "Git.Git"
 call :EnsureCMake
 call :EnsureTool "Ninja" "ninja.exe" "Ninja-build.Ninja"
-call :EnsureLLVM
+if "%SKIP_LLVM%"=="1" (
+    echo [SKIP] LLVM requested by --skip-llvm.
+    echo        Re-run later without --skip-llvm or install LLVM manually.
+) else (
+    call :EnsureLLVM
+)
 call :EnsurePython
 call :EnsureDotNet8
 call :EnsureVisualStudio
@@ -57,6 +66,9 @@ if %FAILED% GTR 0 (
 )
 echo.
 echo IMPORTANT: Close and reopen Command Prompt after installation.
+echo If LLVM gets stuck, press Ctrl+C, then run --skip-llvm to
+echo install the other prerequisites. Install LLVM separately with WinGet.
+echo   winget install --id LLVM.LLVM --exact --interactive
 echo Use "x64 Native Tools Command Prompt for VS" to build.
 echo After extracting your own supported Fable II GOTY game files:
 echo   git clone --recurse-submodules https://github.com/MOTHblank/Fable-2-Recomp.git
@@ -99,6 +111,8 @@ if errorlevel 1 (
 exit /b 0
 
 rem The native source SDK requires LLVM/Clang 20+ and LLD.
+rem Do NOT run LLVM with --silent/--disable-interactivity: a hidden MSI
+rem prompt or Windows Installer delay otherwise looks like a frozen script.
 :EnsureLLVM
 call :CheckLLVM
 if not errorlevel 1 (
@@ -107,11 +121,32 @@ if not errorlevel 1 (
 )
 echo.
 echo [INSTALL] LLVM / Clang 20+ / LLD via WinGet
-where clang++.exe >nul 2>&1
+echo [INFO] LLVM is a large package; downloading, signature validation,
+echo        and Windows Installer preparation can take several minutes.
+echo [INFO] An installer window may open. Watch your taskbar for prompts.
+echo [INFO] If there is no activity for over 10 minutes, press Ctrl+C.
+echo [INFO] To finish other tools without LLVM, re-run with --skip-llvm.
+echo.
+rem LLVM uses an MSI on current WinGet versions. Keep installer UI visible.
+rem The install subcommand can upgrade an existing matching package.
+winget install --exact --id LLVM.LLVM --source winget --interactive --accept-package-agreements --accept-source-agreements --log "%TEMP%\fable2-llvm-install.log"
 if errorlevel 1 (
-    call :InstallPackage "LLVM.LLVM"
+    echo.
+    echo [ERROR] WinGet could not complete LLVM installation.
+  echo [INFO] Installer log, if created: %TEMP%\fable2-llvm-install.log
+  echo [INFO] Try running this command manually in an admin terminal:
+    echo   winget install --id LLVM.LLVM --exact --interactive
+    set /a FAILED+=1 >nul
+    exit /b 0
+)
+rem PATH was seeded with the standard LLVM location at the start of this file.
+call :CheckLLVM
+if errorlevel 1 (
+    echo [WARNING] LLVM finished but Clang 20+ and lld-link were not found.
+    echo           Open a new terminal and verify C:\Program Files\LLVM\bin.
+    set /a FAILED+=1 >nul
 ) else (
-    call :UpgradePackage "LLVM.LLVM"
+    echo [OK] LLVM / Clang 20+ / LLD verified after installation.
 )
 exit /b 0
 
@@ -240,7 +275,8 @@ exit /b 0
 :Elevate
 echo Requesting administrator permission for installation...
 set "FABLE2_INSTALLER_PATH=%~f0"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$q=[char]34; $a='/d /s /c '+$q+$q+$env:FABLE2_INSTALLER_PATH+$q+$q; $p=Start-Process -FilePath $env:ComSpec -ArgumentList $a -Verb RunAs -Wait -PassThru; exit $p.ExitCode"
+set "FABLE2_INSTALLER_ARGUMENT=%~1"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$q=[char]34; $a='/d /s /c '+$q+$q+$env:FABLE2_INSTALLER_PATH+$q; if ($env:FABLE2_INSTALLER_ARGUMENT) { $a+=' '+$env:FABLE2_INSTALLER_ARGUMENT }; $a+=$q; $p=Start-Process -FilePath $env:ComSpec -ArgumentList $a -Verb RunAs -Wait -PassThru; exit $p.ExitCode"
 if errorlevel 1 (
     echo [ERROR] Elevation was cancelled or installation failed.
     pause
