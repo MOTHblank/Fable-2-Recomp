@@ -87,11 +87,13 @@ int main() {
   CHECK(fable2::buttonprompts::DisplayKey("Shift+Enter") == "");
   const fable2::buttonprompts::KeyLabels keycaps{"E", "B", "LMB", "RMB"};
   CHECK(fable2::buttonprompts::Rewrite(u"Press <a_img> to start", keycaps) ==
-        u"Press [E] to start");
+        u"Press [  E  ] to start");
+  CHECK(fable2::buttonprompts::Rewrite(u"<c_img> and <d_img>", keycaps) ==
+        u"[ LMB ] and [ RMB ]");
   CHECK(fable2::buttonprompts::Rewrite(u"<x_img> and <y_img>", keycaps) ==
-        u"[LMB] and [RMB]");
+        u"[ LMB ] and [ RMB ]");
   CHECK(fable2::buttonprompts::Rewrite(u"<unknown> <a_img>", keycaps) ==
-        u"<unknown> [E]");
+        u"<unknown> [  E  ]");
 
   CHECK(native[1] == "XMB1");
   CHECK(native[2] == "LMB");
