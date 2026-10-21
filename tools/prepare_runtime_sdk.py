@@ -113,6 +113,7 @@ def main():
         "rexglue-sdk-pipeline-warmup.patch",
         "rexglue-sdk-fable2-performance.patch",
         "rexglue-sdk-mnk-input.patch",
+        "rexglue-sdk-adaptive-prompts.patch",
     ):
         followup_patch = patch_directory / followup_name
         if not followup_patch.is_file():

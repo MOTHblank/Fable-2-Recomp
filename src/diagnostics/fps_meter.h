@@ -148,5 +148,6 @@ extern "C" void MainRenderLoop_82B9CD68(PPCContext& ctx, uint8_t* base) {
   fable2::f5lua::poll_mainloop(ctx, base);
   // Main-menu mod item: keep the relabeled row's string cache fresh.
   fable2::modmenu::on_frame(base);
+  fable2::buttonprompts::OnFrame(base);
   __imp__MainRenderLoop_82B9CD68(ctx, base);
 }
