@@ -366,7 +366,7 @@ try
     File.AppendAllText(advPath, "\n# legacy setting\n[input_legacy]\ndirect_mouse_look = true\n");
 
     string oldInputPath = Path.Combine(testDirectory, "old-fable2_config.toml");
-    File.WriteAllText(oldInputPath, "[input]\\nmouse_look_scale = 768\\n");
+    File.WriteAllText(oldInputPath, "[input]\nmouse_look_scale = 768\n");
     var migratedInput = Fable2ConfigFile.Read(oldInputPath);
     Require(migratedInput.MouseLookScale == 768 && migratedInput.MouseLookScaleY == 768,
         "old single-axis sensitivity did not migrate to vertical axis");
