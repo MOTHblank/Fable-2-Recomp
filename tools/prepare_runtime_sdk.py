@@ -107,22 +107,25 @@ def main():
                  f"Restore the base with: git -C {source} checkout {SDK_PIN}")
         print(f"SDK revision {head} already carries all runtime fixes (baked in).")
 
-    # Apply the pipeline warmup follow-up to both the clean source pin and
-    # fork revisions with the original runtime fixes already baked in.
-    warmup_name = "rexglue-sdk-pipeline-warmup.patch"
-    warmup_patch = patch_directory / warmup_name
-    if not warmup_patch.is_file():
-        fail(f"SDK patch file is missing: {warmup_patch}")
-    warmup_state = patch_state(source, warmup_patch)
-    if warmup_state == "clean":
-        git(source, "apply", str(warmup_patch))
-        print(f"Applied: {warmup_name}")
-    elif warmup_state == "applied":
-        print(f"Already applied: {warmup_name}")
-    else:
-        detail = git(source, "apply", "--check", str(warmup_patch),
-                     check=False).stderr.strip()
-        fail(f"SDK patch {warmup_name} conflicts with local edits:\\n{detail}")
+    # Keep follow-up fixes idempotent on the pinned checkout and on approved
+    # SDK forks which already bake in the original runtime fixes.
+    for followup_name in (
+        "rexglue-sdk-pipeline-warmup.patch",
+        "rexglue-sdk-fable2-performance.patch",
+    ):
+        followup_patch = patch_directory / followup_name
+        if not followup_patch.is_file():
+            fail(f"SDK patch file is missing: {followup_patch}")
+        followup_state = patch_state(source, followup_patch)
+        if followup_state == "clean":
+            git(source, "apply", str(followup_patch))
+            print(f"Applied: {followup_name}")
+        elif followup_state == "applied":
+            print(f"Already applied: {followup_name}")
+        else:
+            detail = git(source, "apply", "--check", str(followup_patch),
+                         check=False).stderr.strip()
+            fail(f"SDK patch {followup_name} conflicts with local edits:\\n{detail}")
 
     if not args.skip_dependencies:
         # libmspack is either a submodule gitlink (base pin and older fork

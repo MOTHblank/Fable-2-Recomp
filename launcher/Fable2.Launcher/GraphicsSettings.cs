@@ -9,7 +9,7 @@ public static class GraphicsSettings
     [
         "resolution", "window_width", "window_height", "resolution_scale",
         "anisotropic_override", "swap_post_effect", "vsync", "fullscreen", "fullscreen_exclusive",
-        "frame_limit", "guest_vblank_pacing"
+        "frame_limit", "guest_vblank_pacing", "fast_guest_vblank_hz"
     ];
 
     public static Dictionary<string, string> Create(string resolution, string scale,
@@ -44,6 +44,12 @@ public static class GraphicsSettings
             // guest pacing therefore caps it at 30 even with a 60-FPS limiter.
             // This does not disable the user's host presentation VSync.
             ["guest_vblank_pacing"] = (frameLimit == "30").ToString().ToLowerInvariant(),
+            // Fable waits for two guest vblanks per frame. A 3x margin above
+            // that minimum reduces interrupt overhead without becoming the
+            // 60-FPS gate. Legacy 30 and unlimited retain the old 1000 Hz.
+            ["fast_guest_vblank_hz"] = frameLimit is "0" or "30" ? "1000" :
+                Math.Min(1000, int.Parse(frameLimit, CultureInfo.InvariantCulture) * 6)
+                    .ToString(CultureInfo.InvariantCulture),
             ["fullscreen"] = (displayMode != "windowed").ToString().ToLowerInvariant(),
             ["fullscreen_exclusive"] = (displayMode == "exclusive").ToString().ToLowerInvariant()
         };
