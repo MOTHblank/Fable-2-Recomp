@@ -5,6 +5,13 @@
 cmake_minimum_required(VERSION 3.25)
 project(fable_2 LANGUAGES CXX)
 
+# A single Windows game installation, independent of the CMake cache directory.
+# The WPF launcher, native executable, renderer pairs and ISO extraction all use it.
+if(WIN32)
+    set(FABLE2_GAME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/out/game")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${FABLE2_GAME_DIR}")
+endif()
+
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS constants/game_versions.json)
 execute_process(COMMAND ${Python3_EXECUTABLE}
@@ -182,12 +189,8 @@ if(TARGET fable_2_recomp)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/core/fable2_func_trace.h)
 endif()
 
-# NOTE: the build does NOT copy the game content (default.xex, data/, ...) into
-# the build directory. fable_2.exe looks for its content in its own directory
-# only; to run in place, stage it manually (one-time ~6.5 GB copy):
-#   tools\stage_content.cmd <project root> out\build\<preset>
-# or point the exe at an existing content tree with --game_data_root=<path>.
-# saves/, cache/, logs/, and fable_2.toml are always written next to the exe.
+# Original disc content is extracted once into out/game by Fable2Launcher.exe.
+# Never copy it between CMake build trees. Saves and settings stay there too.
 
 # Stage a copy of the README + the function-tracing launcher next to the exe
 # so anyone who gets the build folder (without the repo) knows how to run
@@ -210,9 +213,8 @@ add_custom_command(TARGET fable_2 POST_BUILD
 # "scripts/recomp/F5.lua") via CScriptManager::RunScript when F5 is pressed.
 # The game's VFS indexes data/ from dir.manifest at startup, so the .lua file
 # must exist AND be a dir.manifest line before the game starts. Sources live in
-# src/lua/ (git-tracked); they are staged into BOTH the repo data/ (the
-# git-tracked content root) and the exe dir (the default game data root), and
-# dir.manifest is kept in sync in BOTH trees.
+# src/lua/ and are staged only into the output game directory.
+# ISO extraction into out/game provides the original dir.manifest.
 #
 # This is a custom target that fable_2 depends on (NOT a POST_BUILD step) so it
 # runs on every `build fable_2` even when the exe is up to date -- the .lua
@@ -268,9 +270,14 @@ target_include_directories(fable_2 SYSTEM PRIVATE
 # copy-if-not-exists): it is user data, so user edits must survive rebuilds.
 # The code also recreates it if it is ever deleted (keep that embedded copy
 # in sync - see src/core/fable2_config.cpp).
-if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/fable2_config.toml")
+if(WIN32)
+    set(FABLE2_USER_CONFIG_DIR "${FABLE2_GAME_DIR}")
+else()
+    set(FABLE2_USER_CONFIG_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+if(NOT EXISTS "${FABLE2_USER_CONFIG_DIR}/fable2_config.toml")
     file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/config/fable2_config.toml
-         DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+         DESTINATION ${FABLE2_USER_CONFIG_DIR})
 endif()
 
 # --- PDB for the Release build (crash debugging) --------------------------

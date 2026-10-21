@@ -3,20 +3,16 @@ rem Build the Fable 2 ReXGlue project.
 rem
 rem Toolchain: clang + lld + Ninja (the SDK headers use clang builtins, so
 rem plain MSVC cl cannot compile the generated code). Preset: win-amd64-debug
-rem (out\build\win-amd64-debug) by default, win-amd64-release with -release.
+rem (out\build\win-amd64-release) by default, debug with -debug.
 rem An MSVC-only preset (win-msvc-debug) exists in CMakePresets.json but only
 rem works for targets that don't compile the generated code.
 rem
 rem Usage:
-rem   build.cmd                  build fable_2_codegen (runs codegen from fable_2_manifest.toml)
-rem   build.cmd fable_2          build the full recompiled executable
-rem   build.cmd launcher         build the launcher, self-contained by default
-rem                              (bundles the .NET 8 Desktop Runtime, so users don't need to install .NET)
-rem   build.cmd launcher-dev     build the small framework-dependent launcher
-rem                              (needs the .NET 8 Desktop Runtime installed)
+rem   build.cmd                  build the Release game and launcher into out\game
+rem   build.cmd fable_2          same as above
+rem   build.cmd launcher         rebuild only the launcher into out\game
 rem   build.cmd <other target>   build any other CMake target
-rem   build.cmd -release [t]     build as Release (-O3) instead of Debug
-rem   build.cmd -r [t]           (same, short form)
+rem   build.cmd -debug [t]       build Debug instead of Release
 rem                              (out\build\win-amd64-release; stages the
 rem                              release rexruntime/rexgpu-xenos plugins)
 rem   build.cmd -clean [t]       wipe the build dir for the config instead of
@@ -26,16 +22,8 @@ rem                                out\build\win-amd64-release-profiling
 setlocal
 cd /d "%~dp0"
 
-rem The launcher only needs the .NET SDK, not the much larger C++ toolchain.
+rem Parse launcher-only requests before the native toolchain setup.
 rem Self-contained is the default so the shipped exe needs no .NET install.
-if /i "%~1"=="launcher" (
-    call "%~dp0launcher\build-launcher.cmd" || exit /b 1
-    exit /b 0
-)
-if /i "%~1"=="launcher-dev" (
-    call "%~dp0launcher\build-launcher.cmd" dev || exit /b 1
-    exit /b 0
-)
 rem LLVM: prefer clang++ already on PATH, else the default install location
 where clang++ >nul 2>nul
 if errorlevel 1 (
@@ -78,11 +66,16 @@ if not exist "%REXSDK%\lib\cmake\rexglue\rexglueConfig.cmake" (
 rem Argument parsing: -release / -r select the Release preset, -clean / -c
 rem wipes the build dir instead of building, the first non-flag argument is
 rem the CMake target (default: fable_2_codegen).
-set "CONFIG=win-amd64-debug"
+set "CONFIG=win-amd64-release"
 set "TARGET="
 set "CLEAN=0"
 :parse_args
 if "%~1"=="" goto args_done
+if /i "%~1"=="-debug" (
+    set "CONFIG=win-amd64-debug"
+    shift
+    goto parse_args
+)
 if /i "%~1"=="-release" (
     set "CONFIG=win-amd64-release"
     shift
@@ -107,7 +100,11 @@ set "TARGET=%~1"
 shift
 goto parse_args
 :args_done
-if "%TARGET%"=="" set "TARGET=fable_2_codegen"
+if "%TARGET%"=="" set "TARGET=fable_2"
+if /i "%TARGET%"=="launcher" (
+    call "%~dp0launcher\build-launcher.cmd" || exit /b 1
+    exit /b 0
+)
 
 rem Special target: fable_2_profiler = Release (-O3) + symbols, but WITHOUT the
 rem post-build stable-hash PE cleaning, so the exe keeps the linker's real PDB
@@ -129,6 +126,10 @@ if "%CLEAN%"=="1" (
     )
     exit /b 0
 )
+
+rem The launcher and game always share one install location.
+rem The default build is the playable Release build; -debug remains available
+rem for diagnostics without changing the installed game directory.
 
 rem Bootstrap CMake integration from the existing manifest on a fresh clone.
 rem Do not run rexglue init: that would replace the project's authored files.
@@ -156,4 +157,18 @@ set "REXSDK=%~dp0out\tooling\%RUNTIMEDIR%\win-amd64"
 rem (inline -D with quotes at the call site: cmd cannot carry a quoted value
 rem in a variable for paths with spaces)
 cmake --preset %CONFIG% -DCMAKE_PREFIX_PATH="%REXSDK%" -Drexglue_DIR="%REXSDK%\lib\cmake\rexglue" -DREXGLUE_SDK_ROOT="%REXSDK%" -DREXGLUE_SDK_SOURCE="%SDKSRC%" -DFABLE2_CODEGEN_TOOL="%CODEGENSDK%\bin\rexglue.exe" || exit /b 1
-cmake --build out\build\%CONFIG% --target %TARGET%
+cmake --build "out\build\%CONFIG%" --target %TARGET% || exit /b 1
+if /i "%TARGET%"=="fable_2" (
+    call "%~dp0launcher\build-launcher.cmd" || exit /b 1
+    if not exist "%~dp0out\game\fable_2.exe" (
+        echo Error: native game executable is missing from out\game. 1>&2
+        exit /b 1
+    )
+    if not exist "%~dp0out\game\Fable2Launcher.exe" (
+        echo Error: launcher executable is missing from out\game. 1>&2
+        exit /b 1
+    )
+    echo.
+    echo Build complete. Start: "%~dp0out\game\Fable2Launcher.exe"
+)
+exit /b 0

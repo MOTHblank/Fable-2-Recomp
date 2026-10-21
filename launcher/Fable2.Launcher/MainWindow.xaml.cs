@@ -68,30 +68,16 @@ public partial class MainWindow : Window
 
     private void DetectGameDirectory()
     {
-        string launcherDirectory = AppContext.BaseDirectory;
-        string? configuredPath = LauncherState.LoadGameDirectory();
-        if (!string.IsNullOrWhiteSpace(configuredPath) &&
-            File.Exists(Path.Combine(configuredPath, "default.xex")) &&
-            (File.Exists(Path.Combine(launcherDirectory, "fable_2.exe")) ||
-             File.Exists(Path.Combine(configuredPath, "fable_2.exe"))))
-        {
-            SetGameDirectory(configuredPath);
-            return;
-        }
-        // No saved (or no longer valid) game folder: default the selected location
-        // to the folder the launcher is running from, so it is never empty on first
-        // launch. The status line then explains what is still missing (e.g. that
-        // default.xex has not been extracted yet).
-        SetGameDirectory(launcherDirectory);
+        // The launcher and native executable ship together; ISO extraction uses
+        // this exact directory. Saved paths and folder picking are not supported.
+        SetGameDirectory(AppContext.BaseDirectory);
     }
 
     private void SetGameDirectory(string directory)
     {
         _gameDirectory = Path.GetFullPath(directory);
-        _executableDirectory = File.Exists(Path.Combine(AppContext.BaseDirectory, "fable_2.exe"))
-            ? AppContext.BaseDirectory : _gameDirectory;
+        _executableDirectory = _gameDirectory;
         GamePathText.Text = _gameDirectory;
-        LauncherState.SaveGameDirectory(_gameDirectory);
         try
         {
             LoadConfiguration();
@@ -308,25 +294,6 @@ public partial class MainWindow : Window
         RefreshSummary(markDirty: true);
     }
 
-    private void BrowseClicked(object sender, RoutedEventArgs e)
-    {
-        var dialog = new OpenFolderDialog
-        {
-            Title = "Choose original gamefiles (default.xex and data)",
-            Multiselect = false
-        };
-        if (dialog.ShowDialog(this) == true)
-        {
-            if (!File.Exists(Path.Combine(dialog.FolderName, "default.xex")))
-            {
-                MessageBox.Show(this, "This folder does not contain default.xex.",
-                    "Game not found", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-            SetGameDirectory(dialog.FolderName);
-        }
-    }
-
     private bool _extracting;
     private volatile bool _stopRequested;
     // Non-null while the "unrecognized XEX" prompt is on screen; the worker
@@ -354,7 +321,7 @@ public partial class MainWindow : Window
         // No destination prompt: extract straight into the folder the launcher is
         // running from, so the game data lands beside fable_2.exe and becomes
         // launchable in place.
-        string outDir = AppContext.BaseDirectory;
+        string outDir = _gameDirectory ?? AppContext.BaseDirectory;
 
         _extracting = true;
         _stopRequested = false;
@@ -1087,32 +1054,3 @@ public partial class MainWindow : Window
     }
 }
 
-internal static class LauncherState
-{
-    private static readonly string LocalStatePath = Path.Combine(AppContext.BaseDirectory,
-        "launcher-game-path.txt");
-
-    public static string? LoadGameDirectory()
-    {
-        try
-        {
-            if (File.Exists(LocalStatePath)) return File.ReadAllText(LocalStatePath).Trim();
-            return null;
-        }
-        catch { return null; }
-    }
-
-    public static void SaveGameDirectory(string directory)
-    {
-        try
-        {
-            File.WriteAllText(LocalStatePath, directory);
-            return;
-        }
-        catch
-        {
-            // Graphics saving reports write failures separately. No global
-            // fallback: different installations must not inherit other paths.
-        }
-    }
-}

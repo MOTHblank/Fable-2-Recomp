@@ -2,7 +2,7 @@
 setlocal
 set "ROOT=%~dp0.."
 set "PROJECT=%~dp0Fable2.Launcher\Fable2.Launcher.csproj"
-set "OUTPUT=%ROOT%\out\tests\launcher-build"
+set "OUTPUT=%ROOT%\out\game"
 
 rem Default is self-contained: the exe bundles the .NET 8 Desktop Runtime, so
 rem users need no .NET install. Pass dev or framework-dependent for a small,

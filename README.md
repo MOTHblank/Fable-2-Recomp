@@ -39,6 +39,21 @@ Original GOTY USA/Europe and German GOTY dumps are supported by the default
 [x] Custom Launcher
   - [x] Built in ISO extractor
 
+## Windows: one build, one game folder
+
+On Windows, install the prerequisites listed under **Building** below, then run
+`build.cmd` from the repository root. This builds the Release native game,
+its matched D3D12 runtime, and the self-contained WPF launcher. Start
+`out\\game\\Fable2Launcher.exe`, click **Extract from ISO** and select your
+own Fable II disc image. It extracts `default.xex` and `data/` into
+`out\\game`; launch the game with the launcher. The game executable is
+`out\\game\\fable_2.exe` (not `fable.exe`).
+
+Intermediate compilation artifacts stay in `out\\build\\win-amd64-release`.
+Do not point the launcher at that folder. Rebuilds keep extracted content and
+saved settings in `out\\game`. `build.cmd launcher` rebuilds only the WPF
+launcher in the same output folder. No wrapper scripts or manual file copies.
+
 ## Windows launcher
 
 The optional WPF launcher detects the original game edition and configures
@@ -55,10 +70,11 @@ discs with the shared [X360Extract](tools/x360extract/) library, so its output
 matches the `x360extract` tool byte for byte — making the launcher the simplest
 way to get the game files in place, with no separate extractor tool.
 
-The game-folder selection defaults to the launcher's own folder on first launch
-and then remembers the user's saved location. Game files can live separately;
-the launcher uses `--game_data_root`. Both applications are named Fable 2
-Recompiled and use new project-owned icons.
+The game folder is always `out\\game` in a source checkout. The launcher and
+`fable_2.exe` are built together in this folder; **Extract from ISO** puts
+`default.xex` and `data/` in the same location. There is no separate path
+selection, moving of game files or per-configuration extraction. Both
+applications are named Fable 2 Recompiled and use project-owned icons.
 
 
 
@@ -75,11 +91,9 @@ Recompiled and use new project-owned icons.
 
 ## Running
 
-To run the game you must:
-1) Extract a downloaded copy release of the game 
-2) Extract the "data" and "default.xex" from your copy of the game — easiest with the launcher's **Extract from ISO** button, or an external GUI tool (see "How to extract")
-3) Run the fable.exe program and if no errors pop up then the game should launch and you are good to go
-  - If an error pops up about the hash being wrong try to extract a different version of the game and then try again.
+To run the game, execute `build.cmd`, start `out\\game\\Fable2Launcher.exe`,
+extract a supported disc ISO with its **Extract from ISO** button, and click
+**Launch**. Both programs and extracted files live in `out\\game`.
 
 
 Optional command-line overrides (all normal `--cvar value` args):

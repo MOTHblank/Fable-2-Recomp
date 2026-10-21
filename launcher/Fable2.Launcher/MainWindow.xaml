@@ -198,12 +198,6 @@
                 <TextBlock x:Name="GamePathText" Text="Not selected" FontSize="12"
                            Foreground="#FFD0D8D2" TextWrapping="Wrap" />
               </Border>
-              <!-- Hidden (the launcher defaults to its own folder and the user
-                   can still edit the saved path in launcher-game-path.txt).
-                   The BrowseClicked code is kept in case it is re-enabled. -->
-              <Button Content="Choose game folder…" Click="BrowseClicked"
-                      Style="{StaticResource SecondaryButton}" Margin="0,12,0,0"
-                      Visibility="Collapsed" />
               <Button x:Name="ExtractButton" Content="Extract from ISO" Click="ExtractClicked"
                       Style="{StaticResource SecondaryButton}" Margin="0,12,0,0" />
               <TextBlock x:Name="ExtractionStatusText" FontSize="12"

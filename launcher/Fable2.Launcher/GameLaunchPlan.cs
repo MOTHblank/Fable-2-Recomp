@@ -10,11 +10,15 @@ public static class GameLaunchPlanner
 {
     public static GameLaunchPlan Create(string executableDirectory, string gameRoot, GameCompatibility compatibility)
     {
+        if (!Path.GetFullPath(executableDirectory).TrimEnd(Path.DirectorySeparatorChar).Equals(
+                Path.GetFullPath(gameRoot).TrimEnd(Path.DirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Game files must be next to the launcher and fable_2.exe.");
         if (!compatibility.Supported || compatibility.Profile is null)
             throw new InvalidOperationException(compatibility.Message);
         string executable = Path.Combine(executableDirectory, "fable_2.exe");
         if (!File.Exists(executable))
-            throw new InvalidOperationException("fable_2.exe was not found next to the launcher or in the selected folder.");
+            throw new InvalidOperationException("fable_2.exe was not found next to Fable2Launcher.exe. Re-run build.cmd.");
 
         // Legacy executables only support USA/EU. A generated descriptor permits
         // the German or dual-GOTY executable; never silently try an old US build.
