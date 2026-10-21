@@ -6,6 +6,10 @@
 #include "fable2_button_prompt_strings.h"
 #include <rex/cvar.h>
 #include <algorithm>
+#include <array>
+#include <cstdio>
+#include <memory>
+#include <mutex>
 #include <iterator>
 #include <utility>
 #include <atomic>
@@ -65,8 +69,9 @@ inline uint16_t Be16(const uint8_t* p) {
 }
 
 inline bool HasKnownTag(const uint8_t* p, size_t length) {
-  static constexpr std::array<std::string_view, 4> tags{
-      "<a_img>", "<b_img>", "<x_img>", "<y_img>"};
+  static constexpr std::array<std::string_view, 6> tags{
+      "<a_img>", "<b_img>", "<c_img>", "<d_img>",
+      "<x_img>", "<y_img>"};
   for (size_t i = 0; i + 14 <= length; i += 2) {
     for (auto tag : tags) {
       bool match = true;
@@ -84,9 +89,9 @@ inline bool HasKnownTag(const uint8_t* p, size_t length) {
 // Walk the committed front-end heap, locating NUL-terminated UTF-16BE source
 // strings containing known inline tags. The title prompt and main menu strings
 // were observed in 0x40000000..0x44000000. No asset or code pages are touched.
-inline void Scan(uint8_t* arena, const KeyLabels& labels,
-                 std::vector<Patched>& patches) {
-  constexpr uintptr_t kStart = 0x40000000u, kEnd = 0x44000000u;
+inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
+                 const KeyLabels& labels, std::vector<Patched>& patches,
+                 uint64_t& matches, uint64_t& replacements) {
   constexpr size_t kMaxChars = 160;
   const uintptr_t base = reinterpret_cast<uintptr_t>(arena);
   for (uintptr_t offset = kStart; offset < kEnd;) {
@@ -132,6 +137,7 @@ inline void Scan(uint8_t* arena, const KeyLabels& labels,
       }
       if (end + 1 >= length || Be16(data + end) != 0 ||
           end <= i || !HasKnownTag(data + start, end - start)) continue;
+      ++matches;
       const auto rewritten = Rewrite(text, labels);
       if (rewritten == text || rewritten.size() > text.size()) continue;
       uint8_t* target = data + start;
@@ -147,6 +153,7 @@ inline void Scan(uint8_t* arena, const KeyLabels& labels,
       if (std::memcmp(target, original.data(), bytes) != 0) continue;
       std::memcpy(target, changed.data(), bytes);
       patches.push_back({target, std::move(original), std::move(changed)});
+      ++replacements;
       i = end;
     }
     offset = next;
@@ -160,41 +167,109 @@ inline KeyLabels CurrentKeys() {
           DisplayKey(rex::cvar::GetFlagByName("keybind_y"))};
 }
 
-inline void Loop(uint8_t* arena) {
+// Diagnostic log: distinguishes "source replaced" from "visible UI relaid
+// out". Seeing replacements in this file is not proof they reached the screen.
+inline FILE* LogFile() {
+  static FILE* f = [] {
+    FILE* out = nullptr;
+    fopen_s(&out, "fable2_button_prompts.log", "w");
+    return out;
+  }();
+  return f;
+}
+inline void Log(const char* message, const std::string& extra = {}) {
+  if (FILE* f = LogFile()) {
+    std::fprintf(f, "[button-prompts] %s %s\n", message, extra.c_str());
+    std::fflush(f);
+  }
+}
+inline std::unique_ptr<std::jthread>& Worker() {
+  static std::unique_ptr<std::jthread> worker;
+  return worker;
+}
+inline std::mutex& WorkerMutex() {
+  static auto* mutex = new std::mutex;
+  return *mutex;
+}
+inline void Loop(std::stop_token stop, uint8_t* arena) {
   std::vector<Patched> patches;
   KeyLabels previous_keys{};
-  auto last_scan = std::chrono::steady_clock::now() - std::chrono::seconds(3);
-  for (;;) {
+  bool previous_keyboard = false;
+  auto next_fast = std::chrono::steady_clock::now();
+  auto next_full = next_fast;
+  auto next_report = next_fast;
+  uint64_t matches = 0, replacements = 0;
+  Log("started; scan is native UI source-string replacement, not a texture hook");
+  while (!stop.stop_requested()) {
     const auto mode = rex::cvar::GetFlagByName("ui_prompt_mode");
+    const auto active = rex::cvar::GetFlagByName("input_prompt_keyboard");
+    // A mismatched older SDK lacks the device flag. Prefer keyboard as the
+    // conservative auto fallback instead of silently hiding the feature.
     const bool keyboard = mode == "keyboard" ||
-        (mode == "auto" && rex::cvar::GetFlagByName("input_prompt_keyboard") == "true");
+        (mode != "controller" && active != "false");
     const auto keys = keyboard ? CurrentKeys() : KeyLabels{};
-    if (!keyboard || keys != previous_keys) {
+    if (keyboard != previous_keyboard || keys != previous_keys) {
       Restore(patches);
       previous_keys = keys;
-      last_scan = std::chrono::steady_clock::now() - std::chrono::seconds(3);
+      previous_keyboard = keyboard;
+      next_fast = next_full = std::chrono::steady_clock::now();
+      Log(keyboard ? "keyboard mode" : "controller mode",
+          "input=" + active + " A=" + keys[0] +
+          " B=" + keys[1] + " X=" + keys[2] + " Y=" + keys[3]);
     }
     if (keyboard) {
-      // Entries freed/rebuilt by the game are forgotten without writes.
+      // Reused/freed guest strings may no longer belong to this list. Never
+      // restore changed guest contents unless they still match our exact bytes.
       for (auto it = patches.begin(); it != patches.end();)
         it = Same(*it) ? std::next(it) : patches.erase(it);
-      const auto now = std::chrono::steady_clock::now();
-      if (now - last_scan >= std::chrono::seconds(2)) {
-        Scan(arena, keys, patches);
-        last_scan = now;
+      auto now = std::chrono::steady_clock::now();
+      // Fast path for the documented title-prompt allocation neighborhood.
+      // At 1 MiB per 40 ms this is bounded and runs only off the render thread.
+      if (now >= next_fast) {
+        Scan(arena, 0x42600000u, 0x42700000u, keys, patches,
+             matches, replacements);
+        next_fast = now + std::chrono::milliseconds(40);
+      }
+      // Other front-end / localized strings are discovered more slowly; this
+      // includes menu text and varied translations.
+      if (now >= next_full) {
+        Scan(arena, 0x40000000u, 0x44000000u, keys, patches,
+             matches, replacements);
+        next_full = now + std::chrono::seconds(2);
       }
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    const auto now = std::chrono::steady_clock::now();
+    if (now >= next_report) {
+      Log("scan totals", "known_strings=" + std::to_string(matches) +
+          " replaced=" + std::to_string(replacements) +
+          " tracked=" + std::to_string(patches.size()));
+      next_report = now + std::chrono::seconds(5);
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(15));
   }
+  Restore(patches);
+  Log("stopped and restored tracked source strings");
 }
 
 inline void OnFrame(uint8_t* arena) {
   if (!arena) return;
-  static std::atomic<bool> started{false};
-  if (!started.exchange(true))
-    std::thread([arena] { Loop(arena); }).detach();
+  std::lock_guard lock(WorkerMutex());
+  if (!Worker()) Worker() = std::make_unique<std::jthread>(
+      [arena](std::stop_token stop) { Loop(stop, arena); });
+}
+inline void Stop() {
+  std::unique_ptr<std::jthread> worker;
+  {
+    std::lock_guard lock(WorkerMutex());
+    worker = std::move(Worker());
+  }
+  if (worker) {
+    worker->request_stop();
+    worker->join();
+  }
 }
 #else
 inline void OnFrame(uint8_t*) {}
+inline void Stop() {}
 #endif
 }  // namespace fable2::buttonprompts

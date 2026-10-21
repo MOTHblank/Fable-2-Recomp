@@ -49,17 +49,30 @@ inline std::string DisplayKey(std::string_view bindings) {
 using KeyLabels = std::array<std::string, 4>;  // A, B, X, Y
 
 inline std::u16string Rewrite(std::u16string_view original, const KeyLabels& keys) {
-  constexpr std::array<std::u16string_view, 4> tags{
-      u"<a_img>", u"<b_img>", u"<x_img>", u"<y_img>"};
+  // The title UI's image-tag table uses a/b/c/d; accept x/y aliases as
+  // well for strings supplied by other UI assets. Unknown tags pass through.
+  constexpr std::array<std::u16string_view, 6> tags{
+      u"<a_img>", u"<b_img>", u"<c_img>", u"<d_img>",
+      u"<x_img>", u"<y_img>"};
+  constexpr std::array<size_t, 6> tag_keys{0, 1, 2, 3, 2, 3};
   std::u16string result;
   result.reserve(original.size());
   for (size_t i = 0; i < original.size();) {
     bool substituted = false;
     for (size_t k = 0; k < tags.size(); ++k) {
-      if (keys[k].empty() || keys[k].size() > 5 ||
+      const std::string& label = keys[tag_keys[k]];
+      if (label.empty() || label.size() > 5 ||
           original.substr(i, tags[k].size()) != tags[k]) continue;
+      // Preserve the full seven-character length of <a_img>. Fable II
+      // sometimes retains a separate string-length field while laying out
+      // UI; the old shorter replacement inserted an early NUL and could
+      // leave cached layout state inconsistent with the source length.
+      const size_t pad_left = (5 - label.size()) / 2;
+      const size_t pad_right = 5 - label.size() - pad_left;
       result += u'[';
-      for (char c : keys[k]) result += static_cast<char16_t>(c);
+      result.append(pad_left, u' ');
+      for (char c : label) result += static_cast<char16_t>(c);
+      result.append(pad_right, u' ');
       result += u']';
       i += tags[k].size();
       substituted = true;
