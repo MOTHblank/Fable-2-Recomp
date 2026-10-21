@@ -49,6 +49,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         PreviewKeyDown += MainWindow_PreviewKeyDown;
+        PreviewMouseDown += MainWindow_PreviewMouseDown;
         SetDefaults();
         DetectGameDirectory();
         _loading = false;
@@ -631,29 +632,44 @@ public partial class MainWindow : Window
 
     private void AdvancedOptionsClicked(object sender, RoutedEventArgs e)
     {
-        LoadAdvanced();
-        SetPage(true);
+        if (LoadAdvanced()) SetPage(true);
     }
 
     private void BackClicked(object sender, RoutedEventArgs e) => SetPage(false);
 
-    private void LoadAdvanced()
+    private bool LoadAdvanced()
     {
         _advanced = Fable2ConfigFile.Read(AdvancedConfigPath());
+        List<KeybindEntry> bindings;
+        try
+        {
+            bindings = Fable2ConfigFile.ParseKeybinds(_advanced.KeyboardGamepadMap);
+        }
+        catch (FormatException exception)
+        {
+            // Never silently discard broken entries when the user edits other
+            // advanced settings. An explicit reset is required.
+            var choice = MessageBox.Show(this,
+                exception.Message + "\n\nReset keybindings to defaults before editing?",
+                "Invalid existing keybindings", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (choice != MessageBoxResult.Yes) return false;
+            _advanced.KeyboardGamepadMap = Fable2ConfigValues.DefaultKeyboardGamepadMap;
+            bindings = Fable2ConfigFile.ParseKeybinds(_advanced.KeyboardGamepadMap);
+        }
         _loading = true;
         try
         {
             MouseLookCheck.IsChecked = _advanced.MouseLook;
-            DirectMouseLookCheck.IsChecked = _advanced.DirectMouseLook;
             MouseSensitivitySlider.Value = _advanced.MouseLookScale;
             MouseSensitivityBox.Text = _advanced.MouseLookScale.ToString(CultureInfo.InvariantCulture);
             HotFuncYieldSlider.Value = Math.Clamp(_advanced.HotFuncYieldEvery, 0, 16);
             HotFuncYieldBox.Text = _advanced.HotFuncYieldEvery.ToString(CultureInfo.InvariantCulture);
-            BuildKeybindRows(Fable2ConfigFile.ParseKeybinds(_advanced.KeyboardGamepadMap));
+            BuildKeybindRows(bindings);
             BuildPatchRows();
         }
         finally { _loading = false; }
         AdvancedStatusText.Text = "Editing fable2_config.toml (unsaved)";
+        return true;
     }
 
     // Build one "press-to-capture host key -> guest input" row in the KeybindList.
@@ -666,7 +682,7 @@ public partial class MainWindow : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         // Press-to-capture host key field: click it, then press the key or mouse
-        // button you want to bind (Escape cancels the capture).
+        // button you want to bind (click outside the field to cancel capture).
         var capture = new KeyCaptureField { Value = key };
         var keyField = new Border
         {
@@ -793,6 +809,7 @@ public partial class MainWindow : Window
             Key.Subtract => "NumpadMinus",
             Key.Multiply => "NumpadStar",
             Key.Divide => "NumpadSlash",
+            Key.Escape => "Escape",
             Key.Left => "Left",
             Key.Right => "Right",
             Key.Up => "Up",
@@ -833,16 +850,20 @@ public partial class MainWindow : Window
         };
     }
 
-    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    private void MainWindow_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (_activeKeyField == null) return;
-        if (e.Key == Key.Escape)
+        // Escape is a legitimate game binding. To cancel capture, click away
+        // from the active field without changing the previous mapping.
+        if (_activeKeyField is not null && !_activeKeyField.IsMouseOver)
         {
             SetKeyCaptureIdle(_activeKeyField);
             _activeKeyField = null;
-            e.Handled = true;
-            return;
         }
+    }
+
+    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_activeKeyField == null) return;
         Key key = e.Key == Key.System ? e.SystemKey : e.Key;
         string? name = KeyToName(key);
         if (name != null)
@@ -857,7 +878,16 @@ public partial class MainWindow : Window
         var combo = new ComboBox();
         foreach (string name in names)
             combo.Items.Add(new ComboBoxItem { Content = name, Tag = name });
-        combo.SelectedItem = FindTag(combo, selected) ?? combo.Items[0] as ComboBoxItem;
+        if (!string.IsNullOrWhiteSpace(selected) && FindTag(combo, selected) is null)
+        {
+            // Preserve existing aliases and unsupported values instead of
+            // silently substituting the first ("A") dropdown entry.
+            string suffix = Fable2ConfigFile.IsSupportedGuestButton(selected)
+                ? " (existing alias)" : " (unsupported: choose a valid input)";
+            var original = new ComboBoxItem { Content = selected + suffix, Tag = selected };
+            combo.Items.Insert(0, original);
+        }
+        combo.SelectedItem = FindTag(combo, selected);
         return combo;
     }
 
@@ -881,7 +911,7 @@ public partial class MainWindow : Window
     }
 
     private void AddKeybindClicked(object sender, RoutedEventArgs e) =>
-        AddKeybindRow("", Fable2ConfigFile.ButtonNames[0]);
+        AddKeybindRow("", "");
 
     // Restore the built-in default keyboard -> gamepad map (rebuilds the rows
     // from the C++ default). The user still has to press Save to persist it.
@@ -895,8 +925,9 @@ public partial class MainWindow : Window
         {
             string key = ((KeyCaptureField)_keyFields[i].Tag!).Value;
             string button = (_buttonCombos[i].SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
-            if (!string.IsNullOrWhiteSpace(key) || !string.IsNullOrWhiteSpace(button))
-                entries.Add(new KeybindEntry { Key = key, Button = button });
+            // Include blank rows: the config writer must refuse an unfinished
+            // entry rather than silently discarding it when Save is pressed.
+            entries.Add(new KeybindEntry { Key = key, Button = button });
         }
         return Fable2ConfigFile.BuildKeybinds(entries);
     }
@@ -1062,17 +1093,16 @@ public partial class MainWindow : Window
         }
 
         _advanced.MouseLook = MouseLookCheck.IsChecked == true;
-        _advanced.DirectMouseLook = DirectMouseLookCheck.IsChecked == true;
         _advanced.MouseLookScale = (int)MouseSensitivitySlider.Value;
         _advanced.HotFuncYieldEvery = int.TryParse(HotFuncYieldBox.Text, NumberStyles.Integer,
             CultureInfo.InvariantCulture, out int yieldEvery)
             ? Math.Clamp(yieldEvery, 0, 4096) : (int)HotFuncYieldSlider.Value;
-        _advanced.KeyboardGamepadMap = CollectKeybinds();
-        CollectPatches();
-
         string path = AdvancedConfigPath();
         try
         {
+            // Validate the full binding map before changing any config file.
+            _advanced.KeyboardGamepadMap = CollectKeybinds();
+            CollectPatches();
             Fable2ConfigFile.Write(path, _advanced);
             AdvancedStatusText.Text = $"Saved {Path.GetFileName(path)}.";
         }
