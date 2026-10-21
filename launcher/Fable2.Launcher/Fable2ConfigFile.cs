@@ -24,6 +24,7 @@ public class Fable2ConfigValues
     public string KeyboardGamepadMap { get; set; } = DefaultKeyboardGamepadMap;
     public bool MouseLook { get; set; } = true;
     public bool MouseDirectLook { get; set; } = false;
+    public bool MouseCameraDiagnostics { get; set; } = false;
     public int MouseLookScale { get; set; } = 256;  // range 1..4096 (cvar constraint)
     public int MouseLookScaleY { get; set; } = 256;
     public bool MouseInvertY { get; set; } = false;
@@ -144,6 +145,7 @@ public static class Fable2ConfigFile
                     if (key == "keyboard_gamepad_map") values.KeyboardGamepadMap = Unquote(rawValue);
                     else if (key == "mouse_look") values.MouseLook = ParseBool(rawValue, values.MouseLook);
                     else if (key == "mouse_direct_look") values.MouseDirectLook = ParseBool(rawValue, values.MouseDirectLook);
+                    else if (key == "mouse_look_camera_diag") values.MouseCameraDiagnostics = ParseBool(rawValue, values.MouseCameraDiagnostics);
                     else if (key == "mouse_look_scale") values.MouseLookScale = ParseInt(rawValue, values.MouseLookScale);
                     else if (key == "mouse_look_scale_y")
                     {
@@ -201,6 +203,7 @@ public static class Fable2ConfigFile
             ("input", "keyboard_gamepad_map", Quote(values.KeyboardGamepadMap)),
             ("input", "mouse_look", values.MouseLook ? "true" : "false"),
             ("input", "mouse_direct_look", values.MouseDirectLook ? "true" : "false"),
+            ("input", "mouse_look_camera_diag", values.MouseCameraDiagnostics ? "true" : "false"),
             ("input", "mouse_look_scale", values.MouseLookScale.ToString(CultureInfo.InvariantCulture)),
             ("input", "mouse_look_scale_y", Math.Clamp(values.MouseLookScaleY, 1, 4096).ToString(CultureInfo.InvariantCulture)),
             ("input", "mouse_invert_y", values.MouseInvertY ? "true" : "false"),

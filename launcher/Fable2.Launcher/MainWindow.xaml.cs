@@ -671,6 +671,7 @@ public partial class MainWindow : Window
         try
         {
             MouseLookCheck.IsChecked = _advanced.MouseLook;
+            MouseCameraDiagnosticsCheck.IsChecked = _advanced.MouseCameraDiagnostics;
             SelectByTag(MouseCameraModeCombo, _advanced.MouseDirectLook ? "direct" : "native");
             MouseInvertYCheck.IsChecked = _advanced.MouseInvertY;
             MouseVerticalSensitivitySlider.Value = _advanced.MouseLookScaleY;
@@ -1157,6 +1158,7 @@ public partial class MainWindow : Window
 
         _advanced.MouseLook = MouseLookCheck.IsChecked == true;
         _advanced.MouseDirectLook = SelectedTag(MouseCameraModeCombo) == "direct";
+        _advanced.MouseCameraDiagnostics = MouseCameraDiagnosticsCheck.IsChecked == true;
         _advanced.MouseInvertY = MouseInvertYCheck.IsChecked == true;
         _advanced.MouseLookScaleY = (int)MouseVerticalSensitivitySlider.Value;
         _advanced.MouseDeadzoneCompensation = (int)MouseDeadzoneSlider.Value;

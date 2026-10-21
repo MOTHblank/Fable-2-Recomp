@@ -80,7 +80,8 @@ mouse_look = true
 mouse_direct_look = false
 
 # Mouse-look sensitivity: guest right-stick units per host mouse pixel.
-# This is the only supported mouse camera path; larger values turn faster.
+# Native mode maps to virtual stick. Direct mode scales raw deltas in radians
+# per pixel (256 = 0.15 degrees per pixel).
 # Range: 1..4096. Default: 256.
 mouse_look_scale = 256
 
@@ -101,8 +102,8 @@ mouse_deadzone_compensation = 0
 # This does not increase the game's maximum instantaneous turning speed.
 mouse_flick_buffer_polls = 4
 
-# Log the active camera's orientation fields once, the first frame the mouse
-# moves, to confirm the offsets above. Default: false
+# Log mode at startup and periodic direct-mode diagnostics (raw motion events,
+# camera hook calls, applied and rejected view-buffer updates). Default: false
 mouse_look_camera_diag = false
 
 # Dump EVERY 4-byte field of the active camera object (offset 0..260) plus the

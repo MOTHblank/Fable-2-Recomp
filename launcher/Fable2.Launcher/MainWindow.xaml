@@ -269,9 +269,15 @@
                   <ComboBoxItem Content="Native stick (original)" Tag="native" />
                   <ComboBoxItem Content="Direct mouse orbit (experimental)" Tag="direct" />
                 </ComboBox>
-                <TextBlock Text="Direct mode uses raw mouse movement for horizontal and vertical orbit without the stick turning-speed cap. It can bypass wall collision and scripted framing; use Native if a scene misbehaves."
+                <TextBlock Text="Direct mode applies raw motion to the hero camera output without the virtual-stick speed limit. Experimental: collisions and scripted framing may differ."
                            FontSize="12" Foreground="{StaticResource MutedTextBrush}"
                            Margin="0,5,0,0" TextWrapping="Wrap" />
+                <CheckBox x:Name="MouseCameraDiagnosticsCheck"
+                          Content="Log mouse input and camera hook diagnostics"
+                          Margin="0,10,0,0" Foreground="{StaticResource TextBrush}" />
+                <TextBlock Text="Periodic [mouse-camera] records in the game logs show raw input events, applied camera updates and invalid outputs. Disabled by default."
+                           FontSize="12" Foreground="{StaticResource MutedTextBrush}"
+                           Margin="0,3,0,0" TextWrapping="Wrap" />
                 <Grid Margin="0,16,0,0">
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
