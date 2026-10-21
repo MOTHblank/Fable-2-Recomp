@@ -44,3 +44,48 @@ diff --git a/src/ui/d3d12/d3d12_presenter.cpp b/src/ui/d3d12/d3d12_presenter.cpp
    // Present as soon as possible, without waiting for vsync (the host refresh
    // rate may be something like 144 Hz, which is not a multiple of the common
    // 30 Hz or 60 Hz guest refresh rate), and allowing dropping outdated queued
+diff --git a/src/graphics/graphics_system.cpp b/src/graphics/graphics_system.cpp
+--- a/src/graphics/graphics_system.cpp
++++ b/src/graphics/graphics_system.cpp
+@@ -44,6 +44,14 @@
+ REXCVAR_DEFINE_BOOL(guest_vblank_pacing, true, "GPU",
+                     "Pace emulated vblank interrupts at the guest refresh rate when VSync is on")
+     .lifecycle(rex::cvar::Lifecycle::kHotReload);
++
++// Preserve 1000 Hz for uncapped standalone runs; a capped launcher preset
++// can reduce interrupt dispatch work while keeping three frames' worth of
++// headroom for Fable II's two-vblank-per-frame progress gate.
++REXCVAR_DEFINE_INT32(fast_guest_vblank_hz, 1000, "GPU",
++                     "Virtual vblank frequency when guest pacing is disabled")
++    .range(120, 1000)
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+ 
+ namespace {
+ 
+@@ -162,7 +170,6 @@
+         uint64_t guest_tick_frequency = chrono::Clock::guest_tick_frequency();
+         uint64_t vsync_interval_ticks =
+             std::max(uint64_t(1), uint64_t(double(guest_tick_frequency) / refresh_rate_hz));
+-        uint64_t no_vsync_interval_ticks = std::max(uint64_t(1), guest_tick_frequency / 1000);
+         uint64_t last_frame_time = chrono::Clock::QueryGuestTickCount();
+         while (vsync_worker_running_) {
+           uint64_t current_time = chrono::Clock::QueryGuestTickCount();
+@@ -165,10 +172,14 @@
+         uint64_t no_vsync_interval_ticks = std::max(uint64_t(1), guest_tick_frequency / 1000);
+         uint64_t last_frame_time = chrono::Clock::QueryGuestTickCount();
+         while (vsync_worker_running_) {
+-          uint64_t current_time = chrono::Clock::QueryGuestTickCount();
+-          uint64_t interval_ticks =
+-              (REXCVAR_GET(vsync) && REXCVAR_GET(guest_vblank_pacing))
+-                  ? vsync_interval_ticks : no_vsync_interval_ticks;
++          uint64_t current_time = chrono::Clock::QueryGuestTickCount();
++          const uint64_t fast_rate_hz = uint64_t(std::clamp(
++              REXCVAR_GET(fast_guest_vblank_hz), int32_t(120), int32_t(1000)));
++          const uint64_t no_vsync_interval_ticks =
++              std::max(uint64_t(1), guest_tick_frequency / fast_rate_hz);
++          uint64_t interval_ticks =
++              (REXCVAR_GET(vsync) && REXCVAR_GET(guest_vblank_pacing))
++                  ? vsync_interval_ticks : no_vsync_interval_ticks;
+           while (current_time - last_frame_time >= interval_ticks) {
+             MarkVblank();
+             last_frame_time += interval_ticks;
