@@ -95,13 +95,14 @@ if not exist "%SDK%\bin\rexglue.exe" (
 if not exist "%SDKSRC%\CMakeLists.txt" (
     git submodule update --init thirdparty/rexglue-sdk || exit /b 1
 )
-python "%ROOT%tools\prepare_codegen_manifest.py" "%ROOT%fable_2_manifest.toml" "%ROOT%.fable2_codegen_manifest.toml" "out/game/default.xex" || exit /b 1
+rem The tracked manifest points directly to out/game/default.xex.
+rem This also survives ReXGlue regenerating its own CMake integration file.
 rem First-time CMake configuration must see generated/default/sources.cmake
 rem already on disk; otherwise rexglue_setup_target cannot add guest code to
 rem the executable during configure, even though codegen runs later in Ninja.
 if not exist "%ROOT%generated\default\sources.cmake" (
     echo Generating guest-code source list for first-time CMake setup ...
-    "%SDK%\bin\rexglue.exe" codegen "%ROOT%.fable2_codegen_manifest.toml" || exit /b 1
+    "%SDK%\bin\rexglue.exe" codegen "%ROOT%fable_2_manifest.toml" || exit /b 1
     if not exist "%ROOT%generated\default\sources.cmake" (
         echo Error: ReXGlue did not produce generated\default\sources.cmake. 1>&2
         exit /b 1
@@ -110,8 +111,7 @@ if not exist "%ROOT%generated\default\sources.cmake" (
 echo [3/4] Building matched source SDK ...
 call "%ROOT%tools\build_runtime_sdk.cmd" "%SDK%" Release || exit /b 1
 
-rem CMake prepares a generated manifest next to the source manifest, changing
-rem ONLY its XEX input to out/game/default.xex. The tracked manifest is untouched.
+rem Use the same tracked manifest for code generation and CMake rebuilds.
 echo [4/4] Configuring and building game ...
 cmake --preset win-amd64-release -DCMAKE_PREFIX_PATH="%RUNTIME%" -Drexglue_DIR="%RUNTIME%\lib\cmake\rexglue" -DREXGLUE_SDK_ROOT="%RUNTIME%" -DREXGLUE_SDK_SOURCE="%SDKSRC%" -DFABLE2_CODEGEN_TOOL="%SDK%\bin\rexglue.exe" || exit /b 1
 cmake --build "%BUILDDIR%" --target fable_2 || exit /b 1

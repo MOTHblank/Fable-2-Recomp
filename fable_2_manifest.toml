@@ -25,7 +25,7 @@ sdk_version = "0.10.0"
 game_root = "."
 
 [entrypoint]
-file_path = "default.xex"
+file_path = "out/game/default.xex"
 out_directory_path = "generated/default"
 includes = ["fable2_switch_tables.toml"]
 

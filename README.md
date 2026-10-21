@@ -546,7 +546,7 @@ renderer DLLs. No independent `rexglue-sdk-src` checkout or obsolete
 `rexglue-sdk-local.patch` application is required.
 
 - **One build configuration:** `build.cmd` always builds the Windows x64 Release game using Ninja and Clang into `out\build\win-amd64-release`, then places executable files in `out\game`. No user-facing build-mode or target selection is needed.
-- Codegen uses a generated manifest with `file_path = "out/game/default.xex"`; the tracked `fable_2_manifest.toml` stays untouched. The output manifest is ignored by Git and only rewritten when inputs change. No copy or hard link of the XEX is needed.
+- Codegen uses the tracked `fable_2_manifest.toml` with `[entrypoint].file_path = "out/game/default.xex"`. ReXGlue may regenerate `generated/rexglue.cmake` during codegen, but it continues to use that same manifest. No duplicate XEX, generated override manifest, or hard link is needed.
 - A full clean build recompiles ~291 generated translation units (60,462 guest functions).
 
 ## Vulkan renderer

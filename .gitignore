@@ -67,5 +67,5 @@ thirdparty/android-ndk/
 XenonRecomp
 TODO.md
 
-# Local codegen manifest points at out/game/default.xex (not a source change)
+# Ignore stale override manifests produced by older build revisions (no longer used)
 .fable2_codegen_manifest.toml
