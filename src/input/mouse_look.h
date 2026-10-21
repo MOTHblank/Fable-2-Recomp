@@ -17,25 +17,39 @@ namespace fable2::mouselook {
 // Accumulated raw cursor displacement (host pixels) since the last drain.
 // X = right is positive, Y = down is positive (screen coordinates); the hook
 // applies the sign/scale from fable2_config.
-inline std::atomic<int32_t>& dx_acc() {
-  static std::atomic<int32_t> v{0};
+inline std::atomic<float>& dx_acc() {
+  static std::atomic<float> v{0.0f};
   return v;
 }
-inline std::atomic<int32_t>& dy_acc() {
-  static std::atomic<int32_t> v{0};
+inline std::atomic<float>& dy_acc() {
+  static std::atomic<float> v{0.0f};
   return v;
 }
 
 // Host input driver: add this poll's cursor displacement.
-inline void add_delta(int32_t dx, int32_t dy) {
-  dx_acc().fetch_add(dx, std::memory_order_relaxed);
-  dy_acc().fetch_add(dy, std::memory_order_relaxed);
+inline void add_delta(float dx, float dy) {
+  if (std::isfinite(dx) && std::isfinite(dy)) {
+    dx_acc().fetch_add(dx, std::memory_order_relaxed);
+    dy_acc().fetch_add(dy, std::memory_order_relaxed);
+  }
 }
 
 // Guest camera hook: consume and reset the accumulated displacement.
-inline void take_delta(int32_t& out_dx, int32_t& out_dy) {
-  out_dx = dx_acc().exchange(0, std::memory_order_relaxed);
-  out_dy = dy_acc().exchange(0, std::memory_order_relaxed);
+inline void take_delta(float& out_dx, float& out_dy) {
+  out_dx = dx_acc().exchange(0.0f, std::memory_order_relaxed);
+  out_dy = dy_acc().exchange(0.0f, std::memory_order_relaxed);
+}
+inline std::atomic<bool>& reset_requested() {
+  static std::atomic<bool> pending{true};
+  return pending;
+}
+inline void request_reset() {
+  dx_acc().store(0.0f, std::memory_order_relaxed);
+  dy_acc().store(0.0f, std::memory_order_relaxed);
+  reset_requested().store(true, std::memory_order_release);
+}
+inline bool take_reset_request() {
+  return reset_requested().exchange(false, std::memory_order_acq_rel);
 }
 
 // Guest memory, set once at image load (Fable2App::OnPostLoadXexImage) so the
