@@ -192,7 +192,7 @@
           <Border Style="{StaticResource Panel}">
             <StackPanel>
               <TextBlock Text="Game location" Style="{StaticResource SectionTitle}" />
-              <TextBlock Text="ORIGINAL GAME FILES" Style="{StaticResource FieldLabel}" />
+              <TextBlock Text="INSTALLATION AND EXTRACTED GAME FILES" Style="{StaticResource FieldLabel}" />
               <Border Background="#99101819" BorderBrush="#445E706A" BorderThickness="1"
                       CornerRadius="7" Padding="10,8">
                 <TextBlock x:Name="GamePathText" Text="Not selected" FontSize="12"
@@ -348,7 +348,7 @@
             <ColumnDefinition Width="12" />
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
-          <TextBlock x:Name="StatusText" Text="Select the original game folder containing default.xex and data."
+          <TextBlock x:Name="StatusText" Text="Extract a supported ISO into the installation folder to begin."
                      Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
           <Button Grid.Column="1" Content="Save settings" Click="SaveClicked"
                   Style="{StaticResource SecondaryButton}" MinWidth="125" />

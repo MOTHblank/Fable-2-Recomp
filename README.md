@@ -44,15 +44,15 @@ Original GOTY USA/Europe and German GOTY dumps are supported by the default
 On Windows, install the prerequisites listed under **Building** below, then run
 `build.cmd` from the repository root. This builds the Release native game,
 its matched D3D12 runtime, and the self-contained WPF launcher. Start
-`out\\game\\Fable2Launcher.exe`, click **Extract from ISO** and select your
+`out\game\\Fable2Launcher.exe`, click **Extract from ISO** and select your
 own Fable II disc image. It extracts `default.xex` and `data/` into
-`out\\game`; launch the game with the launcher. The game executable is
-`out\\game\\fable_2.exe` (not `fable.exe`).
+`out\game`; launch the game with the launcher. The game executable is
+`out\game\\fable_2.exe` (not `fable.exe`).
 
-Intermediate compilation artifacts stay in `out\\build\\win-amd64-release`.
+Intermediate compilation artifacts stay in `out\build\\win-amd64-release`.
 Do not point the launcher at that folder. Rebuilds keep extracted content and
-saved settings in `out\\game`. `build.cmd launcher` rebuilds only the WPF
-launcher in the same output folder. No wrapper scripts or manual file copies.
+saved settings in `out\game`. The launcher is built automatically by `build.cmd`. No wrapper scripts,
+extra commands or manual file copies.
 
 ## Windows launcher
 
@@ -70,7 +70,7 @@ discs with the shared [X360Extract](tools/x360extract/) library, so its output
 matches the `x360extract` tool byte for byte — making the launcher the simplest
 way to get the game files in place, with no separate extractor tool.
 
-The game folder is always `out\\game` in a source checkout. The launcher and
+The game folder is always `out\game` in a source checkout. The launcher and
 `fable_2.exe` are built together in this folder; **Extract from ISO** puts
 `default.xex` and `data/` in the same location. There is no separate path
 selection, moving of game files or per-configuration extraction. Both
@@ -82,18 +82,17 @@ applications are named Fable 2 Recompiled and use project-owned icons.
 
 # Notes for running the game
 - **How to extract (built-in, recommended):** the launcher has an **Extract from ISO** button. Click **Extract from ISO** and pick your disc image (`.iso`). It first checks the iso against the supported-version list, and only once that matches does it extract disc (`default.xex` and `data/`) into the launcher's own folder. No separate tool is required.
-- **How to extract (external GUI tool):** alternatively, rip the disc to an ISO and open it with **[XboxImageExtractor](https://github.com/dromex1/XboxImageExtractor)** — a GUI tool for Xbox 360 game images. It lists the image's filesystem; select `default.xex` and `data` and extract them into the project root (`data` extract as folders).
-- **You must supply the game content yourself** (it is not in the repo): rip the Fable 2 GOTY (USA/EU) disc (the one with SHA-256 above) and put `default.xex` and `data/` in the project root. The build does not copy this into the build directories   
-- **Saves live in `<build dir>\saves\`** — back that folder up to keep your progress, and copy it between build trees (Debug/Release) or machines to carry a save over.
+- **You must supply your own game disc ISO** (not in this repository). `build.cmd` starts the launcher to extract it into `out\game` when missing.   
+- **Saves live in `out\game\\saves\`** — they are preserved across rebuilds.
 - The `--game_data_root <path>` override still points the content root at a different tree (e.g. to run from a shared content copy without staging); saves/cache still land next to the exe.
 - Although this was made for the US / Europe GOTY version I have been able to run the following regions: Germany, France, Italy, Russia, and Spain. Your milage may very if you use those regions.
 
 
 ## Running
 
-To run the game, execute `build.cmd`, start `out\\game\\Fable2Launcher.exe`,
-extract a supported disc ISO with its **Extract from ISO** button, and click
-**Launch**. Both programs and extracted files live in `out\\game`.
+Run `build.cmd`, complete the ISO extraction prompt if necessary, then start
+`out\game\\Fable2Launcher.exe` and click **Launch**. All game content and
+both executables live in `out\game`.
 
 
 Optional command-line overrides (all normal `--cvar value` args):
@@ -488,22 +487,27 @@ hardcoded paths**. Prerequisites (all standard tools):
 - **Internet** on first build — `build.cmd` auto-downloads the prebuilt
   ReXGlue SDK v0.10.0 (~100 MB) from the
   [official release](https://github.com/rexglue/rexglue-sdk/releases/tag/v0.10.0)
-  into `out\tooling\rexglue-sdk-0.10.0\`. A compatible official SDK on PATH
+  into `out\tooling\rexglue-sdk-0.10.0`. A compatible official SDK on PATH
   is used instead if present. Downloads never replace the source submodule.
 - **Python and Git** for code generation and source-SDK preparation; **Visual
   Studio Build Tools / Windows SDK** (x64 developer shell) for the native build.
 
-```
-build.cmd               # configure + fable_2_codegen (runs rexglue codegen on the manifest)
-build.cmd fable_2       # configure + build the full executable
-build.cmd <target>      # any other CMake target
-build.cmd -release [t]  # build as Release (-O3) instead of Debug (-r is short form)
+```bat
+build.cmd
 ```
 
+This is the one supported Windows build: the Release game, matched runtime,
+and self-contained launcher are installed in `out/game`. On first run,
+`build.cmd` builds the launcher and opens its ISO picker if game content is
+missing. It extracts `out/game/default.xex` and `out/game/data`, then the
+same command resumes the native build. Start `out/game/Fable2Launcher.exe`;
+`fable_2.exe` is beside it. CMake intermediates stay in `out/build`, while
+rebuilds preserve game content, settings, and saves.
+
 The first `build.cmd` run fetches the official SDK if needed under `out/tooling`.
-Both Debug and Release build the pinned, patched SDK from source; see
+The Windows build uses the pinned, patched SDK from source; see
 [runtime build requirements](docs/RUNTIME_FIXES.md). Game content is required
-for code generation but is never published with this repository.
+for code generation; the launcher extracts it from your disc into `out\game`.
 
 Manual/advanced setup (normally not needed):
 
@@ -521,16 +525,8 @@ The official binary SDK is retained only for its compatible codegen tool;
 renderer DLLs. No independent `rexglue-sdk-src` checkout or obsolete
 `rexglue-sdk-local.patch` application is required.
 
-- Toolchain: the `win-amd64-debug` preset (Ninja + clang) by default. The SDK's public headers use clang builtins (`__builtin_bswap32`, `__VA_OPT__`), so plain MSVC `cl` cannot compile the generated code — a `win-msvc-debug` preset exists but only works for targets that don't compile `generated/`.
-- **Release builds:** `build.cmd` defaults to the `win-amd64-debug` preset (`-O0`, `out\build\win-amd64-debug`). Pass the `-release` flag (short form: `-r`) to select the `win-amd64-release` preset (`-O3`, `out\build\win-amd64-release`):
-
-  ```
-  build.cmd -release fable_2_codegen
-  build.cmd -release fable_2
-  ```
-
-  Both configurations build the patched source SDK, with separate SDK build/staging trees. Release stages `rexruntime.dll` and `rexgpu-xenos.dll`; Debug stages `rexruntimed.dll` and `rexgpu-xenosd.dll`. **Debug builds are drastically slower at runtime** — the recompiled guest code, the runtime, and the Xenos GPU emulator all run at `-O0` with assertions enabled — so use Release for any performance-sensitive run. Omit the flag to build Debug again; the two build trees are independent and can coexist. After updating, rerun `build.cmd` to refresh the SDK selection in an existing CMake cache.
-- Codegen runs as part of the build and re-runs automatically when `fable_2_manifest.toml` or `default.xex` change (tracked via the generated DEPFILE).
+- **One build configuration:** `build.cmd` always builds the Windows x64 Release game using Ninja and Clang into `out\build\win-amd64-release`, then places executable files in `out\game`. No user-facing build-mode or target selection is needed.
+- Codegen uses a generated manifest with `file_path = "out/game/default.xex"`; the tracked `fable_2_manifest.toml` stays untouched. The output manifest is ignored by Git and only rewritten when inputs change. No copy or hard link of the XEX is needed.
 - A full clean build recompiles ~291 generated translation units (60,462 guest functions).
 
 ## Vulkan renderer
@@ -543,7 +539,7 @@ is built separately from this project's pinned, patched source submodule at
 inits Vulkan, and presents a clear color, proving the whole stack on a real GPU:
 
 ```
-build.cmd -release fable_2_vulkan_smoke
+cmake --build out\build\win-amd64-release --target fable_2_vulkan_smoke
 out\build\win-amd64-release\fable_2_vulkan_smoke.exe   # -> stable blue window
 ```
 
@@ -570,9 +566,9 @@ independent runtime/plugin snapshots. The Windows launcher checks provenance
 and SHA-256 hashes before running each pair:
 
 ```bat
-build.cmd -release fable_2       rem Build the game and matched D3D12 SDK.
+build.cmd       rem Build the game and matched D3D12 SDK.
 tools\build_sdk_vulkan.cmd      rem Build and snapshot the Vulkan-enabled SDK.
-build.cmd -release fable_2       rem Stage both verified pairs, even if exe is unchanged.
+build.cmd       rem Stage both verified pairs, even if exe is unchanged.
 
 out\build\win-amd64-release\fable2.cmd          rem D3D12 (default).
 out\build\win-amd64-release\fable2.cmd vulkan   rem Vulkan.

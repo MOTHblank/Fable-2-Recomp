@@ -1,174 +1,124 @@
 @echo off
-rem Build the Fable 2 ReXGlue project.
-rem
-rem Toolchain: clang + lld + Ninja (the SDK headers use clang builtins, so
-rem plain MSVC cl cannot compile the generated code). Preset: win-amd64-debug
-rem (out\build\win-amd64-release) by default, debug with -debug.
-rem An MSVC-only preset (win-msvc-debug) exists in CMakePresets.json but only
-rem works for targets that don't compile the generated code.
-rem
-rem Usage:
-rem   build.cmd                  build the Release game and launcher into out\game
-rem   build.cmd fable_2          same as above
-rem   build.cmd launcher         rebuild only the launcher into out\game
-rem   build.cmd <other target>   build any other CMake target
-rem   build.cmd -debug [t]       build Debug instead of Release
-rem                              (out\build\win-amd64-release; stages the
-rem                              release rexruntime/rexgpu-xenos plugins)
-rem   build.cmd -clean [t]       wipe the build dir for the config instead of
-rem   build.cmd -c [t]             building. E.g. "build.cmd -clean
-rem                                fable_2_profiler" deletes
-rem                                out\build\win-amd64-release-profiling
-setlocal
-cd /d "%~dp0"
+setlocal EnableExtensions
+cd /d "%~dp0" || exit /b 1
 
-rem Parse launcher-only requests before the native toolchain setup.
-rem Self-contained is the default so the shipped exe needs no .NET install.
-rem LLVM: prefer clang++ already on PATH, else the default install location
-where clang++ >nul 2>nul
-if errorlevel 1 (
-    if exist "C:\Program Files\LLVM\bin\clang++.exe" set "LLVM=C:\Program Files\LLVM\bin"
-    if not defined LLVM (
-        echo Error: LLVM not found on PATH and no clang++.exe at C:\Program Files\LLVM\bin 1>&2
-        echo        Install LLVM - https://llvm.org - or add its bin\ to PATH. 1>&2
-        exit /b 1
-    )
-)
-if defined LLVM set "PATH=%LLVM%;%PATH%"
-rem Ninja: prefer one on PATH, else the user bin, else the WinGet package dir
-where ninja >nul 2>nul
-if errorlevel 1 (
-    if exist "%USERPROFILE%\bin\ninja.exe" set "PATH=%USERPROFILE%\bin;%PATH%"
-    for %%d in ("%LOCALAPPDATA%\Microsoft\WinGet\Packages\Ninja-build.Ninja_*\ninja.exe") do set "NINJADIR=%%~dpd"
-    if defined NINJADIR set "PATH=%NINJADIR%;%PATH%"
+rem One Windows workflow: build.cmd -> out\game\Fable2Launcher.exe.
+rem out\game is BOTH the disc extraction root and the installed game directory.
+rem out\build holds only intermediate CMake/SDK compilation artifacts.
+set "ROOT=%~dp0"
+set "GAME=%ROOT%out\game"
+set "BUILDDIR=%ROOT%out\build\win-amd64-release"
+set "SDK=%ROOT%out\tooling\rexglue-sdk-0.10.0\win-amd64"
+set "RUNTIME=%ROOT%out\tooling\runtime-sdk\win-amd64"
+set "SDKSRC=%ROOT%thirdparty\rexglue-sdk"
+
+if /i "%~1"=="clean" if "%~2"=="" goto clean
+if not "%~1"=="" (
+    echo Usage: build.cmd [clean] 1>&2
+    exit /b 2
 )
 
-rem Official codegen SDK: prefer rexglue.exe on PATH, then the downloaded
-rem package under out/tooling. Never download over the source submodule.
-set "REXSDK="
-for /f "delims=" %%f in ('where rexglue.exe 2^>nul') do (
-    if not defined REXSDK for %%d in ("%%~dpf..") do set "REXSDK=%%~fdd"
-)
-if not defined REXSDK set "REXSDK=%~dp0out\tooling\rexglue-sdk-0.10.0\win-amd64"
-if not exist "%REXSDK%\lib\cmake\rexglue\rexglueConfig.cmake" (
-    set "REXSDK=%~dp0..\rexglue-sdk-0.10.0.9-dev.g923c1a5-win-amd64\win-amd64"
-)
-if not exist "%REXSDK%\lib\cmake\rexglue\rexglueConfig.cmake" (
-    echo ReXGlue SDK not found; downloading via tools\setup_sdk.cmd ...
-    call "%~dp0tools\setup_sdk.cmd" || exit /b 1
-    set "REXSDK=%~dp0out\tooling\rexglue-sdk-0.10.0\win-amd64"
-)
-if not exist "%REXSDK%\lib\cmake\rexglue\rexglueConfig.cmake" (
-    echo Error: ReXGlue SDK not found under %REXSDK% 1>&2
+where dotnet >nul 2>nul || (
+    echo Error: .NET 8 SDK is required to build the Windows launcher. 1>&2
     exit /b 1
 )
 
-rem Argument parsing: -release / -r select the Release preset, -clean / -c
-rem wipes the build dir instead of building, the first non-flag argument is
-rem the CMake target (default: fable_2_codegen).
-set "CONFIG=win-amd64-release"
-set "TARGET="
-set "CLEAN=0"
-:parse_args
-if "%~1"=="" goto args_done
-if /i "%~1"=="-debug" (
-    set "CONFIG=win-amd64-debug"
-    shift
-    goto parse_args
-)
-if /i "%~1"=="-release" (
-    set "CONFIG=win-amd64-release"
-    shift
-    goto parse_args
-)
-if /i "%~1"=="-r" (
-    set "CONFIG=win-amd64-release"
-    shift
-    goto parse_args
-)
-if /i "%~1"=="-clean" (
-    set "CLEAN=1"
-    shift
-    goto parse_args
-)
-if /i "%~1"=="-c" (
-    set "CLEAN=1"
-    shift
-    goto parse_args
-)
-set "TARGET=%~1"
-shift
-goto parse_args
-:args_done
-if "%TARGET%"=="" set "TARGET=fable_2"
-if /i "%TARGET%"=="launcher" (
-    call "%~dp0launcher\build-launcher.cmd" || exit /b 1
-    exit /b 0
-)
+rem Publish the launcher FIRST: on a fresh checkout it can extract the original
+rem disc before native code generation needs default.xex. Do not touch existing
+rem game data, saves, or settings when publishing.
+echo [1/4] Publishing launcher to out\game ...
+call "%ROOT%launcher\build-launcher.cmd" || exit /b 1
 
-rem Special target: fable_2_profiler = Release (-O3) + symbols, but WITHOUT the
-rem post-build stable-hash PE cleaning, so the exe keeps the linker's real PDB
-rem UUID/Age and debuggers/profilers (VS, WinDbg, VTune) load fable_2.pdb
-rem directly. Builds into out\build\win-amd64-release-profiling.
-if /i "%TARGET%"=="fable_2_profiler" (
-    set "CONFIG=win-amd64-release-profiling"
-    set "TARGET=fable_2"
-)
+rem An extracted retail disc and both binaries always live under out\game.
+rem No fallback to old source-root data/, and no separate Game Location setting.
+if not exist "%GAME%\default.xex" goto extract
+if not exist "%GAME%\data\dir.manifest" goto extract
+goto content_ready
 
-rem Clean: wipe the whole build dir for the selected config (a full clean is
-rem just deleting the tree for a Ninja + CMake build) and stop.
-if "%CLEAN%"=="1" (
-    if exist "out\build\%CONFIG%" (
-        rmdir /s /q "out\build\%CONFIG%"
-        echo Cleaned out\build\%CONFIG%
-    ) else (
-        echo Nothing to clean: out\build\%CONFIG% does not exist
+:extract
+echo.
+echo [2/4] Game content is missing from out\game.
+echo Select your own Fable II disc ISO in the launcher window.
+start "" /wait "%GAME%\Fable2Launcher.exe" --extract-for-build
+if errorlevel 1 (
+    echo Error: ISO extraction was cancelled or failed. 1>&2
+    exit /b 1
+)
+if not exist "%GAME%\default.xex" (
+    echo Error: out\game\default.xex is missing after extraction. 1>&2
+    exit /b 1
+)
+if not exist "%GAME%\data\dir.manifest" (
+    echo Error: out\game\data\dir.manifest is missing after extraction. 1>&2
+    exit /b 1
+)
+:content_ready
+echo [2/4] Game content found in out\game.
+
+rem ReXGlue needs Clang, Ninja, CMake, Python and the pinned SDK. The project
+rem downloads only the code-generation SDK; the native runtime is rebuilt from
+rem its checked-in source submodule.
+where clang++ >nul 2>nul
+if errorlevel 1 (
+    if exist "C:\Program Files\LLVM\bin\clang++.exe" set "PATH=C:\Program Files\LLVM\bin;%PATH%"
+)
+where clang++ >nul 2>nul || (
+    echo Error: clang++ not found. Install LLVM or add it to PATH. 1>&2
+    exit /b 1
+)
+where ninja >nul 2>nul
+if errorlevel 1 (
+    if exist "%USERPROFILE%\bin\ninja.exe" set "PATH=%USERPROFILE%\bin;%PATH%"
+    for /d %%D in ("%LOCALAPPDATA%\Microsoft\WinGet\Packages\Ninja-build.Ninja_*") do (
+        if exist "%%~fD\ninja.exe" set "PATH=%%~fD;%PATH%"
     )
-    exit /b 0
+)
+where ninja >nul 2>nul || (
+    echo Error: Ninja not found on PATH. 1>&2
+    exit /b 1
+)
+for %%T in (cmake python git) do (
+    where %%T >nul 2>nul || (
+        echo Error: %%T not found on PATH. 1>&2
+        exit /b 1
+    )
 )
 
-rem The launcher and game always share one install location.
-rem The default build is the playable Release build; -debug remains available
-rem for diagnostics without changing the installed game directory.
-
-rem Bootstrap CMake integration from the existing manifest on a fresh clone.
-rem Do not run rexglue init: that would replace the project's authored files.
-if not exist "generated\rexglue.cmake" (
-    "%REXSDK%\bin\rexglue.exe" codegen fable_2_manifest.toml || exit /b 1
+if not exist "%SDK%\lib\cmake\rexglue\rexglueConfig.cmake" (
+    echo Downloading pinned ReXGlue codegen SDK ...
+    call "%ROOT%tools\setup_sdk.cmd" || exit /b 1
 )
-
-rem Pinned source submodule, needed by every matched native runtime build.
-set "SDKSRC=%~dp0thirdparty\rexglue-sdk"
+if not exist "%SDK%\bin\rexglue.exe" (
+    echo Error: ReXGlue SDK is incomplete under "%SDK%". 1>&2
+    exit /b 1
+)
 if not exist "%SDKSRC%\CMakeLists.txt" (
     git submodule update --init thirdparty/rexglue-sdk || exit /b 1
 )
+python "%ROOT%tools\prepare_codegen_manifest.py" "%ROOT%fable_2_manifest.toml" "%ROOT%.fable2_codegen_manifest.toml" "out/game/default.xex" || exit /b 1
+echo [3/4] Building matched source SDK ...
+call "%ROOT%tools\build_runtime_sdk.cmd" "%SDK%" Release || exit /b 1
 
-rem Debug must carry the same fixes as Release, with its own debug DLLs/libs.
-set "RUNTIMECONFIG=Release"
-set "RUNTIMEDIR=runtime-sdk"
-if /i "%CONFIG%"=="win-amd64-debug" (
-    set "RUNTIMECONFIG=Debug"
-    set "RUNTIMEDIR=runtime-sdk-debug"
+rem CMake prepares a generated manifest next to the source manifest, changing
+rem ONLY its XEX input to out/game/default.xex. The tracked manifest is untouched.
+echo [4/4] Configuring and building game ...
+cmake --preset win-amd64-release -DCMAKE_PREFIX_PATH="%RUNTIME%" -Drexglue_DIR="%RUNTIME%\lib\cmake\rexglue" -DREXGLUE_SDK_ROOT="%RUNTIME%" -DREXGLUE_SDK_SOURCE="%SDKSRC%" -DFABLE2_CODEGEN_TOOL="%SDK%\bin\rexglue.exe" || exit /b 1
+cmake --build "%BUILDDIR%" --target fable_2 || exit /b 1
+if not exist "%GAME%\fable_2.exe" (
+    echo Error: out\game\fable_2.exe not produced by the build. 1>&2
+    exit /b 1
 )
-call "%~dp0tools\build_runtime_sdk.cmd" "%REXSDK%" "%RUNTIMECONFIG%" || exit /b 1
-set "CODEGENSDK=%REXSDK%"
-set "REXSDK=%~dp0out\tooling\%RUNTIMEDIR%\win-amd64"
+if not exist "%GAME%\Fable2Launcher.exe" (
+    echo Error: out\game\Fable2Launcher.exe not produced by the build. 1>&2
+    exit /b 1
+)
+echo.
+echo Build complete. Launch "%GAME%\Fable2Launcher.exe"
+exit /b 0
 
-rem (inline -D with quotes at the call site: cmd cannot carry a quoted value
-rem in a variable for paths with spaces)
-cmake --preset %CONFIG% -DCMAKE_PREFIX_PATH="%REXSDK%" -Drexglue_DIR="%REXSDK%\lib\cmake\rexglue" -DREXGLUE_SDK_ROOT="%REXSDK%" -DREXGLUE_SDK_SOURCE="%SDKSRC%" -DFABLE2_CODEGEN_TOOL="%CODEGENSDK%\bin\rexglue.exe" || exit /b 1
-cmake --build "out\build\%CONFIG%" --target %TARGET% || exit /b 1
-if /i "%TARGET%"=="fable_2" (
-    call "%~dp0launcher\build-launcher.cmd" || exit /b 1
-    if not exist "%~dp0out\game\fable_2.exe" (
-        echo Error: native game executable is missing from out\game. 1>&2
-        exit /b 1
-    )
-    if not exist "%~dp0out\game\Fable2Launcher.exe" (
-        echo Error: launcher executable is missing from out\game. 1>&2
-        exit /b 1
-    )
-    echo.
-    echo Build complete. Start: "%~dp0out\game\Fable2Launcher.exe"
-)
+:clean
+rem Clean build intermediates only, never delete extracted content or saves.
+if exist "%BUILDDIR%" rmdir /s /q "%BUILDDIR%"
+if exist "%ROOT%out\build\runtime-sdk" rmdir /s /q "%ROOT%out\build\runtime-sdk"
+echo Build intermediates removed. Game content and saves in out\game preserved.
 exit /b 0

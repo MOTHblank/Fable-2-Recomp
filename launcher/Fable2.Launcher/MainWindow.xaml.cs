@@ -17,6 +17,9 @@ public partial class MainWindow : Window
     private string? _gameDirectory;
     private string? _executableDirectory;
     private bool _loading = true;
+    private bool _gameReady;
+    private readonly bool _extractForBuild = Array.Exists(Environment.GetCommandLineArgs(),
+        arg => string.Equals(arg, "--extract-for-build", StringComparison.OrdinalIgnoreCase));
 
     // Advanced Options page state.
     private Fable2ConfigValues _advanced = new();
@@ -50,6 +53,13 @@ public partial class MainWindow : Window
         DetectGameDirectory();
         _loading = false;
         RefreshSummary();
+        if (_extractForBuild)
+        {
+            // A first-time build has no native executable yet. Present the ISO
+            // picker immediately, then exit back to build.cmd after extraction.
+            Loaded += (_, _) => Dispatcher.BeginInvoke(
+                new Action(() => ExtractClicked(this, new RoutedEventArgs())));
+        }
     }
 
     private void SetDefaults()
@@ -83,11 +93,15 @@ public partial class MainWindow : Window
             LoadConfiguration();
             GameCompatibility compatibility = GameCompatibilityInspector.Inspect(_gameDirectory);
             GameLaunchPlanner.Create(_executableDirectory, _gameDirectory, compatibility);
+            _gameReady = true;
+            LaunchButton.IsEnabled = !_extracting;
             StatusText.Text = compatibility.Message;
             ConfigStateText.Text = compatibility.Label;
         }
         catch (Exception exception)
         {
+            _gameReady = false;
+            LaunchButton.IsEnabled = false;
             StatusText.Text = exception.Message;
             ConfigStateText.Text = "Not ready to launch";
         }
@@ -168,7 +182,7 @@ public partial class MainWindow : Window
     {
         if (_gameDirectory is null || _executableDirectory is null || !File.Exists(Path.Combine(_executableDirectory, "fable_2.exe")))
         {
-            MessageBox.Show(this, "Choose the folder containing fable_2.exe first.",
+            MessageBox.Show(this, "fable_2.exe is missing from this installation. Run build.cmd.",
                 "Game not found", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
@@ -315,7 +329,11 @@ public partial class MainWindow : Window
             Filter = "ISO (*.iso)|*.iso",
             CheckFileExists = true
         };
-        if (isoDialog.ShowDialog(this) != true) return;
+        if (isoDialog.ShowDialog(this) != true)
+        {
+            if (_extractForBuild) Application.Current.Shutdown(1);
+            return;
+        }
         string isoPath = isoDialog.FileName;
 
         // No destination prompt: extract straight into the folder the launcher is
@@ -379,6 +397,13 @@ public partial class MainWindow : Window
                 string hash = disc.ExtractXex(outDir, _ => { }, progress, xexNewName);
                 progress.SetPhase("Checking default.xex SHA-256…");
                 (bool ok, string message) = GameCompatibilityInspector.CheckHash(hash);
+                if (!ok && _extractForBuild)
+                {
+                    // A native build must never generate code from an unknown
+                    // revision, even if the standalone launcher permits it.
+                    try { File.Delete(xexNew); } catch { /* best effort */ }
+                    throw new InvalidDataException(message);
+                }
                 if (!ok)
                 {
                     // The XEX is not a supported version. Instead of bailing out
@@ -431,12 +456,13 @@ public partial class MainWindow : Window
                 _extracting = false;
                 _stopRequested = false;
                 ExtractButton.IsEnabled = true;
-                LaunchButton.IsEnabled = true;
+                LaunchButton.IsEnabled = _gameReady;
                 if (cancelled)
                 {
                     ExtractionOverlay.Visibility = Visibility.Collapsed;
                     ExtractionStatusText.Visibility = Visibility.Visible;
                     ExtractionStatusText.Text = "Extraction stopped.";
+                    if (_extractForBuild) Application.Current.Shutdown(1);
                     return;
                 }
                 if (error is not null)
@@ -446,6 +472,7 @@ public partial class MainWindow : Window
                     ExtractionStatusText.Text = "Extraction failed.";
                     MessageBox.Show(this, error, "Could not extract ISO",
                         MessageBoxButton.OK, MessageBoxImage.Error);
+                    if (_extractForBuild) Application.Current.Shutdown(1);
                     return;
                 }
                 ExtractionProgressBar.Value = 100;
@@ -457,7 +484,10 @@ public partial class MainWindow : Window
                 // SetGameDirectory reports readiness (including whether fable_2.exe
                 // is staged) in the status line and configuration badge.
                 SetGameDirectory(outDir);
-                HideOverlayAfter(900);
+                if (_extractForBuild)
+                    Application.Current.Shutdown(0);
+                else
+                    HideOverlayAfter(900);
             });
         });
     }

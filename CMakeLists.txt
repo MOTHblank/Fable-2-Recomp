@@ -38,6 +38,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Needed by the recomp-level patch step below (tools/apply_recomp_patches.py).
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
+# ReXGlue's tracked manifest refers to the original source-root default.xex.
+# Generate a sibling manifest for the one Windows install root instead of
+# modifying the tracked 4 MB source manifest or requiring a duplicate XEX.
+if(WIN32)
+    set(FABLE2_CODEGEN_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/.fable2_codegen_manifest.toml")
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/prepare_codegen_manifest.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fable_2_manifest.toml"
+            "${FABLE2_CODEGEN_MANIFEST}"
+            "out/game/default.xex"
+        COMMAND_ERROR_IS_FATAL ANY)
+else()
+    set(FABLE2_CODEGEN_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/fable_2_manifest.toml")
+endif()
 include(generated/rexglue.cmake)
 set(FABLE2_CODEGEN_TOOL "" CACHE FILEPATH "Standalone compatible ReXGlue codegen tool")
 if(FABLE2_CODEGEN_TOOL)
