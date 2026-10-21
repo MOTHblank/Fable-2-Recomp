@@ -1,8 +1,9 @@
-// fable_2 - Camera diagnostic guest-memory helpers.
+// fable_2 - Raw mouse transport, direct camera orbit and guest-memory helpers.
 //
-// Mouse input uses the native right-stick pipeline in keyboard_gamepad.h.
-// The camera hook uses these helpers only for opt-in field diagnostics.
-// Older delta/orbit helpers remain for research, but are not active inputs.
+// Native mode synthesizes a right stick through the ReXGlue input driver.
+// Direct mode accumulates fractional SDL3 relative mouse deltas on the UI
+// thread and consumes them from the camera post-dispatch hook. The hook
+// reads and writes big-endian guest state and the frame's view scratch.
 #pragma once
 
 #include <cmath>

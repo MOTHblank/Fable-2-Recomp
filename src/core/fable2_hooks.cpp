@@ -308,6 +308,27 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
       case DirectMouseResult::kInvalidPose: ++invalid_pose; break;
       case DirectMouseResult::kInvalidOutput: ++invalid_output; break;
     }
+    if (cfg.mouse_look_camera_diag && invalid_output == 1) {
+      // One representative frame is enough to show whether r1+0x60 is
+      // actually the camera eye on this particular recompiled XEX.
+      if (r1.u32 >= 0x10000u && (r1.u32 & 0xFu) == 0 &&
+          r1.u32 <= 0xFFFF0000u) {
+        const auto native_eye = fable2::mouselook::read_guest_vec3(mem, cam + 144);
+        const auto scratch = fable2::mouselook::read_guest_vec3(mem, r1.u32 + 96);
+        REXSYS_WARN(
+            "[mouse-camera] rejected output: cam={} eye={:.2f},{:.2f},{:.2f} "
+            "scratch={:.2f},{:.2f},{:.2f} sp=0x{:08X}",
+            cam, native_eye.x, native_eye.y, native_eye.z,
+            scratch.x, scratch.y, scratch.z, r1.u32);
+      } else {
+        REXSYS_WARN("[mouse-camera] rejected invalid guest stack sp=0x{:08X}",
+                    r1.u32);
+      }
+    }
+    if (cfg.mouse_look_camera_diag && invalid_pose == 1) {
+      REXSYS_WARN("[mouse-camera] rejected camera orientation; "
+                  "hero camera cam=0x{:08X}", cam);
+    }
     if (cfg.mouse_look_camera_diag && calls % 300 == 0) {
       REXSYS_INFO(
           "[mouse-camera] enabled=1 hook={} applied={} not-hero={} "
