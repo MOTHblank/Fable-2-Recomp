@@ -6,8 +6,9 @@ Use --skip-dependencies for patch validation without network/dependency setup.
 Accepted SDK states:
   * HEAD at the base pin - a clean SDK checkout; the patches under
     thirdparty/ are applied on top of it, and
-  * any other revision where every patch is already applied - i.e. a fork
-    commit with the fixes baked into the tree (no pin list to maintain).
+  * the repository's explicitly pinned fork with the integrated runtime and
+    debug fixes verified from working-tree source files, or
+  * any other revision where both original patches reverse-apply cleanly.
 """
 import argparse
 from pathlib import Path
@@ -16,6 +17,73 @@ import sys
 
 # Clean base revision the patches were generated against.
 SDK_PIN = "babc769a94be5618010abfd075ed84f3c2bc09f5"
+# The repository's current SDK submodule pin integrates the original runtime
+# fixes, but vendors libmspack as ordinary files. The old runtime patch
+# replaces a *gitlink*, so "git apply --reverse --check" cannot verify the
+# whole patch on this fork even when the code is present.
+BAKED_SDK_PIN = "92ddff153f98b9bdd385bbf72cf0dca9a7cda4b3"
+
+# Verify every area affected by the original runtime-fixes patch and the
+# dependent debug-exports patch. Check the actual working files, not just HEAD:
+# an edited/incomplete SDK checkout must not be treated as fixed.
+BAKED_RUNTIME_MARKERS = {
+    "include/rex/audio/clocked_audio_sink.h": (
+        "class ClockedAudioSink",
+        "bool Start()",
+        "bool Submit()",
+        "void Stop()",
+    ),
+    "include/rex/audio/sdl/sdl_audio_driver.h": (
+        "#include <rex/audio/clocked_audio_sink.h>",
+        "bool InitializeDevice()",
+        "std::unique_ptr<ClockedAudioSink> silent_sink_",
+    ),
+    "include/rex/graphics/command_processor.h": (
+        "#include <rex/graphics/frame_limiter.h>",
+        "#include <rex/graphics/guest_frame_meter.h>",
+        "FrameLimiter frame_limiter_",
+        "GuestFrameMeter guest_frame_meter_",
+    ),
+    "include/rex/graphics/frame_limiter.h": ("class FrameLimiter", "void Pace(int frames_per_second)"),
+    "include/rex/graphics/guest_frame_meter.h": ("class GuestFrameMeter", "Record(Clock::time_point now)"),
+    "src/audio/sdl/sdl_audio_driver.cpp": (
+        "if (InitializeDevice()) return true;",
+        "std::make_unique<ClockedAudioSink>",
+        "if (silent_sink_)",
+        "silent_sink_->Stop()",
+    ),
+    "src/graphics/CMakeLists.txt": ("frame_limiter.cpp",),
+    "src/graphics/command_processor.cpp": (
+        "REXCVAR_DEFINE_INT32(frame_limit",
+        "frame_limiter_.Pace(REXCVAR_GET(frame_limit))",
+        "guest_frame_meter_.Record",
+        "rex::perf::SetCounter",
+        "rex::perf::ResetFrameCounters",
+    ),
+    "src/graphics/frame_limiter.cpp": (
+        "FrameLimiter::~FrameLimiter()",
+        "FrameLimiter::WaitUntil",
+    ),
+    "src/graphics/graphics_system.cpp": (
+        "REXCVAR_DEFINE_BOOL(guest_vblank_pacing",
+        "REXCVAR_GET(guest_vblank_pacing)",
+    ),
+    "src/system/CMakeLists.txt": (
+        "list(FILTER REXRUNTIME_EXPORT_LINES",
+        "rexruntime-d3d12.def",
+    ),
+    "src/system/rexruntime.def": (
+        "?SetCounter@perf@rex",
+        "?ResetFrameCounters@perf@rex",
+        "?SetIcon@Window@ui@rex",
+        "?IncrementCounter@perf@rex",
+        "?WriteCsvFrame@perf@rex",
+        "?FlushCsv@perf@rex",
+        "?GetFlagByName@cvar@rex",
+        "?GetRegistry@cvar@rex",
+    ),
+}
+
 # Public libmspack commit the SDK's broken pin is repointed at.
 MSPACK_PIN = "305907723a4e7ab2018e58040059ffb5e77db837"
 PATCHES = (
@@ -45,6 +113,27 @@ def patch_state(source, patch):
     if git(source, "apply", "--check", str(patch), check=False).returncode == 0:
         return "clean"
     return "conflict"
+
+
+def missing_baked_runtime_features(source):
+    """Return an actionable list of missing features from the known SDK fork."""
+    missing = []
+    for relative, markers in BAKED_RUNTIME_MARKERS.items():
+        path = source / relative
+        try:
+            content = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            missing.append(f"{relative} (missing or unreadable)")
+            continue
+        for marker in markers:
+            if marker not in content:
+                missing.append(f"{relative}: {marker}")
+
+    # The runtime-fixes patch also changes the libmspack gitlink. The
+    # integrated fork has the dependency vendored instead of a submodule.
+    if libmspack_mode(source) != "040000":
+        missing.append("thirdparty/libmspack (expected vendored SDK sources)")
+    return missing
 
 
 def libmspack_mode(source):
@@ -96,8 +185,21 @@ def main():
                 fail(f"SDK patch {name} conflicts with local edits:\n{detail}\n"
                      "The SDK work tree is not at a clean accepted revision. Restore it with:\n"
                      f"  git -C {source} checkout -- . && git -C {source} clean -fd")
+    elif head == BAKED_SDK_PIN:
+        # This exact fork integrates both original patches, but differs from
+        # their line-by-line history (including vendored vs gitlink libmspack).
+        # Refuse incomplete/locally modified builds instead of bypassing the
+        # patch check for every arbitrary revision.
+        missing = missing_baked_runtime_features(source)
+        if missing:
+            fail("the pinned SDK fork is missing expected runtime fixes:\n  "
+                 + "\n  ".join(missing)
+                 + "\nRestore the missing SDK files before building; no "
+                   "automatic reset or checkout was performed.")
+        print(f"SDK revision {head} has the integrated runtime and debug fixes (verified).")
     else:
-        # Any other revision is accepted only with every patch baked in.
+        # Unknown revisions still require both patches to reverse-apply;
+        # never accept an unverified SDK tree merely because it has a fork SHA.
         pending = [name for name, state in states.items() if state != "applied"]
         if pending:
             fail(f"unexpected SDK revision {head} with unapplied patches: "
