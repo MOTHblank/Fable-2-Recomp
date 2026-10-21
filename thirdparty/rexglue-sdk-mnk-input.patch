@@ -29,13 +29,13 @@ diff --git a/src/input/mnk/mnk_input_driver.cpp b/src/input/mnk/mnk_input_driver
    if (vk == rex::ui::VirtualKey::kNone) {
      return false;
    }
-+  // A bare modifier must remain bindable while it is held. Other modifiers
-+  // still require an exact match, preserving Shift+Arrow alternatives.
++  // Plain binds (WASD, E, etc.) must keep working while Shift is held.
++  // Explicit chords still check the specified modifier mask exactly.
 +  uint8_t own = 0;
 +  if (vk == rex::ui::VirtualKey::kShift) own = kModShift;
 +  if (vk == rex::ui::VirtualKey::kControl) own = kModCtrl;
 +  if (vk == rex::ui::VirtualKey::kMenu) own = kModAlt;
-+  if (want != (live_mods & ~own)) return false;
++  if (want != 0 && want != (live_mods & ~own)) return false;
    uint16_t idx = static_cast<uint16_t>(vk);
    return idx < 256 && key_down[idx];
  }
