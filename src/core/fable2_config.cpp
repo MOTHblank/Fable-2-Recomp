@@ -75,6 +75,10 @@ keyboard_gamepad_map = "LMB:X,RMB:Y,MMB:B,Shift:A,E:A,Q:LT,Tab:RB,R:RT,Z:LB,B:B,
 # Default: true
 mouse_look = true
 
+# Experimental two-axis raw mouse orbit. No virtual stick turning-speed cap.
+# May bypass native wall collision and scripted framing; default: false.
+mouse_direct_look = false
+
 # Mouse-look sensitivity: guest right-stick units per host mouse pixel.
 # This is the only supported mouse camera path; larger values turn faster.
 # Range: 1..4096. Default: 256.
@@ -278,6 +282,9 @@ bool Load(const std::filesystem::path& path) {
     values.mouse_look =
         Read<bool>(input_table, "input", "mouse_look", "boolean",
                    values.mouse_look);
+    values.mouse_direct_look = Read<bool>(
+        input_table, "input", "mouse_direct_look", "boolean",
+        values.mouse_direct_look);
     values.mouse_look_scale = static_cast<int32_t>(Read<int64_t>(
         input_table, "input", "mouse_look_scale", "integer",
         values.mouse_look_scale));
