@@ -15,6 +15,15 @@
 #include <rex/logging/macros.h>
 
 #include <string>
+#include <algorithm>
+#include <cmath>
+#include <rex/cvar.h>
+
+REXCVAR_DECLARE(bool, mouse_direct_look);
+REXCVAR_DECLARE(bool, mouse_look);
+REXCVAR_DECLARE(int32_t, mouse_look_scale);
+REXCVAR_DECLARE(int32_t, mouse_look_scale_y);
+REXCVAR_DECLARE(bool, mouse_invert_y);
 
 #include <fmt/format.h>
 
@@ -176,8 +185,63 @@ bool fable2_hook_high_hf_tick_rate_skip_store() {
   return enabled;
 }
 
-// Camera telemetry hook. Native right-stick processing handles all mouse look;
-// no camera state is modified here. Existing diagnostic toggles still work.
+// Experimental two-axis orbit applied after the original camera update.
+// The default native-stick path is unchanged; gamepad state is never modified.
+static void ApplyDirectMouseOrbit(rex::memory::Memory* mem, uint32_t cam,
+                                 int32_t sensitivity_x, int32_t sensitivity_y,
+                                 bool invert_y) {
+  using namespace fable2::mouselook;
+  if (take_reset_request()) reset_cumulative();
+  // Identified hero-follow camera flag; skip scripted/UI camera objects.
+  if (read_guest_u32(mem, cam + 108) == 0) return;
+  const Vec3 eye = read_guest_vec3(mem, cam + 144);
+  const Quat native_q = read_guest_quat(mem, cam + 160);
+  const float norm = native_q.x * native_q.x + native_q.y * native_q.y +
+                     native_q.z * native_q.z + native_q.w * native_q.w;
+  if (!std::isfinite(norm) || norm < 0.5f || norm > 1.5f ||
+      !std::isfinite(eye.x) || !std::isfinite(eye.y) || !std::isfinite(eye.z))
+    return;
+
+  float dx = 0.0f, dy = 0.0f;
+  take_delta(dx, dy);
+  // 256 sensitivity -> 0.15 degrees per pixel; independent of poll frequency.
+  constexpr float kRadPerPixel = 0.00261799388f;
+  cum_yaw() = std::remainder(cum_yaw() +
+      dx * kRadPerPixel * (float(sensitivity_x) / 256.0f), 6.283185307f);
+  cum_pitch() = std::clamp(cum_pitch() +
+      dy * kRadPerPixel * (float(sensitivity_y) / 256.0f) *
+        (invert_y ? 1.0f : -1.0f), -1.15f, 1.15f);
+
+  // Rebase each frame onto the native follow pose, avoiding pivot drift.
+  const Vec3 up{0.0f, 0.0f, 1.0f};
+  const Vec3 native_forward = vec3_normalize(
+      quat_rotate_vec(native_q, Vec3{0.0f, 1.0f, 0.0f}));
+  const Vec3 native_right = vec3_normalize(
+      quat_rotate_vec(native_q, Vec3{1.0f, 0.0f, 0.0f}));
+  if (vec3_len(native_forward) < 0.9f || vec3_len(native_right) < 0.9f) return;
+  const Vec3 pitched = quat_rotate_vec(
+      axis_quat_vec(native_right, cum_pitch()), native_forward);
+  const Vec3 forward = vec3_normalize(
+      quat_rotate_vec(axis_quat_vec(up, cum_yaw()), pitched));
+  const Vec3 right = vec3_normalize(vec3_cross(forward, up));
+  if (vec3_len(right) < 0.01f) return;
+  const Vec3 camera_up = vec3_normalize(vec3_cross(right, forward));
+  const Quat new_q = quat_from_basis(right, forward, camera_up);
+
+  // Reverse-engineered default orbit radius; collision is not replicated.
+  constexpr float radius = 3.1f;
+  const Vec3 pivot{eye.x + native_forward.x * radius,
+                   eye.y + native_forward.y * radius,
+                   eye.z + native_forward.z * radius};
+  write_guest_vec3(mem, cam + 144,
+      Vec3{pivot.x - forward.x * radius,
+           pivot.y - forward.y * radius,
+           pivot.z - forward.z * radius});
+  write_guest_quat(mem, cam + 160, new_q);
+  write_guest_quat(mem, cam + 176, new_q);
+}
+
+// Camera post-update hook: native stick remains the default.
 void fable2_hook_direct_mouse_look(PPCRegister& r31) {
   const auto& cfg = fable2::config::Get();
   rex::memory::Memory* mem =
@@ -185,6 +249,10 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31) {
   if (!mem) return;
   const uint32_t cam = r31.u32;
   if (cam == 0) return;
+  if (REXCVAR_GET(mouse_look) && REXCVAR_GET(mouse_direct_look))
+    ApplyDirectMouseOrbit(mem, cam, REXCVAR_GET(mouse_look_scale),
+                          REXCVAR_GET(mouse_look_scale_y),
+                          REXCVAR_GET(mouse_invert_y));
 
   // Diagnostic: dump EVERY 4-byte field of the active camera object (offset
   // 0..260) once per frame (capped), to the [ml-dump] log, so we can see

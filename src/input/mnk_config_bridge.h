@@ -2,10 +2,12 @@
 // per-controller keybind cvars. The SDK owns device polling and mouse capture.
 #pragma once
 #include "keyboard_gamepad.h"
+#include "mouse_look.h"
 #include <rex/cvar.h>
 REXCVAR_DECLARE(std::string, keyboard_gamepad_map);
 REXCVAR_DECLARE(std::string, mouse_unlock_key);
 REXCVAR_DECLARE(bool, mouse_look);
+REXCVAR_DECLARE(bool, mouse_direct_look);
 REXCVAR_DECLARE(int32_t, mouse_look_scale);
 REXCVAR_DECLARE(int32_t, mouse_look_scale_y);
 REXCVAR_DECLARE(bool, mouse_invert_y);
@@ -110,6 +112,7 @@ inline void SyncLiveSettings() {
   static int32_t prev_deadzone = REXCVAR_GET(mouse_deadzone_compensation);
   static int32_t prev_buffer_polls = REXCVAR_GET(mouse_flick_buffer_polls);
   static bool prev_mouse = REXCVAR_GET(mouse_look);
+  static bool prev_direct = REXCVAR_GET(mouse_direct_look);
   static bool prev_invert = REXCVAR_GET(mouse_invert_y);
   auto map = REXCVAR_GET(keyboard_gamepad_map);
   auto reserved = REXCVAR_GET(mouse_unlock_key);
@@ -124,6 +127,12 @@ inline void SyncLiveSettings() {
   if (mouse != prev_mouse) {
     prev_mouse = mouse;
     rex::cvar::SetFlagByName("mnk_mouse", mouse ? "true" : "false");
+  }
+  auto direct = REXCVAR_GET(mouse_direct_look);
+  if (direct != prev_direct) {
+    prev_direct = direct;
+    fable2::mouselook::request_reset();
+    rex::cvar::SetFlagByName("mnk_direct_mouse", direct ? "true" : "false");
   }
   auto x = REXCVAR_GET(mouse_look_scale);
   if (x != prev_x) {

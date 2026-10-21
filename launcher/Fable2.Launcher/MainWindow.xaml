@@ -258,11 +258,20 @@
               <StackPanel>
                 <TextBlock Text="Mouse" Style="{StaticResource SectionTitle}" />
                 <TextBlock Text="Mouse look (camera)" FontWeight="SemiBold" />
-                <TextBlock Text="Map mouse movement to the guest right stick. Disable to keep the cursor free."
+                <TextBlock Text="Choose a camera control mode. Disable mouse look to keep the cursor free."
                            FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,3,0,0"
                            TextWrapping="Wrap" />
                 <CheckBox x:Name="MouseLookCheck" IsChecked="True" Margin="0,10,0,0"
                           Foreground="{StaticResource TextBrush}" />
+                <TextBlock Text="CAMERA INPUT MODE" Style="{StaticResource FieldLabel}"
+                           Margin="0,14,0,5" />
+                <ComboBox x:Name="MouseCameraModeCombo" SelectionChanged="MouseCameraModeChanged">
+                  <ComboBoxItem Content="Native stick (original)" Tag="native" />
+                  <ComboBoxItem Content="Direct mouse orbit (experimental)" Tag="direct" />
+                </ComboBox>
+                <TextBlock Text="Direct mode uses raw mouse movement for horizontal and vertical orbit without the stick turning-speed cap. It can bypass wall collision and scripted framing; use Native if a scene misbehaves."
+                           FontSize="12" Foreground="{StaticResource MutedTextBrush}"
+                           Margin="0,5,0,0" TextWrapping="Wrap" />
                 <Grid Margin="0,16,0,0">
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -313,7 +322,7 @@
                            TextAlignment="Center" VerticalContentAlignment="Center"
                            LostFocus="MouseDeadzoneBoxLostFocus" />
                 </Grid>
-                <TextBlock Text="Increase compensation only if slow mouse motions are ignored by the game."
+                <TextBlock Text="Native stick mode only: raise compensation if slow mouse motions are ignored."
                            FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0"
                            TextWrapping="Wrap" />
                 <Grid Margin="0,14,0,0">
@@ -331,7 +340,7 @@
                   <TextBlock x:Name="MouseFlickBufferValue" Grid.Column="2" Width="64" Text="4"
                              TextAlignment="Center" VerticalAlignment="Center" />
                 </Grid>
-                <TextBlock Text="Preserves motion clipped by the game's stick limit. Higher values turn farther per flick, but can continue turning briefly after you stop. Zero disables it."
+                <TextBlock Text="Native stick mode only. Preserves motion clipped by the game's stick limit. Higher values turn farther per flick, but can continue turning briefly after you stop. Zero disables it."
                            FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0"
                            TextWrapping="Wrap" />
               </StackPanel>

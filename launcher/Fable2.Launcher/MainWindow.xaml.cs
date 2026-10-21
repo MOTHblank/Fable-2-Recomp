@@ -273,6 +273,17 @@ public partial class MainWindow : Window
         if (!_loading) RefreshSummary(markDirty: true);
     }
 
+    private void MouseCameraModeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        bool nativeMode = SelectedTag(MouseCameraModeCombo) != "direct";
+        // These are features of the virtual gamepad stick, not the raw-delta
+        // gameplay camera. Preserve their values for a future Native switch.
+        if (MouseDeadzoneSlider is not null) MouseDeadzoneSlider.IsEnabled = nativeMode;
+        if (MouseDeadzoneBox is not null) MouseDeadzoneBox.IsEnabled = nativeMode;
+        if (MouseFlickBufferSlider is not null) MouseFlickBufferSlider.IsEnabled = nativeMode;
+        if (!_loading) RefreshSummary(markDirty: true);
+    }
+
     private void PresetClicked(object sender, RoutedEventArgs e)
     {
         string preset = (sender as Button)?.Tag?.ToString() ?? "balanced";
@@ -660,6 +671,7 @@ public partial class MainWindow : Window
         try
         {
             MouseLookCheck.IsChecked = _advanced.MouseLook;
+            SelectByTag(MouseCameraModeCombo, _advanced.MouseDirectLook ? "direct" : "native");
             MouseInvertYCheck.IsChecked = _advanced.MouseInvertY;
             MouseVerticalSensitivitySlider.Value = _advanced.MouseLookScaleY;
             MouseVerticalSensitivityBox.Text = _advanced.MouseLookScaleY.ToString(CultureInfo.InvariantCulture);
@@ -1144,6 +1156,7 @@ public partial class MainWindow : Window
         }
 
         _advanced.MouseLook = MouseLookCheck.IsChecked == true;
+        _advanced.MouseDirectLook = SelectedTag(MouseCameraModeCombo) == "direct";
         _advanced.MouseInvertY = MouseInvertYCheck.IsChecked == true;
         _advanced.MouseLookScaleY = (int)MouseVerticalSensitivitySlider.Value;
         _advanced.MouseDeadzoneCompensation = (int)MouseDeadzoneSlider.Value;

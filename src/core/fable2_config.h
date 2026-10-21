@@ -41,6 +41,7 @@ struct Values {
   // mouse_look_scale); the cvar keeps its compiled default as a fallback so
   // an empty/missing config can never wedge input.
   bool mouse_look = true;
+  bool mouse_direct_look = false;  // Opt-in experimental orbit.
   // Mouse movement always uses the native gamepad right-stick path.
   // Sensitivity is guest stick units per host mouse pixel (1..4096).
   int32_t mouse_look_scale = 256;

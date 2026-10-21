@@ -347,6 +347,7 @@ class Fable2App : public rex::ReXApp {
     }
     seed_cvar("keyboard_gamepad_map", cfg.keyboard_gamepad_map);
     seed_cvar("mouse_look", cfg.mouse_look ? "true" : "false");
+    seed_cvar("mouse_direct_look", cfg.mouse_direct_look ? "true" : "false");
     seed_cvar("mouse_look_scale", std::to_string(cfg.mouse_look_scale));
     seed_cvar("mouse_look_scale_y", std::to_string(cfg.mouse_look_scale_y));
     seed_cvar("mouse_invert_y", cfg.mouse_invert_y ? "true" : "false");
@@ -360,6 +361,7 @@ class Fable2App : public rex::ReXApp {
       seed_cvar(fable2::mnkconfig::kNames[i], binds[i]);
     // SDK cvars remain individually overridable via fable_2.toml / CLI.
     seed_cvar("mnk_mouse", REXCVAR_GET(mouse_look) ? "true" : "false");
+    seed_cvar("mnk_direct_mouse", REXCVAR_GET(mouse_direct_look) ? "true" : "false");
     seed_cvar("mnk_sensitivity",
               std::to_string(double(REXCVAR_GET(mouse_look_scale)) / 256.0));
     seed_cvar("mnk_sensitivity_y",
@@ -371,6 +373,12 @@ class Fable2App : public rex::ReXApp {
               std::to_string(REXCVAR_GET(mouse_flick_buffer_polls)));
     // Keep mouse-only configurations working even when the keyboard map is empty.
     seed_cvar("mnk_mode", "true");
+    // SDL3 relative motion travels directly to the guest camera hook, without
+    // being clipped to a virtual Xbox right-stick axis first.
+    rex::input::mnk::SetMouseMotionCallback([](float dx, float dy, bool reset) {
+      if (reset) fable2::mouselook::request_reset();
+      else fable2::mouselook::add_delta(dx, dy);
+    });
     // NOTE: the hero/dog readback fix (readback_resolve_force_addresses) is a
     // GPU-PLUGIN cvar, so it is seeded in OnPostSetup() (after the plugin is
     // loaded) rather than here - see plans/hero-dog-texture-readback.md.

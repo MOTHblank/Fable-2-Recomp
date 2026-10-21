@@ -53,6 +53,8 @@ REXCVAR_DEFINE_STRING(
 // seeds these cvars from fable2_config.toml [input] at startup (when no
 // higher-priority source set them). Keep the values in sync with the
 // defaults in fable2::config::Values (src/core/fable2_config.h).
+REXCVAR_DEFINE_BOOL(mouse_direct_look, false, "Input",
+                    "Experimental direct hero-camera orbit from raw mouse motion");
 REXCVAR_DEFINE_BOOL(mouse_look, true, "Input",
                     "Map mouse movement to the guest right stick (camera "
                     "look): sweep to look, stop to stop. Default comes from "
