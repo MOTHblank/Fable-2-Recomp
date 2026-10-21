@@ -196,16 +196,21 @@ public sealed class X360Disc : IDisposable
         const int chunk = 1 << 26; // 64 MiB
         var buffer = new byte[chunk];
         long offset = 0;
-        while (offset < iso.Length)
+        // Fewer than GdfxMagic.Length remaining bytes cannot contain the header.
+        while (iso.Length - offset >= GdfxMagic.Length)
         {
             int n = (int)Math.Min((long)chunk, iso.Length - offset);
             iso.Read(offset, buffer, 0, n);
             int found = buffer.AsSpan(0, n).IndexOf(GdfxMagic);
             if (found >= 0)
                 return offset + found;
-            offset += n - GdfxMagic.Length; // overlap the window seam
+
+            // Retain only the bytes needed for a signature spanning two chunks.
+            // n is at least GdfxMagic.Length, so this always advances.
+            offset += n - (GdfxMagic.Length - 1);
             progress?.Invoke(DiscProgress.Header(offset, iso.Length));
         }
+        progress?.Invoke(DiscProgress.Header(iso.Length, iso.Length));
         throw new InvalidDataException(
             "GDFX header (MICROSOFT*XBOX*MEDIA) not found — is this a complete raw Xbox 360 disc image?");
     }

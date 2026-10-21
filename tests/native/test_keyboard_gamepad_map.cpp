@@ -31,6 +31,7 @@ void poll_f5();
 #include "src/input/keyboard_gamepad.h"
 // The built-in default map (src/core/fable2_config.h) must parse fully too.
 #include "src/core/fable2_config.h"
+#include "src/input/mnk_config_bridge.h"
 
 #include <cstdio>
 #include <optional>
@@ -73,6 +74,17 @@ static void CheckBinding(const std::vector<M>& map, uint16_t vk, uint16_t button
 
 int main() {
   using V = rex::ui::VirtualKey;
+  auto native = fable2::mnkconfig::Translate(
+      "LMB:X,RMB:Y,XMB1:B,XMB2:RT,Shift:A,W:StickUp,D:StickRight,F4:B,E:A",
+      "F4");
+  CHECK(native[0] == "Shift,E");
+  CHECK(native[1] == "XMB1");
+  CHECK(native[2] == "LMB");
+  CHECK(native[3] == "RMB");
+  CHECK(native[5] == "XMB2");
+  CHECK(native[8] == "W");
+  CHECK(native[11] == "D");
+  CHECK(fable2::mnkconfig::Translate("", "F4")[0].empty());
 
   // 1) The requested mouse-button config, verbatim, must parse fully:
   //    LMB:X,RMB:Y,MMB:B,Shift:A,Space:A,E:A,Q:LT,Tab:RB,R:RT,Z:LB,B:B,

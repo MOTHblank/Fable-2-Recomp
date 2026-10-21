@@ -10,8 +10,8 @@
 # Consuming the SDK via add_subdirectory() makes PROJECT_IS_TOP_LEVEL false,
 # which skips that install step entirely. We only need the built
 # rexgpu-xenos.dll (Vulkan), so skipping install/packaging is fine. The
-# wrapper modifies nothing - the SDK tree it consumes is stock upstream plus
-# this project's tracked local patch (thirdparty/rexglue-sdk-local.patch).
+# wrapper modifies nothing - both backend builds consume the same pinned
+# thirdparty/rexglue-sdk and tools/prepare_runtime_sdk.py patch set.
 cmake_minimum_required(VERSION 3.25)
 
 # C/CXX enabled so the SDK's C and C++ dependencies configure. The compiler
@@ -33,8 +33,8 @@ endif()
 set(REXGLUE_USE_VULKAN ON CACHE BOOL "Enable Vulkan graphics backend" FORCE)
 set(REXGLUE_USE_D3D12 ON CACHE BOOL "Enable D3D12 graphics backend" FORCE)
 
-# SDK source: default to the thirdparty/rexglue-sdk submodule (your fork,
-# branch vsync-present-gate); override with -DREXGLUE_SDK_SOURCE=...
+# SDK source: the same pinned submodule as build_runtime_sdk.cmd;
+# override with -DREXGLUE_SDK_SOURCE=... only for explicit experiments.
 if(NOT REXGLUE_SDK_SOURCE OR NOT EXISTS "${REXGLUE_SDK_SOURCE}")
     set(REXGLUE_SDK_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/rexglue-sdk")
 endif()
@@ -59,3 +59,11 @@ add_compile_options($<$<CONFIG:RELEASE>:-g>)
 add_link_options(-Xlinker /DEBUG)
 
 add_subdirectory(${REXGLUE_SDK_SOURCE} "${CMAKE_BINARY_DIR}/sdk")
+
+# Expensive GPU readbacks and TEMPDIAG rendering telemetry are available only
+# in explicitly opted-in Debug configurations. Release never compiles them.
+option(FABLE2_VULKAN_DIAGNOSTICS "Enable blocking Vulkan diagnostics in Debug builds" OFF)
+if(FABLE2_VULKAN_DIAGNOSTICS)
+    target_compile_definitions(rexgpu-xenos PRIVATE "$<$<CONFIG:Debug>:FABLE2_VULKAN_DIAGNOSTICS=1>")
+    target_compile_definitions(rexruntime PRIVATE "$<$<CONFIG:Debug>:FABLE2_VULKAN_DIAGNOSTICS=1>")
+endif()

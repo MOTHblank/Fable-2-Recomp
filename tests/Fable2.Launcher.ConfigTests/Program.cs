@@ -61,6 +61,9 @@ try
         var capped = GraphicsSettings.Create("1080p", "2", "4", "none", "windowed", false, cap);
         Require(capped["frame_limit"] == cap, "FPS limit mapping failed");
         Require(capped["guest_vblank_pacing"] == (cap == "30" ? "true" : "false"), "legacy guest 30-FPS gate was not handled");
+        var expectedFastRate = cap is "0" or "30" ? "1000" :
+            Math.Min(1000, int.Parse(cap) * 6).ToString();
+        Require(capped["fast_guest_vblank_hz"] == expectedFastRate, "capped guest vblank mapping failed");
         Require(capped["vsync"] == "false", "guest pacing changed host VSync");
         LauncherConfigFile.WriteValues(configPath, capped, GraphicsSettings.ManagedKeys);
         Require(LauncherConfigFile.ReadValues(configPath)["frame_limit"] == cap, "FPS limit roundtrip failed");
@@ -292,7 +295,9 @@ try
         KeyboardGamepadMap = "LMB:X,RMB:Y,Shift:A,E:A",
         MouseLook = true,
         MouseLookScale = 512,
-        DirectMouseLook = true,
+        MouseLookScaleY = 768,
+        MouseInvertY = true,
+        MouseDeadzoneCompensation = 4000,
         UnlockWebsite = true,
         UnlockCe = false,
         SkipIntroVideos = true,
@@ -309,7 +314,9 @@ try
     var readBack = Fable2ConfigFile.Read(advPath);
     Require(readBack.MouseLook, "mouse look roundtrip failed");
     Require(readBack.MouseLookScale == 512, "mouse scale roundtrip failed");
-    Require(readBack.DirectMouseLook, "direct mouse look roundtrip failed");
+    Require(readBack.MouseLookScaleY == 768, "vertical mouse scale roundtrip failed");
+    Require(readBack.MouseInvertY, "invert Y roundtrip failed");
+    Require(readBack.MouseDeadzoneCompensation == 4000, "deadzone roundtrip failed");
     Require(!readBack.UnlockCe, "unlock_ce roundtrip failed");
     Require(readBack.SkipIntroVideos, "skip_intro_videos roundtrip failed");
     Require(readBack.DisableMotionBlur, "disable_motion_blur roundtrip failed");
@@ -325,12 +332,52 @@ try
         "keybind build roundtrip failed");
     Require(string.IsNullOrEmpty(Fable2ConfigFile.BuildKeybinds(Fable2ConfigFile.ParseKeybinds(""))),
         "empty map should build to empty");
+    // Native FillGuestTarget accepts aliases not offered as canonical dropdown
+    // entries; preserving their spelling prevents silent remapping to "A".
+    const string aliases = "Escape:START,LeftShift:LSHOULDER,E:VIEW,Q:LTRIGGER,Tab:DUP";
+    Require(Fable2ConfigFile.BuildKeybinds(Fable2ConfigFile.ParseKeybinds(aliases)) == aliases,
+        "valid native key/target aliases changed while editing");
+    Require(Fable2ConfigFile.IsSupportedGuestButton("BACK") &&
+            Fable2ConfigFile.IsSupportedGuestButton("RTHUMB"),
+        "known gamepad aliases were rejected");
+    Require(Fable2ConfigFile.ParseKeybinds("E:UnknownButton")[0].Button == "UnknownButton",
+        "unknown existing target was silently replaced");
+    RequireThrows(() => Fable2ConfigFile.BuildKeybinds(
+        Fable2ConfigFile.ParseKeybinds("E:UnknownButton")),
+        "unsupported guest target was silently accepted");
+    foreach (string invalid in new[] { ":A", "E:", "E", "E:A,", "E:A::B", "E:A,,Q:LT" })
+        RequireThrows(() => Fable2ConfigFile.ParseKeybinds(invalid),
+            "invalid existing binding was silently dropped: " + invalid);
+    foreach (KeybindEntry entry in new[]
+    {
+        new KeybindEntry { Key = "", Button = "A" },
+        new KeybindEntry { Key = "E", Button = "" },
+        new KeybindEntry { Key = "", Button = "" },
+        new KeybindEntry { Key = "NotAHostKey", Button = "A" },
+        new KeybindEntry { Key = "E", Button = "InvalidButton" }
+    })
+        RequireThrows(() => Fable2ConfigFile.BuildKeybinds(new[] { entry }),
+            "invalid edited binding was accepted");
+    Require(Fable2ConfigFile.BuildKeybinds(Array.Empty<KeybindEntry>()) == "",
+        "zero bindings should be a valid empty map");
+    Require(!writtenAdv.Contains("direct_mouse_look", StringComparison.Ordinal),
+        "unused direct mouse-look option is still being written");
+    // Old obsolete keys are left untouched, like any other unknown TOML key.
+    File.AppendAllText(advPath, "\n# legacy setting\n[input_legacy]\ndirect_mouse_look = true\n");
+
+    string oldInputPath = Path.Combine(testDirectory, "old-fable2_config.toml");
+    File.WriteAllText(oldInputPath, "[input]\nmouse_look_scale = 768\n");
+    var migratedInput = Fable2ConfigFile.Read(oldInputPath);
+    Require(migratedInput.MouseLookScale == 768 && migratedInput.MouseLookScaleY == 768,
+        "old single-axis sensitivity did not migrate to vertical axis");
     // Second write: update a value and preserve unknown sections/keys.
     File.AppendAllText(advPath, "\n[custom_section]\nsome_key = \"keep me\"\n");
     advanced.MouseLookScale = 1024;
     Fable2ConfigFile.Write(advPath, advanced);
     string advContent = File.ReadAllText(advPath);
     Require(advContent.Contains("mouse_look_scale = 1024"), "mouse scale update failed");
+    Require(advContent.Contains("[input_legacy]") && advContent.Contains("direct_mouse_look = true"),
+        "obsolete setting should be preserved as unknown config data");
     Require(advContent.Contains("[custom_section]") && advContent.Contains("some_key = \"keep me\""),
         "unknown section/keys not preserved");
     Require(Fable2ConfigFile.Read(advPath).MouseLookScale == 1024, "mouse scale re-read failed");

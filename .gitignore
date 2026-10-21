@@ -66,3 +66,6 @@ thirdparty/android-ndk/
 # --- Historical reference (pre-ReXGlue XenonRecomp configs) -------------------
 XenonRecomp
 TODO.md
+
+# Local codegen manifest points at out/game/default.xex (not a source change)
+.fable2_codegen_manifest.toml

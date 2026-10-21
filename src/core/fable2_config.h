@@ -41,81 +41,12 @@ struct Values {
   // mouse_look_scale); the cvar keeps its compiled default as a fallback so
   // an empty/missing config can never wedge input.
   bool mouse_look = true;
-  // Shared mouse-look sensitivity slider (1..4096, 256 = 1x): legacy stick
-  // units-per-pixel, and a multiplier on mouse_look_*_sens for direct look.
-  int32_t mouse_look_scale = 256;  // range 1..4096 (cvar constraint)
-  // Direct mouse-to-camera look (see src/input/mouse_look.h). EXPERIMENTAL.
-  // When true, mouse movement bypasses the synthetic pad's right stick and is
-  // applied directly to the active camera's orientation by
-  // fable2_hook_direct_mouse_look, giving a desktop-FPS "move the mouse that
-  // far, turn that far" feel with no rate cap. When false, the legacy
-  // right-stick mapping (mouse_look_scale) is used. Defaults to false but is
-  // still considered experimental.
-  bool direct_mouse_look = false;
-  // Fallback for direct_mouse_look. When true (and direct_mouse_look is on) the
-  // OLD re-implemented orbit runs: the hook at CECCameraUpdateFrame rotates the
-  // world-space eye around a low-passed hero pivot and writes a look-at
-  // quaternion (2-axis orbit with independent yaw). This is a working but
-  // hand-rolled orbit (not 1:1 with the stick). When false the direct-mouse
-  // path offsets the game's target orbit angle (cam+68) and lets the native
-  // easing drive the camera -- the intended 1:1 path, but it is still being
-  // tuned (see plans/plan-direct-mouse-1to1.md), so the default is the legacy
-  // orbit until that path is confirmed to move the eye.
-  bool mouse_look_legacy_orbit = true;
-  // Camera-look sensitivity: radians of camera rotation per host mouse pixel.
-  // Signed so an axis direction can be flipped without a code change.
-  float mouse_look_yaw_sens = -0.0022f;   // horizontal mouse -> camera yaw
-  float mouse_look_pitch_sens = -0.0022f;  // vertical mouse -> camera pitch
-  // Native look-orbit angle limits, in the game's own orbit-angle scale (the
-  // target angle at camera+68, which the right-stick look integrates and clamps).
-  // A full-range stick test (hero stationary) shows the native orbit clamps this
-  // angle to [floor, ceil]: floor = camera low / looking up, ceil = camera high /
-  // looking down, with the rest position in between (~2.81 at spawn).
-  //
-  // The mouse adds its cumulative pitch ON TOP of the native angle, and is
-  // clamped so the TOTAL (native orbit + mouse) stays within [floor, ceil]. This
-  // makes the mouse and the stick share one orbit and one set of bounds, so the
-  // two can't compound past the native limits (the mouse's headroom shrinks as
-  // the stick approaches a limit).
-  float mouse_look_pitch_floor = 1.458f;  // native floor angle (camera low)
-  float mouse_look_pitch_ceil = 4.067f;   // native ceiling angle (camera high)
-  // Camera local axis each look direction rotates around (0=X, 1=Y, 2=Z). The
-  // camera looks along its local Y, so a correct orbit turns around the local up
-  // (Z) and pitches around the local right (X). Negate the matching *_sens to flip
-  // a look direction. No rebuild needed to change these.
-  int32_t mouse_look_yaw_axis = 2;   // default Z (local up -> orbit)
-  int32_t mouse_look_pitch_axis = 0; // default X (local right -> pitch)
-  // Active-camera (CECCamera) field offsets used by the direct-mouse-look hook
-  // (bytes from the camera object). The look-orbit is reproduced by rotating
-  // BOTH the orientation quaternions AND the world-space eye position around the
-  // hero, exactly like the game's own right-stick look:
-  //   * camera_rot_tgt_off (160) / camera_rot_cur_off (176): the rotation-state
-  //     orientation quaternions (x,y,z,w, |m|=1) the follow logic eases the view
-  //     through. Rotated (pre-multiplied) by the orbit rotation so the camera
-  //     keeps facing the hero.
-  //   * camera_eye_off (144): the world-space camera EYE position (large values,
-  //     e.g. ~204,~93,~55). When the stick orbits the camera (hero stationary)
-  //     this sweeps a ~3.1-radius circle around the hero. Rotated around the
-  //     hero pivot by the same orbit rotation so the eye physically moves (a
-  //     true orbit rather than an in-place turn).
-  // The hero pivot is derived as eye + forward * camera_distance, where forward
-  // is the camera's local +Y rotated by the target orientation. All of these
-  // can be tuned at runtime with no rebuild (see mouse_look_camera_diag).
-  int32_t camera_rot_tgt_off = 160;  // rotation-state target (quaternion)
-  int32_t camera_rot_cur_off = 176;  // rotation-state current (quaternion)
-  int32_t camera_eye_off = 144;      // world-space eye position (x,y,z)
-  // "Is this the hero-orbit camera?" flag offset. The direct-mouse-look hook
-  // fires for EVERY CECCamera, including cinematic/cutscene cameras that the
-  // game scripts on its own (opening movie, cut-in shots, ...). Orbiting those
-  // fights the cutscene and makes the camera go wild. The hero (player)
-  // camera has a flag of 1.0 at this offset; cutscene/secondary cameras have
-  // 0.0. The hook only orbits the camera when this flag is >= 0.5, leaving
-  // cinematic cameras untouched so cutscenes play normally.
-  int32_t camera_hero_flag_off = 108;
-  // Distance from the hero to the camera eye (= the orbit radius). The game's
-  // native stick orbit has a horizontal radius of ~3.1 (fit from a live
-  // capture); tune this so the mouse orbit radius matches the game's.
-  float camera_distance = 3.1f;
+  // Mouse movement always uses the native gamepad right-stick path.
+  // Sensitivity is guest stick units per host mouse pixel (1..4096).
+  int32_t mouse_look_scale = 256;
+  int32_t mouse_look_scale_y = 256;
+  bool mouse_invert_y = false;
+  int32_t mouse_deadzone_compensation = 0;
   // Log the active camera's orientation fields once, the first frame the mouse
   // moves, to confirm the offset guesses above (and to spot which fields are
   // position vs. angle vs. the transform). Off by default.
@@ -180,10 +111,10 @@ struct Values {
   // [perf] - hot-function override tuning.
   // hotfunc_yield_every: NtYieldExecution batching factor for the hotfunc
   // overrides (see src/core/hotfunc/hotfunc_yield.h). Every Nth call does
-  // the real SwitchToThread; the others take a full memory fence. 1 =
+  // the real SwitchToThread; the others take a compiler fence. 1 =
   // original (yield every call), 0 = never yield. Larger = fewer context
   // switches, less frequent CPU rotation to other guest threads.
-  int32_t hotfunc_yield_every = 1;
+  int32_t hotfunc_yield_every = 4;
 };
 
 // Load the config from `path`.

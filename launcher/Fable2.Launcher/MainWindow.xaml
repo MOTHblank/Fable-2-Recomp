@@ -192,18 +192,12 @@
           <Border Style="{StaticResource Panel}">
             <StackPanel>
               <TextBlock Text="Game location" Style="{StaticResource SectionTitle}" />
-              <TextBlock Text="ORIGINAL GAME FILES" Style="{StaticResource FieldLabel}" />
+              <TextBlock Text="INSTALLATION AND EXTRACTED GAME FILES" Style="{StaticResource FieldLabel}" />
               <Border Background="#99101819" BorderBrush="#445E706A" BorderThickness="1"
                       CornerRadius="7" Padding="10,8">
                 <TextBlock x:Name="GamePathText" Text="Not selected" FontSize="12"
                            Foreground="#FFD0D8D2" TextWrapping="Wrap" />
               </Border>
-              <!-- Hidden (the launcher defaults to its own folder and the user
-                   can still edit the saved path in launcher-game-path.txt).
-                   The BrowseClicked code is kept in case it is re-enabled. -->
-              <Button Content="Choose game folder…" Click="BrowseClicked"
-                      Style="{StaticResource SecondaryButton}" Margin="0,12,0,0"
-                      Visibility="Collapsed" />
               <Button x:Name="ExtractButton" Content="Extract from ISO" Click="ExtractClicked"
                       Style="{StaticResource SecondaryButton}" Margin="0,12,0,0" />
               <TextBlock x:Name="ExtractionStatusText" FontSize="12"
@@ -244,6 +238,9 @@
               <StackPanel>
                 <TextBlock Text="Keybinds" Style="{StaticResource SectionTitle}" />
                 <TextBlock Text="HOST KEY  →  GUEST INPUT" Style="{StaticResource FieldLabel}" />
+                <TextBlock Text="Click a key field, then press a key (including Escape). Click outside to cancel."
+                           FontSize="12" Foreground="{StaticResource MutedTextBrush}"
+                           Margin="0,4,0,10" TextWrapping="Wrap" />
                 <StackPanel x:Name="KeybindList" />
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                   <Button Content="+ Add binding" Click="AddKeybindClicked"
@@ -251,7 +248,7 @@
                   <Button Content="Reset to defaults" Click="ResetKeybindsClicked"
                           Style="{StaticResource SecondaryButton}" MinWidth="150" Margin="8,0,0,0" />
                 </StackPanel>
-                <TextBlock Text="Click a host-key box, then press the key or mouse button you want to bind (Esc cancels). Changes are saved to fable2_config.toml and take effect the next time the game is launched."
+                <TextBlock Text="Click a host-key box, then press a key or mouse button. Escape can be bound; click outside to cancel. Each binding needs a valid host key and guest input before saving."
                            FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,12,0,0"
                            TextWrapping="Wrap" />
               </StackPanel>
@@ -273,7 +270,7 @@
                     <ColumnDefinition Width="Auto" />
                   </Grid.ColumnDefinitions>
                   <StackPanel>
-                    <TextBlock Text="MOUSE SENSITIVITY" Style="{StaticResource FieldLabel}" />
+                    <TextBlock Text="HORIZONTAL SENSITIVITY" Style="{StaticResource FieldLabel}" />
                     <Slider x:Name="MouseSensitivitySlider" Minimum="1" Maximum="4096" Value="256"
                             SmallChange="1" LargeChange="64"
                             ValueChanged="MouseSensitivitySliderChanged" />
@@ -282,24 +279,43 @@
                            TextAlignment="Center" VerticalContentAlignment="Center"
                            LostFocus="MouseSensitivityBoxLostFocus" />
                 </Grid>
-                <Border Background="#264A2C2C" CornerRadius="8" Padding="14,10,14,10" Margin="0,16,0,0">
-                  <Grid>
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="*" />
-                      <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel>
-                      <TextBlock Text="Direct mouse look (camera)  (experimental)"
-                                 FontWeight="SemiBold" Foreground="#FFE06666" />
-                      <TextBlock Text="Aim the camera directly like a desktop FPS, orbiting the hero with native pitch limits, instead of mapping to the gamepad right stick. Only applies when mouse look is on. May feel wrong in some scenes."
-                                 FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,2,0,0"
-                                 TextWrapping="Wrap" />
-                    </StackPanel>
-                    <CheckBox x:Name="DirectMouseLookCheck" Grid.Column="1" IsChecked="False"
-                              VerticalAlignment="Top" Margin="10,0,0,0"
-                              Foreground="{StaticResource TextBrush}" />
-                  </Grid>
-                </Border>
+                <Grid Margin="0,12,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="VERTICAL SENSITIVITY" Style="{StaticResource FieldLabel}" />
+                    <Slider x:Name="MouseVerticalSensitivitySlider" Minimum="1" Maximum="4096" Value="256"
+                            SmallChange="1" LargeChange="64"
+                            ValueChanged="MouseVerticalSensitivitySliderChanged" />
+                  </StackPanel>
+                  <TextBox x:Name="MouseVerticalSensitivityBox" Grid.Column="2" Width="64" Text="256"
+                           TextAlignment="Center" VerticalContentAlignment="Center"
+                           LostFocus="MouseVerticalSensitivityBoxLostFocus" />
+                </Grid>
+                <CheckBox x:Name="MouseInvertYCheck" Content="Invert vertical mouse movement"
+                          Margin="0,14,0,0" Foreground="{StaticResource TextBrush}" />
+                <Grid Margin="0,14,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="STICK DEADZONE COMPENSATION" Style="{StaticResource FieldLabel}" />
+                    <Slider x:Name="MouseDeadzoneSlider" Minimum="0" Maximum="12000" Value="0"
+                            SmallChange="100" LargeChange="1000"
+                            ValueChanged="MouseDeadzoneSliderChanged" />
+                  </StackPanel>
+                  <TextBox x:Name="MouseDeadzoneBox" Grid.Column="2" Width="64" Text="0"
+                           TextAlignment="Center" VerticalContentAlignment="Center"
+                           LostFocus="MouseDeadzoneBoxLostFocus" />
+                </Grid>
+                <TextBlock Text="Increase compensation only if slow mouse motions are ignored by the game."
+                           FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0"
+                           TextWrapping="Wrap" />
               </StackPanel>
             </Border>
           </StackPanel>
@@ -354,7 +370,7 @@
             <ColumnDefinition Width="12" />
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
-          <TextBlock x:Name="StatusText" Text="Select the original game folder containing default.xex and data."
+          <TextBlock x:Name="StatusText" Text="Extract a supported ISO into the installation folder to begin."
                      Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
           <Button Grid.Column="1" Content="Save settings" Click="SaveClicked"
                   Style="{StaticResource SecondaryButton}" MinWidth="125" />

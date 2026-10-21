@@ -2,16 +2,18 @@ diff --git a/include/rex/graphics/vulkan/command_processor.h b/include/rex/graph
 index 696ff48..5bd7342 100644
 --- a/include/rex/graphics/vulkan/command_processor.h
 +++ b/include/rex/graphics/vulkan/command_processor.h
-@@ -268,6 +268,12 @@ class VulkanCommandProcessor : public CommandProcessor {
+@@ -268,6 +268,14 @@ class VulkanCommandProcessor : public CommandProcessor {
    bool IssueCopy() override;
  
   private:
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +  // TEMPDIAG: blocking image readback for the Vulkan black-screen diagnosis.
 +  void TmpDiagReadbackImage(VkImage image, bool is_10bit, const char* label, uint64_t swap_no);
 +  void TmpDiagReadbackBuffer(VkBuffer buffer, uint32_t size_bytes, const char* label,
 +                             uint64_t swap_no);
 +  uint64_t tmp_diag_swap_count_ = 0;
 +
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
    struct CommandBuffer {
      VkCommandPool pool;
      VkCommandBuffer buffer;
@@ -19,10 +21,11 @@ diff --git a/include/rex/graphics/vulkan/texture_cache.h b/include/rex/graphics/
 index 04856ee..1e303d7 100644
 --- a/include/rex/graphics/vulkan/texture_cache.h
 +++ b/include/rex/graphics/vulkan/texture_cache.h
-@@ -120,6 +120,13 @@ class VulkanTextureCache final : public TextureCache {
+@@ -120,6 +120,15 @@ class VulkanTextureCache final : public TextureCache {
                                   uint32_t* height_unscaled_out = nullptr,
                                   bool* swap_source_needs_rb_swap_out = nullptr);
  
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +  // TEMPDIAG: access to the last swap source image (for readback).
 +  VkImage GetLastSwapImageForDiag() const {
 +    return last_swap_texture_for_diag_
@@ -30,16 +33,19 @@ index 04856ee..1e303d7 100644
 +               : VK_NULL_HANDLE;
 +  }
 +
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
    bool GetScaledResolveRange(uint32_t start_unscaled, uint32_t length_unscaled,
                               uint32_t length_scaled_alignment_log2, uint64_t& start_scaled_out,
                               uint64_t& length_scaled_out) const;
-@@ -152,6 +159,9 @@ class VulkanTextureCache final : public TextureCache {
+@@ -152,6 +161,11 @@ class VulkanTextureCache final : public TextureCache {
    void UpdateTextureBindingsImpl(uint32_t fetch_constant_mask) override;
  
   private:
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +  // TEMPDIAG: last swap source texture object (for readback).
 +  Texture* last_swap_texture_for_diag_ = nullptr;
 +
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
    enum LoadDescriptorSetIndex {
      kLoadDescriptorSetIndexDestination,
      kLoadDescriptorSetIndexSource,
@@ -476,10 +482,11 @@ index 001f36b..250f137 100644
      }
      if (dfn.vkMapMemory(device, gamma_ramp_upload_buffer_memory_, 0, VK_WHOLE_SIZE, 0,
                          &gamma_ramp_upload_mapping_) != VK_SUCCESS) {
-@@ -1237,6 +1309,42 @@ bool VulkanCommandProcessor::SetupContext() {
+@@ -1237,6 +1309,44 @@ bool VulkanCommandProcessor::SetupContext() {
      }
    }
  
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +  // TEMPDIAG: poll the mapping from a background thread to catch the moment
 +  // the uploaded contents change.
 +  if (gamma_ramp_upload_mapping_ != nullptr && gamma_ramp_upload_buffer_ == VK_NULL_HANDLE) {
@@ -516,13 +523,15 @@ index 001f36b..250f137 100644
 +        vulkan_device->properties().nonCoherentAtomSize);
 +  }
 +
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
    // Swap descriptor set layouts.
    VkDescriptorSetLayoutBinding swap_descriptor_set_layout_binding;
    swap_descriptor_set_layout_binding.binding = 0;
-@@ -2269,6 +2377,309 @@ void VulkanCommandProcessor::OnGammaRampPWLValueWritten() {
+@@ -2269,6 +2379,311 @@ void VulkanCommandProcessor::OnGammaRampPWLValueWritten() {
    gamma_ramp_pwl_current_frame_ = UINT32_MAX;
  }
  
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +void VulkanCommandProcessor::TmpDiagReadbackImage(VkImage image, bool is_10bit, const char* label,
 +                                                  uint64_t swap_no) {
 +  static VkBuffer tmp_staging = VK_NULL_HANDLE;
@@ -826,13 +835,15 @@ index 001f36b..250f137 100644
 +  tmp_dfn.vkDestroyFence(tmp_device, tmp_fence, nullptr);
 +}
 +
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
  void VulkanCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr, uint32_t frontbuffer_width,
                                         uint32_t frontbuffer_height) {
    SCOPE_profile_cpu_f("gpu");
-@@ -2319,6 +2730,15 @@ void VulkanCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr, uint32_t frontb
+@@ -2319,6 +2734,17 @@ void VulkanCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr, uint32_t frontb
      REXGPU_ERROR("XELOG_GPU PRESENT: swap_texture_view=NULL");
      return;
    }
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +
 +  // TEMPDIAG: periodic blocking readback of the swap source (frontbuffer).
 +  ++tmp_diag_swap_count_;
@@ -842,13 +853,15 @@ index 001f36b..250f137 100644
 +      TmpDiagReadbackImage(tmp_src_image, false, "frontbuffer", tmp_diag_swap_count_);
 +    }
 +  }
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
    // The swap gamma / FXAA pass samples source texels by pixel index, but swap
    // textures may be allocation-padded. Prefer the active frontbuffer region
    // from the swap packet, scaled proportionally to the actual source texture.
-@@ -2512,6 +2932,19 @@ void VulkanCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr, uint32_t frontb
+@@ -2512,6 +2938,21 @@ void VulkanCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr, uint32_t frontb
            }
          }
          bool use_compute_gamma = swap_apply_gamma_compute_pipeline != VK_NULL_HANDLE;
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +        // TEMPDIAG: which swap path runs, and with which objects.
 +        {
 +          static bool tmp_swap_path_logged = false;
@@ -862,13 +875,15 @@ index 001f36b..250f137 100644
 +                use_fxaa, guest_output_width, guest_output_height);
 +          }
 +        }
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
  
          // TODO(Triang3l): FXAA can result in more than 8 bits of precision.
          context.SetIs8bpc(!use_pwl_gamma_ramp && !use_fxaa);
-@@ -2552,7 +2985,53 @@ void VulkanCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr, uint32_t frontb
+@@ -2552,7 +2993,57 @@ void VulkanCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr, uint32_t frontb
                                             : static_cast<const void*>(gamma_ramp_256_entry_table()),
                          gamma_ramp_size);
            }
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +          // TEMPDIAG: dump the ramp contents at upload time.
 +          if (!use_pwl_gamma_ramp) {
 +            const auto* tmp_ramp =
@@ -889,7 +904,9 @@ index 001f36b..250f137 100644
 +                        tmp_ramp[0], tmp_ramp[128], tmp_ramp[255], tmp_rmin, tmp_rmax,
 +                        tmp_rsum / 256);
 +          }
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
            bool gamma_ramp_has_upload_buffer = gamma_ramp_upload_buffer_memory_ != VK_NULL_HANDLE;
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +          // TEMPDIAG: force an explicit flush even if the type claims coherent,
 +          // to test whether the coherent flag is lying on this driver.
 +          if (!use_pwl_gamma_ramp) {
@@ -916,13 +933,15 @@ index 001f36b..250f137 100644
 +                        "e128={:08X} e255={:08X}",
 +                        swap_frame_index, tmp_cpu[0], tmp_cpu[128], tmp_cpu[255]);
 +          }
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
            VkPipelineStageFlags gamma_ramp_read_stage_mask =
                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
            ui::vulkan::util::FlushMappedMemoryRange(
-@@ -2921,6 +3400,20 @@ void VulkanCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr, uint32_t frontb
+@@ -2921,6 +3412,22 @@ void VulkanCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr, uint32_t frontb
          // presenter so it can submit its own commands for displaying it to the
          // queue, and also need to submit the release barrier.
          EndSubmission(true);
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +
 +        // TEMPDIAG: read back the guest output after the swap path's submission
 +        // (queue ordering guarantees the copy runs after the write).
@@ -937,30 +956,35 @@ index 001f36b..250f137 100644
 +                "gamma_ramp_full", tmp_diag_swap_count_);
 +          }
 +        }
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
          return true;
        });
  
-@@ -3863,6 +4356,11 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+@@ -3863,6 +4370,13 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
                                                  &pipeline_is_placeholder);
    if (REXCVAR_GET(async_shader_compilation) && pipeline_is_placeholder) {
      frame_used_async_placeholder_pipeline_ = true;
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +    // TEMPDIAG: throttled count of skipped placeholder draws.
 +    static uint64_t tmp_skip_count = 0;
 +    if ((++tmp_skip_count & 0x3FF) == 1) {
 +      REXGPU_INFO("TEMPDIAG: placeholder draw skips so far: {}", tmp_skip_count);
 +    }
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
      return true;
    }
    if (pipeline == VK_NULL_HANDLE || pipeline_layout_provider == nullptr) {
-@@ -4115,6 +4613,11 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+@@ -4115,6 +4629,13 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
        render_target_cache_->last_update_render_pass(),
        render_target_cache_->last_update_framebuffer());
  
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +  // TEMPDIAG: count draws that actually reach the command buffer.
 +  static uint64_t tmp_issued_draws = 0;
 +  if ((++tmp_issued_draws & 0x4FF) == 1) {
 +    REXGPU_INFO("TEMPDIAG: issued draws so far: {}", tmp_issued_draws);
 +  }
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
    // Draw.
    if (primitive_processing_result.index_buffer_type ==
            PrimitiveProcessor::ProcessedIndexBufferType::kNone ||
@@ -968,23 +992,26 @@ diff --git a/src/graphics/vulkan/pipeline_cache.cpp b/src/graphics/vulkan/pipeli
 index 91ac08f..d7a500a 100644
 --- a/src/graphics/vulkan/pipeline_cache.cpp
 +++ b/src/graphics/vulkan/pipeline_cache.cpp
-@@ -3508,6 +3508,12 @@ bool VulkanPipelineCache::EnsurePipelineCreated(const PipelineCreationArguments&
+@@ -3508,6 +3508,14 @@ bool VulkanPipelineCache::EnsurePipelineCreated(const PipelineCreationArguments&
    } else {
      creation_arguments.pipeline->second.is_placeholder.store(false, std::memory_order_release);
      if (was_placeholder && old_pipeline != VK_NULL_HANDLE) {
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +      // TEMPDIAG: hot-swap completion.
 +      uint64_t tmp_ps_hash = creation_arguments.pixel_shader
 +                                 ? creation_arguments.pixel_shader->shader().ucode_data_hash()
 +                                 : 0;
 +      REXGPU_INFO("TEMPDIAG: placeholder hot-swap complete vs={:016X} ps={:016X}",
 +                  creation_arguments.vertex_shader->shader().ucode_data_hash(), tmp_ps_hash);
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
        std::lock_guard<std::mutex> lock(deferred_destroy_lock_);
        deferred_destroy_pipelines_.emplace_back(command_processor_.GetCurrentSubmission(),
                                                 old_pipeline);
-@@ -3539,6 +3545,15 @@ void VulkanPipelineCache::CreationThread(size_t thread_index) {
+@@ -3539,6 +3547,17 @@ void VulkanPipelineCache::CreationThread(size_t thread_index) {
      }
  
      bool created = EnsurePipelineCreated(creation_arguments);
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +    // TEMPDIAG: async creation outcome.
 +    uint64_t tmp_vs_hash = creation_arguments.vertex_shader
 +                               ? creation_arguments.vertex_shader->shader().ucode_data_hash()
@@ -994,6 +1021,7 @@ index 91ac08f..d7a500a 100644
 +                               : 0;
 +    REXGPU_INFO("TEMPDIAG: async creation result={} vs={:016X} ps={:016X}", created, tmp_vs_hash,
 +                tmp_ps_hash);
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
      if (!created) {
        bool has_placeholder =
            creation_arguments.pipeline->second.is_placeholder.load(std::memory_order_acquire);
@@ -1001,12 +1029,14 @@ diff --git a/src/graphics/vulkan/texture_cache.cpp b/src/graphics/vulkan/texture
 index ecbd940..f8b0893 100644
 --- a/src/graphics/vulkan/texture_cache.cpp
 +++ b/src/graphics/vulkan/texture_cache.cpp
-@@ -997,6 +997,8 @@ VkImageView VulkanTextureCache::RequestSwapTexture(uint32_t& width_scaled_out,
+@@ -997,6 +997,10 @@ VkImageView VulkanTextureCache::RequestSwapTexture(uint32_t& width_scaled_out,
    if (!texture) {
      return VK_NULL_HANDLE;
    }
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +  // TEMPDIAG: remember the swap source texture for readback.
 +  last_swap_texture_for_diag_ = texture;
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
    uint32_t host_swizzle = GuestToHostSwizzle(fetch.swizzle, GetHostFormatSwizzle(key));
    if (swap_source_needs_rb_swap_out) {
      auto swizzle_component = [](uint32_t swizzle,
@@ -1089,10 +1119,11 @@ index 23645ef..8c7a04d 100644
  #include <atomic>
  #include <cstddef>
  #include <cstdint>
-@@ -1221,6 +1222,18 @@ VkSwapchainKHR VulkanPresenter::PaintContext::CreateSwapchainForVulkanSurface(
+@@ -1221,6 +1222,20 @@ VkSwapchainKHR VulkanPresenter::PaintContext::CreateSwapchainForVulkanSurface(
      // specification violation).
      surface_formats.clear();
    }
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +  // TEMPDIAG: log the full surface format list once.
 +  {
 +    static bool tmp_fmt_logged = false;
@@ -1105,13 +1136,15 @@ index 23645ef..8c7a04d 100644
 +      }
 +    }
 +  }
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
  #if REX_PLATFORM_ANDROID
    // Android uses R8G8B8A8.
    static const VkFormat kFormat8888Primary = VK_FORMAT_R8G8B8A8_UNORM;
-@@ -1316,6 +1329,18 @@ VkSwapchainKHR VulkanPresenter::PaintContext::CreateSwapchainForVulkanSurface(
+@@ -1316,6 +1331,20 @@ VkSwapchainKHR VulkanPresenter::PaintContext::CreateSwapchainForVulkanSurface(
      present_modes.clear();
    }
  
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +  // TEMPDIAG: log the full present mode list once.
 +  {
 +    static bool tmp_mode_logged = false;
@@ -1124,24 +1157,28 @@ index 23645ef..8c7a04d 100644
 +    }
 +  }
 +
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
    // Create the swapchain.
    VkSwapchainCreateInfoKHR swapchain_create_info;
    swapchain_create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-@@ -1381,6 +1406,10 @@ VkSwapchainKHR VulkanPresenter::PaintContext::CreateSwapchainForVulkanSurface(
+@@ -1381,6 +1410,12 @@ VkSwapchainKHR VulkanPresenter::PaintContext::CreateSwapchainForVulkanSurface(
    // interfering with GPU command processing, and also to allow tearing so
    // variable refresh rate may be used where it's available.
    // Note: If the priorities here are changes, update the cvar descriptions.
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +  REXGPU_INFO("TEMPDIAG: cvars immediate={} mailbox={} fifo_relaxed={}",
 +              REXCVAR_GET(vulkan_allow_present_mode_immediate) ? 1 : 0,
 +              REXCVAR_GET(vulkan_allow_present_mode_mailbox) ? 1 : 0,
 +              REXCVAR_GET(vulkan_allow_present_mode_fifo_relaxed) ? 1 : 0);
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
    if (REXCVAR_GET(vulkan_allow_present_mode_immediate) &&
        std::find(present_modes.cbegin(), present_modes.cend(), VK_PRESENT_MODE_IMMEDIATE_KHR) !=
            present_modes.cend()) {
-@@ -1529,6 +1558,20 @@ bool VulkanPresenter::GuestOutputImage::Initialize() {
+@@ -1529,6 +1564,22 @@ bool VulkanPresenter::GuestOutputImage::Initialize() {
  }
  
  Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_drawers) {
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +  // TEMPDIAG: paint entry telemetry.
 +  {
 +    static uint32_t tmp_paint_n = 0;
@@ -1156,13 +1193,15 @@ index 23645ef..8c7a04d 100644
 +    tmp_paint_n++;
 +    tmp_paint_last = tmp_now;
 +  }
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
    // Begin the submission in place of the one not currently potentially used on
    // the GPU.
    uint64_t current_paint_submission_index =
-@@ -1635,6 +1678,24 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
+@@ -1635,6 +1686,26 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
      uint32_t guest_output_mailbox_index;
      std::unique_lock<std::mutex> guest_output_consumer_lock(ConsumeGuestOutput(
          guest_output_mailbox_index, &guest_output_properties, &guest_output_paint_config));
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +    // TEMPDIAG: log the mailbox consumption state.
 +    {
 +      static uint32_t tmp_mailbox_log_count = 0;
@@ -1181,13 +1220,15 @@ index 23645ef..8c7a04d 100644
 +      }
 +      tmp_mailbox_log_count++;
 +    }
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
      if (guest_output_mailbox_index != UINT32_MAX) {
        assert_true(guest_output_images_[guest_output_mailbox_index].ever_successfully_refreshed);
        guest_output_image = guest_output_images_[guest_output_mailbox_index].image;
-@@ -1652,6 +1713,27 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
+@@ -1652,6 +1723,29 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
          guest_output_properties, paint_context_.swapchain_extent.width,
          paint_context_.swapchain_extent.height, max_framebuffer_extent.width,
          max_framebuffer_extent.height, guest_output_paint_config);
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +    // TEMPDIAG: log the paint flow decision once.
 +    {
 +      static bool tmp_paint_flow_logged = false;
@@ -1209,13 +1250,15 @@ index 23645ef..8c7a04d 100644
 +        REXGPU_INFO("TEMPDIAG: paint flow ]");
 +      }
 +    }
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
      if (guest_output_flow.effect_count) {
        // Store the main target reference to the guest output image so it's not
        // destroyed while it's still potentially in use by main target painting
-@@ -2020,6 +2102,24 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
+@@ -2020,6 +2114,26 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
            effect_rect_constants.y = -1.0f + float(effect_rect_y) * effect_y_to_ndc;
            effect_rect_constants.width = float(effect_rect_size.first) * effect_x_to_ndc;
            effect_rect_constants.height = float(effect_rect_size.second) * effect_y_to_ndc;
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +          // TEMPDIAG: log the paint draw constants once.
 +          if (is_final_effect) {
 +            static bool tmp_paint_consts_logged = false;
@@ -1234,10 +1277,11 @@ index 23645ef..8c7a04d 100644
 +                  guest_output_viewport.height, (void*)guest_output_image->image());
 +            }
 +          }
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
            dfn.vkCmdPushConstants(draw_command_buffer, guest_output_paint_pipeline_layout,
                                   VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(effect_rect_constants),
                                   &effect_rect_constants);
-@@ -2151,6 +2251,7 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
+@@ -2151,6 +2265,7 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
      ExecuteUIDrawersFromUIThread(ui_draw_context);
    }
  
@@ -1245,7 +1289,7 @@ index 23645ef..8c7a04d 100644
    dfn.vkCmdEndRenderPass(draw_command_buffer);
  
    dfn.vkEndCommandBuffer(draw_command_buffer);
-@@ -2208,7 +2309,8 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
+@@ -2208,7 +2323,8 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
        }
      }
      if (submit_result != VK_SUCCESS) {
@@ -1255,10 +1299,11 @@ index 23645ef..8c7a04d 100644
        fence_acqusition.SubmissionFailedOrDropped();
        ui_fence_acquisition.SubmissionFailedOrDropped();
        if (ui_setup_command_buffer_index != SIZE_MAX) {
-@@ -2242,6 +2344,19 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
+@@ -2242,6 +2358,21 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
          vulkan_device_->AcquireQueue(paint_context_.present_queue_family, 0);
      present_result = dfn.vkQueuePresentKHR(queue_acquisition.queue(), &present_info);
    }
++#if defined(FABLE2_VULKAN_DIAGNOSTICS) && !defined(NDEBUG)
 +  // TEMPDIAG: periodic present telemetry.
 +  {
 +    static uint32_t tmp_present_n = 0;
@@ -1272,6 +1317,7 @@ index 23645ef..8c7a04d 100644
 +    }
 +    tmp_present_n++;
 +  }
++#endif  // FABLE2_VULKAN_DIAGNOSTICS
    switch (present_result) {
      case VK_SUCCESS:
        return PaintResult::kPresented;

@@ -17,6 +17,9 @@ public partial class MainWindow : Window
     private string? _gameDirectory;
     private string? _executableDirectory;
     private bool _loading = true;
+    private bool _gameReady;
+    private readonly bool _extractForBuild = Array.Exists(Environment.GetCommandLineArgs(),
+        arg => string.Equals(arg, "--extract-for-build", StringComparison.OrdinalIgnoreCase));
 
     // Advanced Options page state.
     private Fable2ConfigValues _advanced = new();
@@ -46,10 +49,18 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         PreviewKeyDown += MainWindow_PreviewKeyDown;
+        PreviewMouseDown += MainWindow_PreviewMouseDown;
         SetDefaults();
         DetectGameDirectory();
         _loading = false;
         RefreshSummary();
+        if (_extractForBuild)
+        {
+            // A first-time build has no native executable yet. Present the ISO
+            // picker immediately, then exit back to build.cmd after extraction.
+            Loaded += (_, _) => Dispatcher.BeginInvoke(
+                new Action(() => ExtractClicked(this, new RoutedEventArgs())));
+        }
     }
 
     private void SetDefaults()
@@ -68,40 +79,30 @@ public partial class MainWindow : Window
 
     private void DetectGameDirectory()
     {
-        string launcherDirectory = AppContext.BaseDirectory;
-        string? configuredPath = LauncherState.LoadGameDirectory();
-        if (!string.IsNullOrWhiteSpace(configuredPath) &&
-            File.Exists(Path.Combine(configuredPath, "default.xex")) &&
-            (File.Exists(Path.Combine(launcherDirectory, "fable_2.exe")) ||
-             File.Exists(Path.Combine(configuredPath, "fable_2.exe"))))
-        {
-            SetGameDirectory(configuredPath);
-            return;
-        }
-        // No saved (or no longer valid) game folder: default the selected location
-        // to the folder the launcher is running from, so it is never empty on first
-        // launch. The status line then explains what is still missing (e.g. that
-        // default.xex has not been extracted yet).
-        SetGameDirectory(launcherDirectory);
+        // The launcher and native executable ship together; ISO extraction uses
+        // this exact directory. Saved paths and folder picking are not supported.
+        SetGameDirectory(AppContext.BaseDirectory);
     }
 
     private void SetGameDirectory(string directory)
     {
         _gameDirectory = Path.GetFullPath(directory);
-        _executableDirectory = File.Exists(Path.Combine(AppContext.BaseDirectory, "fable_2.exe"))
-            ? AppContext.BaseDirectory : _gameDirectory;
+        _executableDirectory = _gameDirectory;
         GamePathText.Text = _gameDirectory;
-        LauncherState.SaveGameDirectory(_gameDirectory);
         try
         {
             LoadConfiguration();
             GameCompatibility compatibility = GameCompatibilityInspector.Inspect(_gameDirectory);
             GameLaunchPlanner.Create(_executableDirectory, _gameDirectory, compatibility);
+            _gameReady = true;
+            LaunchButton.IsEnabled = !_extracting;
             StatusText.Text = compatibility.Message;
             ConfigStateText.Text = compatibility.Label;
         }
         catch (Exception exception)
         {
+            _gameReady = false;
+            LaunchButton.IsEnabled = false;
             StatusText.Text = exception.Message;
             ConfigStateText.Text = "Not ready to launch";
         }
@@ -182,7 +183,7 @@ public partial class MainWindow : Window
     {
         if (_gameDirectory is null || _executableDirectory is null || !File.Exists(Path.Combine(_executableDirectory, "fable_2.exe")))
         {
-            MessageBox.Show(this, "Choose the folder containing fable_2.exe first.",
+            MessageBox.Show(this, "fable_2.exe is missing from this installation. Run build.cmd.",
                 "Game not found", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
@@ -308,25 +309,6 @@ public partial class MainWindow : Window
         RefreshSummary(markDirty: true);
     }
 
-    private void BrowseClicked(object sender, RoutedEventArgs e)
-    {
-        var dialog = new OpenFolderDialog
-        {
-            Title = "Choose original gamefiles (default.xex and data)",
-            Multiselect = false
-        };
-        if (dialog.ShowDialog(this) == true)
-        {
-            if (!File.Exists(Path.Combine(dialog.FolderName, "default.xex")))
-            {
-                MessageBox.Show(this, "This folder does not contain default.xex.",
-                    "Game not found", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-            SetGameDirectory(dialog.FolderName);
-        }
-    }
-
     private bool _extracting;
     private volatile bool _stopRequested;
     // Non-null while the "unrecognized XEX" prompt is on screen; the worker
@@ -348,13 +330,17 @@ public partial class MainWindow : Window
             Filter = "ISO (*.iso)|*.iso",
             CheckFileExists = true
         };
-        if (isoDialog.ShowDialog(this) != true) return;
+        if (isoDialog.ShowDialog(this) != true)
+        {
+            if (_extractForBuild) Application.Current.Shutdown(1);
+            return;
+        }
         string isoPath = isoDialog.FileName;
 
         // No destination prompt: extract straight into the folder the launcher is
         // running from, so the game data lands beside fable_2.exe and becomes
         // launchable in place.
-        string outDir = AppContext.BaseDirectory;
+        string outDir = _gameDirectory ?? AppContext.BaseDirectory;
 
         _extracting = true;
         _stopRequested = false;
@@ -412,6 +398,13 @@ public partial class MainWindow : Window
                 string hash = disc.ExtractXex(outDir, _ => { }, progress, xexNewName);
                 progress.SetPhase("Checking default.xex SHA-256…");
                 (bool ok, string message) = GameCompatibilityInspector.CheckHash(hash);
+                if (!ok && _extractForBuild)
+                {
+                    // A native build must never generate code from an unknown
+                    // revision, even if the standalone launcher permits it.
+                    try { File.Delete(xexNew); } catch { /* best effort */ }
+                    throw new InvalidDataException(message);
+                }
                 if (!ok)
                 {
                     // The XEX is not a supported version. Instead of bailing out
@@ -464,12 +457,13 @@ public partial class MainWindow : Window
                 _extracting = false;
                 _stopRequested = false;
                 ExtractButton.IsEnabled = true;
-                LaunchButton.IsEnabled = true;
+                LaunchButton.IsEnabled = _gameReady;
                 if (cancelled)
                 {
                     ExtractionOverlay.Visibility = Visibility.Collapsed;
                     ExtractionStatusText.Visibility = Visibility.Visible;
                     ExtractionStatusText.Text = "Extraction stopped.";
+                    if (_extractForBuild) Application.Current.Shutdown(1);
                     return;
                 }
                 if (error is not null)
@@ -479,6 +473,7 @@ public partial class MainWindow : Window
                     ExtractionStatusText.Text = "Extraction failed.";
                     MessageBox.Show(this, error, "Could not extract ISO",
                         MessageBoxButton.OK, MessageBoxImage.Error);
+                    if (_extractForBuild) Application.Current.Shutdown(1);
                     return;
                 }
                 ExtractionProgressBar.Value = 100;
@@ -490,7 +485,10 @@ public partial class MainWindow : Window
                 // SetGameDirectory reports readiness (including whether fable_2.exe
                 // is staged) in the status line and configuration badge.
                 SetGameDirectory(outDir);
-                HideOverlayAfter(900);
+                if (_extractForBuild)
+                    Application.Current.Shutdown(0);
+                else
+                    HideOverlayAfter(900);
             });
         });
     }
@@ -634,29 +632,49 @@ public partial class MainWindow : Window
 
     private void AdvancedOptionsClicked(object sender, RoutedEventArgs e)
     {
-        LoadAdvanced();
-        SetPage(true);
+        if (LoadAdvanced()) SetPage(true);
     }
 
     private void BackClicked(object sender, RoutedEventArgs e) => SetPage(false);
 
-    private void LoadAdvanced()
+    private bool LoadAdvanced()
     {
         _advanced = Fable2ConfigFile.Read(AdvancedConfigPath());
+        List<KeybindEntry> bindings;
+        try
+        {
+            bindings = Fable2ConfigFile.ParseKeybinds(_advanced.KeyboardGamepadMap);
+        }
+        catch (FormatException exception)
+        {
+            // Never silently discard broken entries when the user edits other
+            // advanced settings. An explicit reset is required.
+            var choice = MessageBox.Show(this,
+                exception.Message + "\n\nReset keybindings to defaults before editing?",
+                "Invalid existing keybindings", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (choice != MessageBoxResult.Yes) return false;
+            _advanced.KeyboardGamepadMap = Fable2ConfigValues.DefaultKeyboardGamepadMap;
+            bindings = Fable2ConfigFile.ParseKeybinds(_advanced.KeyboardGamepadMap);
+        }
         _loading = true;
         try
         {
             MouseLookCheck.IsChecked = _advanced.MouseLook;
-            DirectMouseLookCheck.IsChecked = _advanced.DirectMouseLook;
+            MouseInvertYCheck.IsChecked = _advanced.MouseInvertY;
+            MouseVerticalSensitivitySlider.Value = _advanced.MouseLookScaleY;
+            MouseVerticalSensitivityBox.Text = _advanced.MouseLookScaleY.ToString(CultureInfo.InvariantCulture);
+            MouseDeadzoneSlider.Value = _advanced.MouseDeadzoneCompensation;
+            MouseDeadzoneBox.Text = _advanced.MouseDeadzoneCompensation.ToString(CultureInfo.InvariantCulture);
             MouseSensitivitySlider.Value = _advanced.MouseLookScale;
             MouseSensitivityBox.Text = _advanced.MouseLookScale.ToString(CultureInfo.InvariantCulture);
             HotFuncYieldSlider.Value = Math.Clamp(_advanced.HotFuncYieldEvery, 0, 16);
             HotFuncYieldBox.Text = _advanced.HotFuncYieldEvery.ToString(CultureInfo.InvariantCulture);
-            BuildKeybindRows(Fable2ConfigFile.ParseKeybinds(_advanced.KeyboardGamepadMap));
+            BuildKeybindRows(bindings);
             BuildPatchRows();
         }
         finally { _loading = false; }
         AdvancedStatusText.Text = "Editing fable2_config.toml (unsaved)";
+        return true;
     }
 
     // Build one "press-to-capture host key -> guest input" row in the KeybindList.
@@ -669,7 +687,7 @@ public partial class MainWindow : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         // Press-to-capture host key field: click it, then press the key or mouse
-        // button you want to bind (Escape cancels the capture).
+        // button you want to bind (click outside the field to cancel capture).
         var capture = new KeyCaptureField { Value = key };
         var keyField = new Border
         {
@@ -796,6 +814,7 @@ public partial class MainWindow : Window
             Key.Subtract => "NumpadMinus",
             Key.Multiply => "NumpadStar",
             Key.Divide => "NumpadSlash",
+            Key.Escape => "Escape",
             Key.Left => "Left",
             Key.Right => "Right",
             Key.Up => "Up",
@@ -836,16 +855,20 @@ public partial class MainWindow : Window
         };
     }
 
-    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    private void MainWindow_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (_activeKeyField == null) return;
-        if (e.Key == Key.Escape)
+        // Escape is a legitimate game binding. To cancel capture, click away
+        // from the active field without changing the previous mapping.
+        if (_activeKeyField is not null && !_activeKeyField.IsMouseOver)
         {
             SetKeyCaptureIdle(_activeKeyField);
             _activeKeyField = null;
-            e.Handled = true;
-            return;
         }
+    }
+
+    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_activeKeyField == null) return;
         Key key = e.Key == Key.System ? e.SystemKey : e.Key;
         string? name = KeyToName(key);
         if (name != null)
@@ -860,7 +883,16 @@ public partial class MainWindow : Window
         var combo = new ComboBox();
         foreach (string name in names)
             combo.Items.Add(new ComboBoxItem { Content = name, Tag = name });
-        combo.SelectedItem = FindTag(combo, selected) ?? combo.Items[0] as ComboBoxItem;
+        if (!string.IsNullOrWhiteSpace(selected) && FindTag(combo, selected) is null)
+        {
+            // Preserve existing aliases and unsupported values instead of
+            // silently substituting the first ("A") dropdown entry.
+            string suffix = Fable2ConfigFile.IsSupportedGuestButton(selected)
+                ? " (existing alias)" : " (unsupported: choose a valid input)";
+            var original = new ComboBoxItem { Content = selected + suffix, Tag = selected };
+            combo.Items.Insert(0, original);
+        }
+        combo.SelectedItem = FindTag(combo, selected);
         return combo;
     }
 
@@ -884,7 +916,7 @@ public partial class MainWindow : Window
     }
 
     private void AddKeybindClicked(object sender, RoutedEventArgs e) =>
-        AddKeybindRow("", Fable2ConfigFile.ButtonNames[0]);
+        AddKeybindRow("", "");
 
     // Restore the built-in default keyboard -> gamepad map (rebuilds the rows
     // from the C++ default). The user still has to press Save to persist it.
@@ -898,8 +930,9 @@ public partial class MainWindow : Window
         {
             string key = ((KeyCaptureField)_keyFields[i].Tag!).Value;
             string button = (_buttonCombos[i].SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
-            if (!string.IsNullOrWhiteSpace(key) || !string.IsNullOrWhiteSpace(button))
-                entries.Add(new KeybindEntry { Key = key, Button = button });
+            // Include blank rows: the config writer must refuse an unfinished
+            // entry rather than silently discarding it when Save is pressed.
+            entries.Add(new KeybindEntry { Key = key, Button = button });
         }
         return Fable2ConfigFile.BuildKeybinds(entries);
     }
@@ -1034,6 +1067,44 @@ public partial class MainWindow : Window
         }
     }
 
+    private void MouseVerticalSensitivitySliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (MouseVerticalSensitivityBox is not null)
+            MouseVerticalSensitivityBox.Text = ((int)e.NewValue).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private void MouseVerticalSensitivityBoxLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (int.TryParse(MouseVerticalSensitivityBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture,
+            out int value))
+        {
+            value = Math.Clamp(value, 1, 4096);
+            MouseVerticalSensitivitySlider.Value = value;
+            MouseVerticalSensitivityBox.Text = value.ToString(CultureInfo.InvariantCulture);
+        }
+        else
+            MouseVerticalSensitivityBox.Text = ((int)MouseVerticalSensitivitySlider.Value).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private void MouseDeadzoneSliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (MouseDeadzoneBox is not null)
+            MouseDeadzoneBox.Text = ((int)e.NewValue).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private void MouseDeadzoneBoxLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (int.TryParse(MouseDeadzoneBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture,
+            out int value))
+        {
+            value = Math.Clamp(value, 0, 12000);
+            MouseDeadzoneSlider.Value = value;
+            MouseDeadzoneBox.Text = value.ToString(CultureInfo.InvariantCulture);
+        }
+        else
+            MouseDeadzoneBox.Text = ((int)MouseDeadzoneSlider.Value).ToString(CultureInfo.InvariantCulture);
+    }
+
     private void HotFuncYieldSliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (HotFuncYieldBox is not null)
@@ -1065,17 +1136,19 @@ public partial class MainWindow : Window
         }
 
         _advanced.MouseLook = MouseLookCheck.IsChecked == true;
-        _advanced.DirectMouseLook = DirectMouseLookCheck.IsChecked == true;
+        _advanced.MouseInvertY = MouseInvertYCheck.IsChecked == true;
+        _advanced.MouseLookScaleY = (int)MouseVerticalSensitivitySlider.Value;
+        _advanced.MouseDeadzoneCompensation = (int)MouseDeadzoneSlider.Value;
         _advanced.MouseLookScale = (int)MouseSensitivitySlider.Value;
         _advanced.HotFuncYieldEvery = int.TryParse(HotFuncYieldBox.Text, NumberStyles.Integer,
             CultureInfo.InvariantCulture, out int yieldEvery)
             ? Math.Clamp(yieldEvery, 0, 4096) : (int)HotFuncYieldSlider.Value;
-        _advanced.KeyboardGamepadMap = CollectKeybinds();
-        CollectPatches();
-
         string path = AdvancedConfigPath();
         try
         {
+            // Validate the full binding map before changing any config file.
+            _advanced.KeyboardGamepadMap = CollectKeybinds();
+            CollectPatches();
             Fable2ConfigFile.Write(path, _advanced);
             AdvancedStatusText.Text = $"Saved {Path.GetFileName(path)}.";
         }
@@ -1087,32 +1160,3 @@ public partial class MainWindow : Window
     }
 }
 
-internal static class LauncherState
-{
-    private static readonly string LocalStatePath = Path.Combine(AppContext.BaseDirectory,
-        "launcher-game-path.txt");
-
-    public static string? LoadGameDirectory()
-    {
-        try
-        {
-            if (File.Exists(LocalStatePath)) return File.ReadAllText(LocalStatePath).Trim();
-            return null;
-        }
-        catch { return null; }
-    }
-
-    public static void SaveGameDirectory(string directory)
-    {
-        try
-        {
-            File.WriteAllText(LocalStatePath, directory);
-            return;
-        }
-        catch
-        {
-            // Graphics saving reports write failures separately. No global
-            // fallback: different installations must not inherit other paths.
-        }
-    }
-}

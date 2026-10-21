@@ -12,7 +12,7 @@ public static class GameCompatibilityInspector
     {
         string xex = Path.Combine(directory, "default.xex");
         if (!File.Exists(xex))
-            return new("Content missing", "default.xex was not found in the selected game folder.", false);
+            return new("Content missing", "default.xex is missing here. Use Extract from ISO to add your game disc.", false);
         using FileStream input = File.OpenRead(xex);
         string hash = Convert.ToHexString(SHA256.HashData(input)).ToLowerInvariant();
         return Classify(hash,
@@ -61,7 +61,7 @@ public static class GameCompatibilityInspector
                     "This XEX is paired with incompatible retail/TU1 content. Use a complete matching dump.", false);
             if (!version.RequiredFiles.All(hasFile))
                 return new("Incomplete " + version.Name + " files",
-                    "Required content or localization is missing. Select a complete matching dump.", false);
+                    "Required content or localization is missing. Re-extract a complete matching ISO.", false);
             return new(version.Name + " detected", version.Reason, true, version.Id);
         }
         return new("Unknown XEX build", $"Unknown default.xex SHA-256: {hash}", false);

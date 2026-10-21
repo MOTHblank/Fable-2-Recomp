@@ -147,3 +147,40 @@ or unplug/replug recovery. There is no claim that long-session simulation,
 cutscenes or timing above 60 FPS are fully correct. Frame drops below 20 FPS
 were reported and remain unresolved. Other regional/TU revisions, exhaustive
 save compatibility and remaster features are outside this change.
+
+## Renderer cache warmup and Vulkan diagnostics
+
+D3D12 already persists guest shaders and pipeline descriptions under the
+runtime's `cache/shaders/shareable/` directory when the SDK's `store_shaders`
+setting is enabled (the default). Existing stored pipelines are translated and
+created when the title's shader storage is initialized, before normal gameplay.
+Do not delete the `cache/` directory between launches if you want to reuse
+that work. First-ever effects cannot be precompiled until the game has seen
+and recorded their shader and pipeline combinations.
+
+`thirdparty/rexglue-sdk-pipeline-warmup.patch` corrects two SDK defects:
+its warmup loop now starts the extra compilation workers it calculates, and its
+storage writer drains pending shader/pipeline records during shutdown instead
+of silently discarding them. `tools/prepare_runtime_sdk.py` applies this patch
+to both the clean SDK pin and accepted fork revisions carrying the original
+runtime fixes. The existing `async_pipeline_wait` correctness behavior is
+unchanged: a required pipeline is never intentionally skipped merely to hide
+first-use compilation latency. Warmup cost may move to the loading phase, and
+no claim is made that an empty cache eliminates all first-use stalls.
+
+The optional, older Vulkan source patch
+(`thirdparty/rexglue-sdk-local.patch`) retains its gamma-ramp and renderer
+correctness fixes, but guards the temporary GPU readback functions, periodic
+swap and gamma-ramp readbacks, background mapping monitor and verbose telemetry
+behind `FABLE2_VULKAN_DIAGNOSTICS`. The wrapper
+(`tools/vulkan_sdk/CMakeLists.txt`) defaults this flag to OFF and defines it
+only for Debug builds when explicitly enabled with
+`-DFABLE2_VULKAN_DIAGNOSTICS=ON`. Release builds exclude these diagnostics
+even if the CMake option is ON. Lightweight frame-time/FPS counters and
+meaningful error logs remain available without the flag.
+
+**Deployment note:** the normal Windows build uses the pinned source SDK and
+its separate runtime patches; editing the older optional Vulkan patch does not
+change already-built DLLs. Reconfigure and rebuild the corresponding SDK to
+pick up the changes. Any older Vulkan SDK checkout with the unguarded version
+of the patch must be recreated/repatched before being used for production.
