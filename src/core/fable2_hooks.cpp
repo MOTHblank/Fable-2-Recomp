@@ -300,15 +300,17 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
   const bool direct = REXCVAR_GET(mouse_look) &&
                       REXCVAR_GET(mouse_direct_look);
   if (direct) {
-    switch (ApplyDirectMouseOrbit(
+    const DirectMouseResult result = ApplyDirectMouseOrbit(
         mem, cam, r1.u32, REXCVAR_GET(mouse_look_scale),
-        REXCVAR_GET(mouse_look_scale_y), REXCVAR_GET(mouse_invert_y))) {
+        REXCVAR_GET(mouse_look_scale_y), REXCVAR_GET(mouse_invert_y));
+    switch (result) {
       case DirectMouseResult::kApplied: ++applied; break;
       case DirectMouseResult::kNotHero: ++not_hero; break;
       case DirectMouseResult::kInvalidPose: ++invalid_pose; break;
       case DirectMouseResult::kInvalidOutput: ++invalid_output; break;
     }
-    if (cfg.mouse_look_camera_diag && invalid_output == 1) {
+    if (cfg.mouse_look_camera_diag &&
+        result == DirectMouseResult::kInvalidOutput && invalid_output == 1) {
       // One representative frame is enough to show whether r1+0x60 is
       // actually the camera eye on this particular recompiled XEX.
       if (r1.u32 >= 0x10000u && (r1.u32 & 0xFu) == 0 &&
@@ -325,7 +327,8 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
                     r1.u32);
       }
     }
-    if (cfg.mouse_look_camera_diag && invalid_pose == 1) {
+    if (cfg.mouse_look_camera_diag &&
+        result == DirectMouseResult::kInvalidPose && invalid_pose == 1) {
       REXSYS_WARN("[mouse-camera] rejected camera orientation; "
                   "hero camera cam=0x{:08X}", cam);
     }
