@@ -96,6 +96,17 @@ if not exist "%SDKSRC%\CMakeLists.txt" (
     git submodule update --init thirdparty/rexglue-sdk || exit /b 1
 )
 python "%ROOT%tools\prepare_codegen_manifest.py" "%ROOT%fable_2_manifest.toml" "%ROOT%.fable2_codegen_manifest.toml" "out/game/default.xex" || exit /b 1
+rem First-time CMake configuration must see generated/default/sources.cmake
+rem already on disk; otherwise rexglue_setup_target cannot add guest code to
+rem the executable during configure, even though codegen runs later in Ninja.
+if not exist "%ROOT%generated\default\sources.cmake" (
+    echo Generating guest-code source list for first-time CMake setup ...
+    "%SDK%\bin\rexglue.exe" codegen "%ROOT%.fable2_codegen_manifest.toml" || exit /b 1
+    if not exist "%ROOT%generated\default\sources.cmake" (
+        echo Error: ReXGlue did not produce generated\default\sources.cmake. 1>&2
+        exit /b 1
+    )
+)
 echo [3/4] Building matched source SDK ...
 call "%ROOT%tools\build_runtime_sdk.cmd" "%SDK%" Release || exit /b 1
 
