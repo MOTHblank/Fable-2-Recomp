@@ -41,7 +41,7 @@ recomp's own settings (stored in `fable2_config.toml` next to `fable_2.exe`,
 separate from the engine's `fable_2.toml`):
 
 - **Keybinds** — the keyboard→gamepad map as a list of editable rows (host key
-  → guest input, with add/remove). Mouse look and mouse sensitivity are also
+  → guest input, with add/remove). Mouse look (via the gamepad right-stick path) and mouse sensitivity are also
   here.
 - **Patches** — a checkbox per recomp-level patch (unlock website/CE, skip
   intro videos, disable motion blur, realtime texture morphing, hero/dog

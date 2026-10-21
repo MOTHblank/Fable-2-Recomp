@@ -180,12 +180,12 @@ dog_fur_depth_bias = true
 [perf]
 # NtYieldExecution batching for the hot-function overrides (see
 # src/core/hotfunc/hotfunc_yield.h): every Nth guest yield does the real
-# SwitchToThread; the others take a full memory fence. The work-loop yield
+# SwitchToThread; the others take a compiler fence. The work-loop yield
 # was the single biggest cost in the 475 render chain; on multi-core hosts
 # the yield is only a politeness hint, so batch it. 1 = original (yield
 # every call); 0 = never yield; larger = fewer context switches.
-# Default: 1
-hotfunc_yield_every = 1
+# Default: 4
+hotfunc_yield_every = 4
 )TOML_EOF";
 
 std::string_view TypeName(toml::node_type t) {
@@ -274,6 +274,7 @@ bool Load(const std::filesystem::path& path) {
     values.mouse_look_scale = static_cast<int32_t>(Read<int64_t>(
         input_table, "input", "mouse_look_scale", "integer",
         values.mouse_look_scale));
+    // Keep older single-axis settings symmetric until Y is configured.
     values.mouse_look_scale_y = static_cast<int32_t>(Read<int64_t>(
         input_table, "input", "mouse_look_scale_y", "integer",
         values.mouse_look_scale));

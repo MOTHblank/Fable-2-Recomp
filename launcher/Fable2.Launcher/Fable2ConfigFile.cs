@@ -27,7 +27,6 @@ public class Fable2ConfigValues
     public int MouseLookScaleY { get; set; } = 256;
     public bool MouseInvertY { get; set; } = false;
     public int MouseDeadzoneCompensation { get; set; } = 0;
-
     // [patches]
     public bool UnlockWebsite { get; set; } = true;
     public bool UnlockCe { get; set; } = true;
@@ -86,6 +85,33 @@ public static class Fable2ConfigFile
         "StickUp","StickDown","StickLeft","StickRight",
     };
 
+    // Keep these in sync with FillGuestTarget in src/input/keyboard_gamepad.h.
+    // The dropdown uses canonical labels, but existing valid aliases must retain
+    // their exact spelling when loaded and saved.
+    private static readonly HashSet<string> GuestTargets = new(
+        ButtonNames.Concat(new[]
+        {
+            "LSHOULDER", "RSHOULDER", "DUP", "DDOWN", "DLEFT", "DRIGHT",
+            "START", "BACK", "VIEW", "LTHUMB", "RTHUMB",
+            "LTRIGGER", "RTRIGGER", "LU", "LD", "LL", "LR"
+        }), StringComparer.OrdinalIgnoreCase);
+
+    // ParseKey in the native host input also accepts these aliases.
+    private static readonly HashSet<string> HostKeys = new(
+        KeyNames.Concat(new[]
+        {
+            "LEFTMOUSE", "RIGHTMOUSE", "MIDDLEMOUSE", "XBUTTON1",
+            "XBUTTON2", "SIDEBUTTON1", "SIDEBUTTON2",
+            "LeftShift", "RightShift", "LeftControl", "RightControl",
+            "LeftAlt", "RightAlt"
+        }), StringComparer.OrdinalIgnoreCase);
+
+    public static bool IsSupportedGuestButton(string value) =>
+        GuestTargets.Contains(value.Trim());
+
+    public static bool IsSupportedHostKey(string value) =>
+        HostKeys.Contains(value.Trim());
+
     /// <summary>Read the fable2_config.toml values. Missing file -> built-in defaults.</summary>
     public static Fable2ConfigValues Read(string path)
     {
@@ -139,8 +165,6 @@ public static class Fable2ConfigFile
                     break;
             }
         }
-        // Existing users configured only one mouse sensitivity. Keep the
-        // same feel on both axes until they explicitly adjust vertical.
         if (!hasExplicitVerticalSensitivity)
             values.MouseLookScaleY = values.MouseLookScale;
         return values;
@@ -206,34 +230,56 @@ public static class Fable2ConfigFile
         }
     }
 
-    /// <summary>Parse "Key:Button,Key:Button,..." into a list of bindings.</summary>
+    /// <summary>
+    /// Parse keybindings without losing malformed rows. Invalid syntax is an error
+    /// rather than silently removing input from the user's config on the next save.
+    /// Unsupported but well-formed names are kept so the editor can display them.
+    /// </summary>
     public static List<KeybindEntry> ParseKeybinds(string map)
     {
         var entries = new List<KeybindEntry>();
         if (string.IsNullOrWhiteSpace(map)) return entries;
-        foreach (string part in map.Split(','))
+        string[] parts = map.Split(',');
+        for (int i = 0; i < parts.Length; i++)
         {
-            string trimmed = part.Trim();
-            if (trimmed.Length == 0) continue;
-            int colon = trimmed.IndexOf(':');
-            if (colon < 0) continue;
+            string part = parts[i].Trim();
+            int colon = part.IndexOf(':');
+            if (colon <= 0 || colon == part.Length - 1 ||
+                part.IndexOf(':', colon + 1) >= 0)
+                throw new FormatException(
+                    $"Binding {i + 1} must have a host key and guest input (Key:Button).");
+
             entries.Add(new KeybindEntry
             {
-                Key = trimmed.Substring(0, colon).Trim(),
-                Button = trimmed.Substring(colon + 1).Trim(),
+                Key = part[..colon].Trim(),
+                Button = part[(colon + 1)..].Trim(),
             });
+            if (entries[^1].Key.Length == 0 || entries[^1].Button.Length == 0)
+                throw new FormatException($"Binding {i + 1} is incomplete.");
         }
         return entries;
     }
 
-    /// <summary>Build "Key:Button,Key:Button,..." from a list of bindings.</summary>
+    /// <summary>Build a valid map or reject the entire write, including empty UI rows.</summary>
     public static string BuildKeybinds(IEnumerable<KeybindEntry> entries)
     {
         var parts = new List<string>();
+        int number = 0;
         foreach (KeybindEntry entry in entries)
         {
-            if (string.IsNullOrWhiteSpace(entry.Key) && string.IsNullOrWhiteSpace(entry.Button)) continue;
-            parts.Add($"{entry.Key.Trim()}:{entry.Button.Trim()}");
+            number++;
+            string key = entry.Key.Trim();
+            string button = entry.Button.Trim();
+            if (key.Length == 0 || button.Length == 0 ||
+                key.Contains(':') || key.Contains(',') ||
+                button.Contains(':') || button.Contains(','))
+                throw new ArgumentException(
+                    $"Binding {number} is incomplete or contains an invalid separator.");
+            if (!IsSupportedHostKey(key))
+                throw new ArgumentException($"Binding {number}: unrecognized host key '{key}'.");
+            if (!IsSupportedGuestButton(button))
+                throw new ArgumentException($"Binding {number}: unrecognized guest input '{button}'.");
+            parts.Add($"{key}:{button}");
         }
         return string.Join(",", parts);
     }

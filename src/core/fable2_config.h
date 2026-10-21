@@ -111,10 +111,10 @@ struct Values {
   // [perf] - hot-function override tuning.
   // hotfunc_yield_every: NtYieldExecution batching factor for the hotfunc
   // overrides (see src/core/hotfunc/hotfunc_yield.h). Every Nth call does
-  // the real SwitchToThread; the others take a full memory fence. 1 =
+  // the real SwitchToThread; the others take a compiler fence. 1 =
   // original (yield every call), 0 = never yield. Larger = fewer context
   // switches, less frequent CPU rotation to other guest threads.
-  int32_t hotfunc_yield_every = 1;
+  int32_t hotfunc_yield_every = 4;
 };
 
 // Load the config from `path`.
