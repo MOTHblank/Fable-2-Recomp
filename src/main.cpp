@@ -6,6 +6,7 @@
 #include "fable2_f5_lua.h"
 
 #include "fable_2_app.h"
+#include "fable2_button_prompts.h"
 #include "fps_meter.h"
 #include "fable2_text_probe.h"
 #include "fable2_glyph_probe.h"
@@ -21,6 +22,12 @@
 #include "keyboard_gamepad.h"
 
 #include <rex/cvar.h>
+
+// Native guest UI button markup: automatic last-active device, or a manual
+// override when the user wants only keyboard or only controller prompts.
+REXCVAR_DEFINE_STRING(ui_prompt_mode, "auto", "Input",
+                     "Prompt display mode: auto, keyboard, controller")
+    .allowed({"auto", "keyboard", "controller"});
 
 // Host keyboard -> guest gamepad map (see src/input/keyboard_gamepad.h).
 // Format: "Key:Button,Key:Button,...".
