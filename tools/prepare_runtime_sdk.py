@@ -125,9 +125,18 @@ def main():
         elif followup_state == "applied":
             print(f"Already applied: {followup_name}")
         else:
-            detail = git(source, "apply", "--check", str(followup_patch),
-                         check=False).stderr.strip()
-            fail(f"SDK patch {followup_name} conflicts with local edits:\\n{detail}")
+            # Git apply cannot represent partial patch state or tolerate
+            # unrelated nearby edits. Apply only full, exact before/after hunks
+            # and refuse any unknown contents without cleaning the SDK tree.
+            from apply_sdk_followup_patch import apply_exact_hunks
+            try:
+                action = apply_exact_hunks(source, followup_patch)
+            except (ValueError, OSError) as exc:
+                detail = git(source, "apply", "--check", str(followup_patch),
+                             check=False).stderr.strip()
+                fail(f"SDK patch {followup_name} conflicts with local edits:\n"
+                     f"{detail}\nStrict recovery refused: {exc}")
+            print(f"{'Recovered' if action == 'applied' else 'Already applied'}: {followup_name}")
 
     if not args.skip_dependencies:
         # libmspack is either a submodule gitlink (base pin and older fork
