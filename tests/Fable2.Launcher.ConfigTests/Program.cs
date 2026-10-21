@@ -329,6 +329,11 @@ try
         "keybind build roundtrip failed");
     Require(string.IsNullOrEmpty(Fable2ConfigFile.BuildKeybinds(Fable2ConfigFile.ParseKeybinds(""))),
         "empty map should build to empty");
+    string oldInputPath = Path.Combine(testDirectory, "old-fable2_config.toml");
+    File.WriteAllText(oldInputPath, "[input]\nmouse_look_scale = 768\n");
+    var migratedInput = Fable2ConfigFile.Read(oldInputPath);
+    Require(migratedInput.MouseLookScale == 768 && migratedInput.MouseLookScaleY == 768,
+        "old single-axis sensitivity did not migrate to vertical axis");
     // Second write: update a value and preserve unknown sections/keys.
     File.AppendAllText(advPath, "\n[custom_section]\nsome_key = \"keep me\"\n");
     advanced.MouseLookScale = 1024;

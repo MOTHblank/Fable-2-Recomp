@@ -276,7 +276,7 @@ bool Load(const std::filesystem::path& path) {
         values.mouse_look_scale));
     values.mouse_look_scale_y = static_cast<int32_t>(Read<int64_t>(
         input_table, "input", "mouse_look_scale_y", "integer",
-        values.mouse_look_scale_y));
+        values.mouse_look_scale));
     values.mouse_invert_y = Read<bool>(
         input_table, "input", "mouse_invert_y", "boolean", values.mouse_invert_y);
     values.mouse_deadzone_compensation = static_cast<int32_t>(Read<int64_t>(

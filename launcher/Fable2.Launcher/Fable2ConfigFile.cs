@@ -93,6 +93,7 @@ public static class Fable2ConfigFile
         if (!File.Exists(path)) return values;
 
         string? section = null;
+        bool hasExplicitVerticalSensitivity = false;
         foreach (string rawLine in File.ReadLines(path))
         {
             string line = rawLine.TrimStart();
@@ -115,7 +116,11 @@ public static class Fable2ConfigFile
                     if (key == "keyboard_gamepad_map") values.KeyboardGamepadMap = Unquote(rawValue);
                     else if (key == "mouse_look") values.MouseLook = ParseBool(rawValue, values.MouseLook);
                     else if (key == "mouse_look_scale") values.MouseLookScale = ParseInt(rawValue, values.MouseLookScale);
-                    else if (key == "mouse_look_scale_y") values.MouseLookScaleY = ParseInt(rawValue, values.MouseLookScaleY);
+                    else if (key == "mouse_look_scale_y")
+                    {
+                        values.MouseLookScaleY = ParseInt(rawValue, values.MouseLookScaleY);
+                        hasExplicitVerticalSensitivity = true;
+                    }
                     else if (key == "mouse_invert_y") values.MouseInvertY = ParseBool(rawValue, values.MouseInvertY);
                     else if (key == "mouse_deadzone_compensation") values.MouseDeadzoneCompensation = ParseInt(rawValue, values.MouseDeadzoneCompensation);
                     break;
@@ -134,6 +139,10 @@ public static class Fable2ConfigFile
                     break;
             }
         }
+        // Existing users configured only one mouse sensitivity. Keep the
+        // same feel on both axes until they explicitly adjust vertical.
+        if (!hasExplicitVerticalSensitivity)
+            values.MouseLookScaleY = values.MouseLookScale;
         return values;
     }
 
