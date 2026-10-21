@@ -32,6 +32,7 @@ void poll_f5();
 // The built-in default map (src/core/fable2_config.h) must parse fully too.
 #include "src/core/fable2_config.h"
 #include "src/input/mnk_config_bridge.h"
+#include "src/diagnostics/fable2_button_prompt_strings.h"
 
 #include <cstdio>
 #include <optional>
@@ -78,6 +79,20 @@ int main() {
       "LMB:X,RMB:Y,XMB1:B,XMB2:RT,Shift:A,W:StickUp,D:StickRight,F4:B,E:A",
       "F4");
   CHECK(native[0] == "Shift,E");
+  // UI markup must resolve to the actual usable native binding without
+  // changing the controller version or touching unknown markup.
+  CHECK(fable2::buttonprompts::DisplayKey("Shift,E") == "E");
+  CHECK(fable2::buttonprompts::DisplayKey("LMB,RMB") == "LMB");
+  CHECK(fable2::buttonprompts::DisplayKey("Return,Space") == "Enter");
+  CHECK(fable2::buttonprompts::DisplayKey("Shift+Enter") == "");
+  const fable2::buttonprompts::KeyLabels keycaps{"E", "B", "LMB", "RMB"};
+  CHECK(fable2::buttonprompts::Rewrite(u"Press <a_img> to start", keycaps) ==
+        u"Press [E] to start");
+  CHECK(fable2::buttonprompts::Rewrite(u"<x_img> and <y_img>", keycaps) ==
+        u"[LMB] and [RMB]");
+  CHECK(fable2::buttonprompts::Rewrite(u"<unknown> <a_img>", keycaps) ==
+        u"<unknown> [E]");
+
   CHECK(native[1] == "XMB1");
   CHECK(native[2] == "LMB");
   CHECK(native[3] == "RMB");
