@@ -124,6 +124,20 @@ def main():
                      check=False).stderr.strip()
         fail(f"SDK patch {warmup_name} conflicts with local edits:\\n{detail}")
 
+    # MnK fixes are kept separate from renderer/runtime patches, so SDK
+    # upgrades cannot silently drop keyboard and mouse handling.
+    input_patch = patch_directory / "rexglue-sdk-mnk-input.patch"
+    input_state = patch_state(source, input_patch)
+    if input_state == "clean":
+        git(source, "apply", str(input_patch))
+        print(f"Applied: {input_patch.name}")
+    elif input_state == "applied":
+        print(f"Already applied: {input_patch.name}")
+    else:
+        detail = git(source, "apply", "--check", str(input_patch),
+                     check=False).stderr.strip()
+        fail(f"SDK input patch conflicts with local edits:\n{detail}")
+
     if not args.skip_dependencies:
         # libmspack is either a submodule gitlink (base pin and older fork
         # commits) or plain vendored files (newer fork commits). Only the

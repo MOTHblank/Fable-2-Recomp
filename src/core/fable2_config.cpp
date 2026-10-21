@@ -80,6 +80,16 @@ mouse_look = true
 # Range: 1..4096. Default: 256.
 mouse_look_scale = 256
 
+# Vertical sensitivity (independent of horizontal); 1..4096.
+mouse_look_scale_y = 256
+
+# Invert vertical mouse movement (false = up moves camera up).
+mouse_invert_y = false
+
+# Additional mouse-to-stick deadzone compensation, 0..12000.
+# Leave at 0 unless slow movement gets swallowed by the game's stick deadzone.
+mouse_deadzone_compensation = 0
+
 # Log the active camera's orientation fields once, the first frame the mouse
 # moves, to confirm the offsets above. Default: false
 mouse_look_camera_diag = false
@@ -264,6 +274,14 @@ bool Load(const std::filesystem::path& path) {
     values.mouse_look_scale = static_cast<int32_t>(Read<int64_t>(
         input_table, "input", "mouse_look_scale", "integer",
         values.mouse_look_scale));
+    values.mouse_look_scale_y = static_cast<int32_t>(Read<int64_t>(
+        input_table, "input", "mouse_look_scale_y", "integer",
+        values.mouse_look_scale_y));
+    values.mouse_invert_y = Read<bool>(
+        input_table, "input", "mouse_invert_y", "boolean", values.mouse_invert_y);
+    values.mouse_deadzone_compensation = static_cast<int32_t>(Read<int64_t>(
+        input_table, "input", "mouse_deadzone_compensation", "integer",
+        values.mouse_deadzone_compensation));
     values.mouse_look_camera_diag =
         Read<bool>(input_table, "input", "mouse_look_camera_diag", "boolean",
                    values.mouse_look_camera_diag);
