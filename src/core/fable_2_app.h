@@ -348,6 +348,11 @@ class Fable2App : public rex::ReXApp {
     seed_cvar("keyboard_gamepad_map", cfg.keyboard_gamepad_map);
     seed_cvar("mouse_look", cfg.mouse_look ? "true" : "false");
     seed_cvar("mouse_direct_look", cfg.mouse_direct_look ? "true" : "false");
+    REXSYS_INFO("[mouse-camera] startup mode={} enabled={} "
+                "diagnostics={} (config mouse_direct_look={})",
+                REXCVAR_GET(mouse_direct_look) ? "direct" : "native",
+                REXCVAR_GET(mouse_look),
+                cfg.mouse_look_camera_diag, cfg.mouse_direct_look);
     seed_cvar("mouse_look_scale", std::to_string(cfg.mouse_look_scale));
     seed_cvar("mouse_look_scale_y", std::to_string(cfg.mouse_look_scale_y));
     seed_cvar("mouse_invert_y", cfg.mouse_invert_y ? "true" : "false");
