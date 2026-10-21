@@ -265,7 +265,7 @@
                           Foreground="{StaticResource TextBrush}" />
                 <TextBlock Text="CAMERA INPUT MODE" Style="{StaticResource FieldLabel}"
                            Margin="0,14,0,5" />
-                <ComboBox x:Name="MouseCameraModeCombo" SelectionChanged="SettingChanged">
+                <ComboBox x:Name="MouseCameraModeCombo" SelectionChanged="MouseCameraModeChanged">
                   <ComboBoxItem Content="Native stick (original)" Tag="native" />
                   <ComboBoxItem Content="Direct mouse orbit (experimental)" Tag="direct" />
                 </ComboBox>
@@ -322,7 +322,7 @@
                            TextAlignment="Center" VerticalContentAlignment="Center"
                            LostFocus="MouseDeadzoneBoxLostFocus" />
                 </Grid>
-                <TextBlock Text="Increase compensation only if slow mouse motions are ignored by the game."
+                <TextBlock Text="Native stick mode only: raise compensation if slow mouse motions are ignored."
                            FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0"
                            TextWrapping="Wrap" />
                 <Grid Margin="0,14,0,0">
@@ -340,7 +340,7 @@
                   <TextBlock x:Name="MouseFlickBufferValue" Grid.Column="2" Width="64" Text="4"
                              TextAlignment="Center" VerticalAlignment="Center" />
                 </Grid>
-                <TextBlock Text="Preserves motion clipped by the game's stick limit. Higher values turn farther per flick, but can continue turning briefly after you stop. Zero disables it."
+                <TextBlock Text="Native stick mode only. Preserves motion clipped by the game's stick limit. Higher values turn farther per flick, but can continue turning briefly after you stop. Zero disables it."
                            FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0"
                            TextWrapping="Wrap" />
               </StackPanel>
