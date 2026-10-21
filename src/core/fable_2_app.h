@@ -39,6 +39,8 @@
 // Re-enable to re-measure the frame pacing:
 // #include "fps_probe.h"
 #include "mnk_config_bridge.h"
+#include "mouse_look.h"
+#include <rex/input/input_system.h>
 #include <rex/input/mnk/mnk_input_driver.h>
 #ifdef FABLE2_REMOTE_CONTROL
 #include "remote_control_server.h"
