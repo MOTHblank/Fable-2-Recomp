@@ -644,7 +644,11 @@ public partial class MainWindow : Window
         try
         {
             MouseLookCheck.IsChecked = _advanced.MouseLook;
-            DirectMouseLookCheck.IsChecked = _advanced.DirectMouseLook;
+            MouseInvertYCheck.IsChecked = _advanced.MouseInvertY;
+            MouseVerticalSensitivitySlider.Value = _advanced.MouseLookScaleY;
+            MouseVerticalSensitivityBox.Text = _advanced.MouseLookScaleY.ToString(CultureInfo.InvariantCulture);
+            MouseDeadzoneSlider.Value = _advanced.MouseDeadzoneCompensation;
+            MouseDeadzoneBox.Text = _advanced.MouseDeadzoneCompensation.ToString(CultureInfo.InvariantCulture);
             MouseSensitivitySlider.Value = _advanced.MouseLookScale;
             MouseSensitivityBox.Text = _advanced.MouseLookScale.ToString(CultureInfo.InvariantCulture);
             HotFuncYieldSlider.Value = Math.Clamp(_advanced.HotFuncYieldEvery, 0, 16);
@@ -1031,6 +1035,44 @@ public partial class MainWindow : Window
         }
     }
 
+    private void MouseVerticalSensitivitySliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (MouseVerticalSensitivityBox is not null)
+            MouseVerticalSensitivityBox.Text = ((int)e.NewValue).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private void MouseVerticalSensitivityBoxLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (int.TryParse(MouseVerticalSensitivityBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture,
+            out int value))
+        {
+            value = Math.Clamp(value, 1, 4096);
+            MouseVerticalSensitivitySlider.Value = value;
+            MouseVerticalSensitivityBox.Text = value.ToString(CultureInfo.InvariantCulture);
+        }
+        else
+            MouseVerticalSensitivityBox.Text = ((int)MouseVerticalSensitivitySlider.Value).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private void MouseDeadzoneSliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (MouseDeadzoneBox is not null)
+            MouseDeadzoneBox.Text = ((int)e.NewValue).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private void MouseDeadzoneBoxLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (int.TryParse(MouseDeadzoneBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture,
+            out int value))
+        {
+            value = Math.Clamp(value, 0, 12000);
+            MouseDeadzoneSlider.Value = value;
+            MouseDeadzoneBox.Text = value.ToString(CultureInfo.InvariantCulture);
+        }
+        else
+            MouseDeadzoneBox.Text = ((int)MouseDeadzoneSlider.Value).ToString(CultureInfo.InvariantCulture);
+    }
+
     private void HotFuncYieldSliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (HotFuncYieldBox is not null)
@@ -1062,7 +1104,9 @@ public partial class MainWindow : Window
         }
 
         _advanced.MouseLook = MouseLookCheck.IsChecked == true;
-        _advanced.DirectMouseLook = DirectMouseLookCheck.IsChecked == true;
+        _advanced.MouseInvertY = MouseInvertYCheck.IsChecked == true;
+        _advanced.MouseLookScaleY = (int)MouseVerticalSensitivitySlider.Value;
+        _advanced.MouseDeadzoneCompensation = (int)MouseDeadzoneSlider.Value;
         _advanced.MouseLookScale = (int)MouseSensitivitySlider.Value;
         _advanced.HotFuncYieldEvery = int.TryParse(HotFuncYieldBox.Text, NumberStyles.Integer,
             CultureInfo.InvariantCulture, out int yieldEvery)

@@ -292,7 +292,9 @@ try
         KeyboardGamepadMap = "LMB:X,RMB:Y,Shift:A,E:A",
         MouseLook = true,
         MouseLookScale = 512,
-        DirectMouseLook = true,
+        MouseLookScaleY = 768,
+        MouseInvertY = true,
+        MouseDeadzoneCompensation = 4000,
         UnlockWebsite = true,
         UnlockCe = false,
         SkipIntroVideos = true,
@@ -309,7 +311,9 @@ try
     var readBack = Fable2ConfigFile.Read(advPath);
     Require(readBack.MouseLook, "mouse look roundtrip failed");
     Require(readBack.MouseLookScale == 512, "mouse scale roundtrip failed");
-    Require(readBack.DirectMouseLook, "direct mouse look roundtrip failed");
+    Require(readBack.MouseLookScaleY == 768, "vertical mouse scale roundtrip failed");
+    Require(readBack.MouseInvertY, "invert Y roundtrip failed");
+    Require(readBack.MouseDeadzoneCompensation == 4000, "deadzone roundtrip failed");
     Require(!readBack.UnlockCe, "unlock_ce roundtrip failed");
     Require(readBack.SkipIntroVideos, "skip_intro_videos roundtrip failed");
     Require(readBack.DisableMotionBlur, "disable_motion_blur roundtrip failed");

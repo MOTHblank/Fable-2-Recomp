@@ -267,7 +267,7 @@
                     <ColumnDefinition Width="Auto" />
                   </Grid.ColumnDefinitions>
                   <StackPanel>
-                    <TextBlock Text="MOUSE SENSITIVITY" Style="{StaticResource FieldLabel}" />
+                    <TextBlock Text="HORIZONTAL SENSITIVITY" Style="{StaticResource FieldLabel}" />
                     <Slider x:Name="MouseSensitivitySlider" Minimum="1" Maximum="4096" Value="256"
                             SmallChange="1" LargeChange="64"
                             ValueChanged="MouseSensitivitySliderChanged" />
@@ -276,24 +276,44 @@
                            TextAlignment="Center" VerticalContentAlignment="Center"
                            LostFocus="MouseSensitivityBoxLostFocus" />
                 </Grid>
-                <Border Background="#264A2C2C" CornerRadius="8" Padding="14,10,14,10" Margin="0,16,0,0">
-                  <Grid>
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="*" />
-                      <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel>
-                      <TextBlock Text="Direct mouse look (camera)  (experimental)"
-                                 FontWeight="SemiBold" Foreground="#FFE06666" />
-                      <TextBlock Text="Aim the camera directly like a desktop FPS, orbiting the hero with native pitch limits, instead of mapping to the gamepad right stick. Only applies when mouse look is on. May feel wrong in some scenes."
-                                 FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,2,0,0"
-                                 TextWrapping="Wrap" />
-                    </StackPanel>
-                    <CheckBox x:Name="DirectMouseLookCheck" Grid.Column="1" IsChecked="False"
-                              VerticalAlignment="Top" Margin="10,0,0,0"
-                              Foreground="{StaticResource TextBrush}" />
-                  </Grid>
-                </Border>
+                <Grid Margin="0,12,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="VERTICAL SENSITIVITY" Style="{StaticResource FieldLabel}" />
+                    <Slider x:Name="MouseVerticalSensitivitySlider" Minimum="1" Maximum="4096" Value="256"
+                            SmallChange="1" LargeChange="64"
+                            ValueChanged="MouseVerticalSensitivitySliderChanged" />
+                  </StackPanel>
+                  <TextBox x:Name="MouseVerticalSensitivityBox" Grid.Column="2" Width="64" Text="256"
+                           TextAlignment="Center" VerticalContentAlignment="Center"
+                           LostFocus="MouseVerticalSensitivityBoxLostFocus" />
+                </Grid>
+                <CheckBox x:Name="MouseInvertYCheck" Content="Invert vertical mouse movement"
+                          Margin="0,14,0,0" Foreground="{StaticResource TextBrush}" />
+                <Grid Margin="0,14,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="STICK DEADZONE COMPENSATION" Style="{StaticResource FieldLabel}" />
+                    <Slider x:Name="MouseDeadzoneSlider" Minimum="0" Maximum="12000" Value="0"
+                            SmallChange="100" LargeChange="1000"
+                            ValueChanged="MouseDeadzoneSliderChanged" />
+                  </StackPanel>
+                  <TextBox x:Name="MouseDeadzoneBox" Grid.Column="2" Width="64" Text="0"
+                           TextAlignment="Center" VerticalContentAlignment="Center"
+                           LostFocus="MouseDeadzoneBoxLostFocus" />
+                </Grid>
+                <TextBlock Text="Increase compensation only if slow mouse motions are ignored by the game."
+                           FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0"
+                           TextWrapping="Wrap" />
+
               </StackPanel>
             </Border>
           </StackPanel>

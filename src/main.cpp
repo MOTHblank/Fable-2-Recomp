@@ -63,17 +63,13 @@ REXCVAR_DEFINE_INT32(mouse_deadzone_compensation, 0, "Input",
                      "Additional right-stick threshold compensation for mouse motion")
     .range(0, 12000);
 
-// Key that toggles the debug menu (F4). While the menu is open the mouse lock
-// is released (free cursor); closing it re-locks. This key is excluded from
-// the gamepad map so it doesn't double as a button. Set empty to always lock
-// while focused (no menu-based unlock).
+// The SDK manages cursor capture using focus and active UI state.
+// Reserve the debug menu key from gameplay bindings.
 REXCVAR_DEFINE_STRING(
     mouse_unlock_key,
     "F4",
     "Input",
-    "Key that toggles the debug menu; while the menu is open the mouse lock is "
-    "released (free cursor) and re-engaged when it closes. Empty = always lock "
-    "while focused. This key is excluded from the gamepad map.");
+    "Host key reserved from the synthetic gamepad map for the debug menu.");
 
 // Skip the default.xex SHA-256 integrity check at startup (see
 // Fable2App::OnLoadXexImage). When set, the XEX hash is still computed and

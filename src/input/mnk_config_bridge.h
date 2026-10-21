@@ -2,6 +2,14 @@
 // per-controller keybind cvars. The SDK owns device polling and mouse capture.
 #pragma once
 #include "keyboard_gamepad.h"
+#include <rex/cvar.h>
+REXCVAR_DECLARE(std::string, keyboard_gamepad_map);
+REXCVAR_DECLARE(std::string, mouse_unlock_key);
+REXCVAR_DECLARE(bool, mouse_look);
+REXCVAR_DECLARE(int32_t, mouse_look_scale);
+REXCVAR_DECLARE(int32_t, mouse_look_scale_y);
+REXCVAR_DECLARE(bool, mouse_invert_y);
+REXCVAR_DECLARE(int32_t, mouse_deadzone_compensation);
 #include <array>
 #include <string>
 #include <string_view>
@@ -90,5 +98,50 @@ inline std::array<std::string, kNames.size()> Translate(std::string_view map,
     start = comma + 1;
   }
   return result;
+}
+// Changes made in the developer console propagate without a second input
+// driver. This is a cheap per-frame check; SDK keybinds are only set on change.
+inline void SyncLiveSettings() {
+  static std::string prev_map = REXCVAR_GET(keyboard_gamepad_map);
+  static std::string prev_reserved = REXCVAR_GET(mouse_unlock_key);
+  static int32_t prev_x = REXCVAR_GET(mouse_look_scale);
+  static int32_t prev_y = REXCVAR_GET(mouse_look_scale_y);
+  static int32_t prev_deadzone = REXCVAR_GET(mouse_deadzone_compensation);
+  static bool prev_mouse = REXCVAR_GET(mouse_look);
+  static bool prev_invert = REXCVAR_GET(mouse_invert_y);
+  auto map = REXCVAR_GET(keyboard_gamepad_map);
+  auto reserved = REXCVAR_GET(mouse_unlock_key);
+  if (map != prev_map || reserved != prev_reserved) {
+    prev_map = map;
+    prev_reserved = reserved;
+    auto binds = Translate(map, reserved);
+    for (size_t i = 0; i < binds.size(); ++i)
+      rex::cvar::SetFlagByName(kNames[i], binds[i]);
+  }
+  auto mouse = REXCVAR_GET(mouse_look);
+  if (mouse != prev_mouse) {
+    prev_mouse = mouse;
+    rex::cvar::SetFlagByName("mnk_mouse", mouse ? "true" : "false");
+  }
+  auto x = REXCVAR_GET(mouse_look_scale);
+  if (x != prev_x) {
+    prev_x = x;
+    rex::cvar::SetFlagByName("mnk_sensitivity", std::to_string(double(x) / 256.0));
+  }
+  auto y = REXCVAR_GET(mouse_look_scale_y);
+  if (y != prev_y) {
+    prev_y = y;
+    rex::cvar::SetFlagByName("mnk_sensitivity_y", std::to_string(double(y) / 256.0));
+  }
+  auto invert = REXCVAR_GET(mouse_invert_y);
+  if (invert != prev_invert) {
+    prev_invert = invert;
+    rex::cvar::SetFlagByName("mnk_invert_y", invert ? "true" : "false");
+  }
+  auto deadzone = REXCVAR_GET(mouse_deadzone_compensation);
+  if (deadzone != prev_deadzone) {
+    prev_deadzone = deadzone;
+    rex::cvar::SetFlagByName("mnk_deadzone_compensation", std::to_string(deadzone));
+  }
 }
 }  // namespace fable2::mnkconfig

@@ -363,8 +363,7 @@ class Fable2App : public rex::ReXApp {
     seed_cvar("mnk_deadzone_compensation",
               std::to_string(REXCVAR_GET(mouse_deadzone_compensation)));
     // Keep mouse-only configurations working even when the keyboard map is empty.
-    seed_cvar("mnk_mode", (!REXCVAR_GET(keyboard_gamepad_map).empty() ||
-                           REXCVAR_GET(mouse_look)) ? "true" : "false");
+    seed_cvar("mnk_mode", "true");
     // NOTE: the hero/dog readback fix (readback_resolve_force_addresses) is a
     // GPU-PLUGIN cvar, so it is seeded in OnPostSetup() (after the plugin is
     // loaded) rather than here - see plans/hero-dog-texture-readback.md.
