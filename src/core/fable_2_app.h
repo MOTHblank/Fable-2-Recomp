@@ -33,6 +33,7 @@
 #include "fable2_address_scan.h"
 #include "fable2_config.h"
 #include "fable2_patches.h"
+#include "fable2_button_prompts.h"
 // #include "fable2_deadbeef_overlay.h"
 // 30fps-cap instrumentation (writes fps_probe.log next to the exe). Disabled
 // now that the cap is lifted via REX_VSYNC=0 (see tools/fable2-uncapped.cmd).
@@ -404,6 +405,9 @@ class Fable2App : public rex::ReXApp {
 
   // Join any diagnostic thread before the guest memory arena is destroyed.
   void OnShutdown() override {
+    // Join prompt scanner before guest memory unmaps. The old detached worker
+    // could otherwise outlive this runtime and access freed arena pages.
+    fable2::buttonprompts::Stop();
 #ifdef FABLE2_ALLOC_WATCH
     alloc_watch_thread_.request_stop();
     if (alloc_watch_thread_.joinable()) alloc_watch_thread_.join();
@@ -418,6 +422,11 @@ class Fable2App : public rex::ReXApp {
   // Each patch is switched on by a [patches] key in fable2_config.toml
   // (loaded earlier, in OnPostInitLogging).
   void OnPostLoadXexImage() override {
+    // Start before the guest constructs and lays out the first UI strings.
+    // Waiting until MainRenderLoop after layout was too late for cached text.
+#ifdef _WIN32
+    fable2::buttonprompts::OnFrame(reinterpret_cast<uint8_t*>(uintptr_t{0x100000000ull}));
+#endif
     fable2::patches::ApplyAll(runtime()->memory(), PPCImageConfig);
     // Lets the address-scan hook (src/core/fable2_address_scan.cpp) read the
     // guest page tables.
