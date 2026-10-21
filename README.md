@@ -191,7 +191,7 @@ Remap at launch without recompiling, e.g.
 fable_2.exe --keyboard_gamepad_map "E:A,B:B,Space:L3,Enter:Start"
 ```
 
-### Mouse look (right stick)
+### Mouse look (native stick or experimental direct orbit)
 
 Mouse movement now comes from **SDL3 relative mouse mode**, with cursor
 recentering used only as a fallback. Fractional mouse motion is accumulated
@@ -201,13 +201,23 @@ camera path, preserving its camera limits. The following cvars control it:
 | Argument | Effect |
 |---|---|
 | `--mouse_look <bool>` | Enable/disable mouse look (default `true`) |
+| `--mouse_direct_look <bool>` | Use experimental raw-delta yaw/pitch gameplay camera (default `false`); no virtual stick turn-speed ceiling, but can bypass native collision and authored camera framing. |
 | `--mouse_look_scale <n>` | Horizontal sensitivity (default `256`) |
 | `--mouse_look_scale_y <n>` | Vertical sensitivity (default `256`) |
 | `--mouse_invert_y <bool>` | Invert vertical movement (default `false`) |
 | `--mouse_deadzone_compensation <n>` | Optional mouse-only deadzone compensation, 0..12000 (default `0`) |
 | `--mouse_flick_buffer_polls <n>` | Retain clipped mouse flick movement for 0..12 extra input polls (default `4`). Larger values turn farther but may add turning after a flick; 0 is the original behavior. |
 
-The mouse always uses the game's native right-stick camera handling.
+By default, mouse movement uses the game's native right-stick path. In the
+launcher, **Advanced → Mouse → Camera input mode** also offers **Direct mouse
+orbit (experimental)**. Direct mode uses SDL3 relative deltas for independent
+horizontal yaw and vertical pitch instead of converting movement into a capped
+Xbox right-stick value. The existing sensitivity X/Y and invert-Y controls
+apply to either mode. Deadzone compensation and flick buffering apply **only
+to Native stick mode** and are disabled in the launcher while Direct is selected.
+Direct mode uses the observed hero-follow camera layout and may not preserve
+wall collision or special scene framing; switch back to Native if necessary.
+No gamepad controller input is changed.
 The retired `direct_mouse_look` and `mouse_look_legacy_orbit` modes and
 related orbit tuning keys are not supported; remove them from older config
 files. Use the settings above instead. Camera telemetry
