@@ -116,21 +116,17 @@ name = "fable2_hook_disable_motion_blur"
 registers = ["f12"]
 after_instruction = true
 #
-# Direct mouse-to-camera look (src/core/fable2_hooks.cpp + src/input/mouse_look.h).
-# Runs at 0x822A47F8 in CECCameraUpdateFrame_822A47C0 (after the virtual method that
-# writes the fresh per-frame "current" transform to the caller stack); r31 is the
-# active CECCamera. The hook fires for EVERY camera, so it first gates on the
-# hero-orbit camera (flag 1.0 at +108) and skips the all-zero-eye secondary / cinematic
-# cameras (flag 0.0), so scripted cutscenes and cinematic shots aren't hijacked. It
-# keeps a persistent look offset (cumulative yaw/pitch from the raw host mouse, pitch
-# clamped to the native orbit-angle limits so mouse + stick share the same bounds) and
-# re-applies it each frame by orbiting the world-space eye (+144) around a low-passed
-# hero pivot and writing a roll-free look-at orientation to the rotation-state
-# quaternions (target +160, current +176). Toggle: [input] direct_mouse_look.
+# Direct mouse camera: 0x822A47F8 runs after the hero controller's
+# vtable-dispatched transform method writes the current eye into guest stack
+# r1+0x60 (before the remainder of CECCameraUpdateFrame consumes it).
+# Both guest r31 (CECCamera*) and guest r1 (stack pointer) must be exposed
+# to the hook. The hook gates the hero marker at cam+0x6c, checks the scratch
+# buffer against the camera's current eye, and modifies the frame's output
+# rather than only the camera's stored state. Disabled by default.
 [[entrypoint.midasm_hook]]
 address = 0x822A47F8
 name = "fable2_hook_direct_mouse_look"
-registers = ["r31"]
+registers = ["r31", "r1"]
 after_instruction = true
 #
 # CE: sub_824ACAE0 is the CE-chest grant vtable slot called from
