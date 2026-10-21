@@ -5,6 +5,9 @@
 #pragma once
 #include "fable2_button_prompt_strings.h"
 #include <rex/cvar.h>
+#include <algorithm>
+#include <iterator>
+#include <utility>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -51,7 +54,10 @@ inline void Restore(std::vector<Patched>& patches) {
 }
 
 inline bool TextUnit(uint16_t codepoint) {
-  return codepoint >= 0x20 && codepoint < 0xD800;
+  // Printable ASCII, accented Latin and Cyrillic used by supported regions.
+  // Reject arbitrary binary heap data and unsupported UTF-16 surrogates.
+  return (codepoint >= 0x20 && codepoint <= 0x7E) ||
+         (codepoint >= 0xA0 && codepoint <= 0x052F);
 }
 
 inline uint16_t Be16(const uint8_t* p) {
@@ -108,8 +114,14 @@ inline void Scan(uint8_t* arena, const KeyLabels& labels,
       size_t start = i;
       while (start >= 2 && i - start < kMaxChars * 2 &&
              TextUnit(Be16(data + start - 2))) start -= 2;
-      // Avoid treating the middle of an overlong buffer as a whole string.
-      if (i - start >= kMaxChars * 2) continue;
+      // Only edit a bounded string with a known start. In the title screen
+      // the source begins with "Press "; elsewhere require a NUL boundary.
+      const bool title = i >= start + 12 &&
+          Be16(data + start) == 'P' && Be16(data + start + 2) == 'r' &&
+          Be16(data + start + 4) == 'e' && Be16(data + start + 6) == 's' &&
+          Be16(data + start + 8) == 's' && Be16(data + start + 10) == ' ';
+      if (i - start >= kMaxChars * 2 ||
+          (!title && (start < 2 || Be16(data + start - 2) != 0))) continue;
       size_t end = start;
       std::u16string text;
       for (; end + 1 < length && text.size() < kMaxChars; end += 2) {
@@ -151,6 +163,7 @@ inline KeyLabels CurrentKeys() {
 inline void Loop(uint8_t* arena) {
   std::vector<Patched> patches;
   KeyLabels previous_keys{};
+  auto last_scan = std::chrono::steady_clock::now() - std::chrono::seconds(3);
   for (;;) {
     const auto mode = rex::cvar::Query<std::string>("ui_prompt_mode");
     const bool keyboard = mode == "keyboard" ||
@@ -159,14 +172,19 @@ inline void Loop(uint8_t* arena) {
     if (!keyboard || keys != previous_keys) {
       Restore(patches);
       previous_keys = keys;
+      last_scan = std::chrono::steady_clock::now() - std::chrono::seconds(3);
     }
     if (keyboard) {
       // Entries freed/rebuilt by the game are forgotten without writes.
       for (auto it = patches.begin(); it != patches.end();)
         it = Same(*it) ? std::next(it) : patches.erase(it);
-      Scan(arena, keys, patches);
+      const auto now = std::chrono::steady_clock::now();
+      if (now - last_scan >= std::chrono::seconds(2)) {
+        Scan(arena, keys, patches);
+        last_scan = now;
+      }
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(750));
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
   }
 }
 
