@@ -205,6 +205,7 @@ camera path, preserving its camera limits. The following cvars control it:
 | `--mouse_look_scale_y <n>` | Vertical sensitivity (default `256`) |
 | `--mouse_invert_y <bool>` | Invert vertical movement (default `false`) |
 | `--mouse_deadzone_compensation <n>` | Optional mouse-only deadzone compensation, 0..12000 (default `0`) |
+| `--mouse_flick_buffer_polls <n>` | Retain clipped mouse flick movement for 0..12 extra input polls (default `4`). Larger values turn farther but may add turning after a flick; 0 is the original behavior. |
 
 The mouse always uses the game's native right-stick camera handling.
 The retired `direct_mouse_look` and `mouse_look_legacy_orbit` modes and
@@ -217,6 +218,13 @@ The defaults come from `[input] mouse_look` / `[input] mouse_look_scale` in
 line overrides per launch, and both cvars are hot-reloadable from the in-game
 console, so you can dial in the sensitivity live. Example: `fable_2.exe
 --mouse_look_scale 512` for a more sensitive camera.
+
+Fast mouse movement can exceed the virtual stick's +/-32767 range in a
+single guest poll. ReXGlue keeps up to four additional polls of the
+overflow by default instead of dropping all of it. This improves the distance
+covered by a fast flick, **not the native game's instantaneous maximum
+turning rate**. Set `mouse_flick_buffer_polls = 0` to disable any delayed
+motion, or increase it carefully up to 12 when fast flicks still feel short.
 
 The launcher edits `fable2_config.toml`, with individual SDK `keybind_*`
 overrides supported in `fable_2.toml`. F3 supports live remapping and

@@ -69,6 +69,9 @@ REXCVAR_DEFINE_BOOL(mouse_invert_y, false, "Input", "Invert mouse look verticall
 REXCVAR_DEFINE_INT32(mouse_deadzone_compensation, 0, "Input",
                      "Additional right-stick threshold compensation for mouse motion")
     .range(0, 12000);
+REXCVAR_DEFINE_INT32(mouse_flick_buffer_polls, 4, "Input",
+                     "Extra guest input polls to retain clipped mouse flicks (0..12)")
+    .range(0, 12);
 
 // The SDK manages cursor capture using focus and active UI state.
 // Reserve the debug menu key from gameplay bindings.

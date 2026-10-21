@@ -352,6 +352,8 @@ class Fable2App : public rex::ReXApp {
     seed_cvar("mouse_invert_y", cfg.mouse_invert_y ? "true" : "false");
     seed_cvar("mouse_deadzone_compensation",
               std::to_string(cfg.mouse_deadzone_compensation));
+    seed_cvar("mouse_flick_buffer_polls",
+              std::to_string(cfg.mouse_flick_buffer_polls));
     const auto binds = fable2::mnkconfig::Translate(
         REXCVAR_GET(keyboard_gamepad_map), REXCVAR_GET(mouse_unlock_key));
     for (size_t i = 0; i < binds.size(); ++i)
@@ -365,6 +367,8 @@ class Fable2App : public rex::ReXApp {
     seed_cvar("mnk_invert_y", REXCVAR_GET(mouse_invert_y) ? "true" : "false");
     seed_cvar("mnk_deadzone_compensation",
               std::to_string(REXCVAR_GET(mouse_deadzone_compensation)));
+    seed_cvar("mnk_mouse_flick_buffer_polls",
+              std::to_string(REXCVAR_GET(mouse_flick_buffer_polls)));
     // Keep mouse-only configurations working even when the keyboard map is empty.
     seed_cvar("mnk_mode", "true");
     // NOTE: the hero/dog readback fix (readback_resolve_force_addresses) is a

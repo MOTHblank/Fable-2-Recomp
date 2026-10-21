@@ -59,6 +59,13 @@ mouse_invert_y = false
 # Leave at 0 unless slow movement gets swallowed by the game's stick deadzone.
 mouse_deadzone_compensation = 0
 
+# Retain fast mouse movement clipped at full right-stick deflection for a
+# limited number of additional game input polls. 0 drops excess like the
+# original mapping; larger values make fast flicks rotate farther, but may
+# keep turning briefly after a flick. 0..12; default 4.
+# This does not increase the game's maximum instantaneous turning speed.
+mouse_flick_buffer_polls = 4
+
 # Log the active camera's orientation fields once, the first frame the mouse
 # moves, to confirm the offsets above. Default: false
 mouse_look_camera_diag = false

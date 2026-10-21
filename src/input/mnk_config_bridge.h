@@ -10,6 +10,7 @@ REXCVAR_DECLARE(int32_t, mouse_look_scale);
 REXCVAR_DECLARE(int32_t, mouse_look_scale_y);
 REXCVAR_DECLARE(bool, mouse_invert_y);
 REXCVAR_DECLARE(int32_t, mouse_deadzone_compensation);
+REXCVAR_DECLARE(int32_t, mouse_flick_buffer_polls);
 #include <array>
 #include <string>
 #include <string_view>
@@ -107,6 +108,7 @@ inline void SyncLiveSettings() {
   static int32_t prev_x = REXCVAR_GET(mouse_look_scale);
   static int32_t prev_y = REXCVAR_GET(mouse_look_scale_y);
   static int32_t prev_deadzone = REXCVAR_GET(mouse_deadzone_compensation);
+  static int32_t prev_buffer_polls = REXCVAR_GET(mouse_flick_buffer_polls);
   static bool prev_mouse = REXCVAR_GET(mouse_look);
   static bool prev_invert = REXCVAR_GET(mouse_invert_y);
   auto map = REXCVAR_GET(keyboard_gamepad_map);
@@ -137,6 +139,12 @@ inline void SyncLiveSettings() {
   if (invert != prev_invert) {
     prev_invert = invert;
     rex::cvar::SetFlagByName("mnk_invert_y", invert ? "true" : "false");
+  }
+  auto buffer_polls = REXCVAR_GET(mouse_flick_buffer_polls);
+  if (buffer_polls != prev_buffer_polls) {
+    prev_buffer_polls = buffer_polls;
+    rex::cvar::SetFlagByName("mnk_mouse_flick_buffer_polls",
+                              std::to_string(buffer_polls));
   }
   auto deadzone = REXCVAR_GET(mouse_deadzone_compensation);
   if (deadzone != prev_deadzone) {

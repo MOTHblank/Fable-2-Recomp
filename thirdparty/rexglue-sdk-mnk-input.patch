@@ -1,7 +1,7 @@
 diff --git a/src/input/mnk/mnk_input_driver.cpp b/src/input/mnk/mnk_input_driver.cpp
 --- a/src/input/mnk/mnk_input_driver.cpp
 +++ b/src/input/mnk/mnk_input_driver.cpp
-@@ -27,8 +27,14 @@
+@@ -27,8 +27,17 @@
  REXCVAR_DEFINE_BOOL(mnk_mouse, false, "Input",
                      "Use the mouse for the right stick. Off means the right stick comes "
                      "from the keybind_rstick_* keys only");
@@ -15,10 +15,13 @@ diff --git a/src/input/mnk/mnk_input_driver.cpp b/src/input/mnk/mnk_input_driver
 +REXCVAR_DEFINE_INT32(mnk_deadzone_compensation, 0, "Input",
 +                     "Additional mouse-only right-stick deadzone compensation")
 +    .range(0, 12000);
++REXCVAR_DEFINE_INT32(mnk_mouse_flick_buffer_polls, 4, "Input",
++                     "Extra guest polls to retain clipped mouse motion (0 disables buffering)")
++    .range(0, 12);
  
  REXCVAR_DEFINE_STRING(keybind_a, "Semicolon,Space", "Input/Keybinds/Controller", "A button");
  REXCVAR_DEFINE_STRING(keybind_b, "Quote,Backspace", "Input/Keybinds/Controller", "B button");
-@@ -124,13 +130,17 @@
+@@ -124,13 +133,17 @@
  
  bool TokenPressed(const bool (&key_down)[256], std::string_view token, uint8_t live_mods) {
    uint8_t want = TakeModifiers(token);
@@ -39,7 +42,20 @@ diff --git a/src/input/mnk/mnk_input_driver.cpp b/src/input/mnk/mnk_input_driver
    uint16_t idx = static_cast<uint16_t>(vk);
    return idx < 256 && key_down[idx];
  }
-@@ -320,6 +330,12 @@
+@@ -265,6 +278,12 @@
+                           has_focus_ && is_active());
+ 
+   if (!is_active() || !has_focus_) {
++    // No delayed motion may survive entering a menu or losing focus.
++    {
++      std::lock_guard lock(state_mutex_);
++      mouse_dx_ = 0.0f;
++      mouse_dy_ = 0.0f;
++    }
+     if (out_state) {
+       std::memset(out_state, 0, sizeof(*out_state));
+       out_state->packet_number = packet_number_;
+@@ -320,6 +339,12 @@
    if (IsBindPressed(key_down_, REXCVAR_GET(keybind_lstick_down)))
      ly -= INT16_MAX;
  
@@ -52,7 +68,7 @@ diff --git a/src/input/mnk/mnk_input_driver.cpp b/src/input/mnk/mnk_input_driver
    int32_t rx = 0;
    int32_t ry = 0;
    if (IsBindPressed(key_down_, REXCVAR_GET(keybind_rstick_left)))
-@@ -332,10 +348,22 @@
+@@ -332,16 +357,46 @@
      ry -= INT16_MAX;
  
    if (REXCVAR_GET(mnk_mouse) && IsMouseLookActive()) {
@@ -60,26 +76,65 @@ diff --git a/src/input/mnk/mnk_input_driver.cpp b/src/input/mnk/mnk_input_driver
 -    constexpr double kBaseScale = 200.0;
 -    rx += static_cast<int32_t>(double(mouse_dx_) * sensitivity * kBaseScale);
 -    ry += static_cast<int32_t>(double(-mouse_dy_) * sensitivity * kBaseScale);
-+    // Preserve fractional relative deltas until the guest poll. Clamp before
-+    // narrowing, so a fast flick never overflows the signed 32-bit conversion.
 +    constexpr double kBaseScale = 256.0;
-+    const auto from_mouse = [](double motion) -> int32_t {
-+      if (motion == 0.0) return 0;
-+      const double magnitude = std::clamp(std::abs(motion), 0.0, 32767.0);
++    // An Xbox stick tops out at +/-32767. Previously any mouse movement
++    // past that limit was discarded on every poll, so high-DPI flicks barely
++    // moved the camera regardless of sensitivity. Keep a bounded remainder
++    // in the existing fractional delta accumulator. This preserves more
++    // distance across guest polls without ever exceeding the native stick
++    // range or changing a physical gamepad's input.
++    const auto consume_mouse_axis = [](float& queued_pixels, double units_per_pixel) -> int32_t {
++      if (!std::isfinite(queued_pixels) || !std::isfinite(units_per_pixel) ||
++          units_per_pixel == 0.0) {
++        queued_pixels = 0.0f;
++        return 0;
++      }
++      constexpr double kStickMax = 32767.0;
++      const double max_buffer = kStickMax *
++          (1.0 + REXCVAR_GET(mnk_mouse_flick_buffer_polls));
++      const double motion = std::clamp(double(queued_pixels) * units_per_pixel,
++                                       -max_buffer, max_buffer);
++      const double consumed = std::trunc(std::clamp(motion, -kStickMax, kStickMax));
++      // Keep sub-stick-unit fractional movement too, so slow mouse motion is
++      // not quantized away at low sensitivity.
++      queued_pixels = static_cast<float>((motion - consumed) / units_per_pixel);
++      if (consumed == 0.0) return 0;
++      const double magnitude = std::abs(consumed);
 +      const int deadzone = REXCVAR_GET(mnk_deadzone_compensation);
 +      const int value = static_cast<int>(std::lround(
-+          deadzone + magnitude * (32767.0 - deadzone) / 32767.0));
-+      return motion < 0.0 ? -value : value;
++          deadzone + magnitude * (kStickMax - deadzone) / kStickMax));
++      return consumed < 0.0 ? -value : value;
 +    };
-+    rx += from_mouse(double(mouse_dx_) * REXCVAR_GET(mnk_sensitivity) * kBaseScale);
-+    const double vertical = -double(mouse_dy_) *
-+        REXCVAR_GET(mnk_sensitivity_y) * kBaseScale *
-+        (REXCVAR_GET(mnk_invert_y) ? -1.0 : 1.0);
-+    ry += from_mouse(vertical);
++    rx += consume_mouse_axis(mouse_dx_,
++          REXCVAR_GET(mnk_sensitivity) * kBaseScale);
++    ry += consume_mouse_axis(mouse_dy_,
++          -REXCVAR_GET(mnk_sensitivity_y) * kBaseScale *
++          (REXCVAR_GET(mnk_invert_y) ? -1.0 : 1.0));
++  } else {
++    // Mouse look turned off: discard queued movement; never play it back
++    // when the player re-enables look or returns from a menu.
++    mouse_dx_ = 0.0f;
++    mouse_dy_ = 0.0f;
    }
-   // Drained unconditionally: deltas keep accumulating in OnMouseMove while the
-   // mouse is off, and toggling it on would otherwise dump the whole backlog
-@@ -510,6 +538,12 @@
+-  // Drained unconditionally: deltas keep accumulating in OnMouseMove while the
+-  // mouse is off, and toggling it on would otherwise dump the whole backlog
+-  // into one frame as a camera snap.
+-  mouse_dx_ = 0.0f;
+-  mouse_dy_ = 0.0f;
+ 
+   auto clamp16 = [](int32_t v) -> int16_t {
+     return static_cast<int16_t>(std::clamp(v, (int32_t)INT16_MIN, (int32_t)INT16_MAX));
+@@ -450,6 +505,9 @@
+   window->SetRelativeMouseMode(false);
+   relative_mouse_mode_ = false;
+   window->ReleaseMouse();
++  std::lock_guard lock(state_mutex_);
++  mouse_dx_ = 0.0f;
++  mouse_dy_ = 0.0f;
+ }
+ 
+ void MnkInputDriver::RecenterCursorFromUIThread(int32_t x, int32_t y) {
+@@ -510,6 +568,12 @@
      case rex::ui::MouseEvent::Button::kMiddle:
        SetKeyState(static_cast<uint16_t>(VirtualKey::kMButton), true);
        break;
@@ -92,7 +147,7 @@ diff --git a/src/input/mnk/mnk_input_driver.cpp b/src/input/mnk/mnk_input_driver
      default:
        break;
    }
-@@ -529,6 +563,12 @@
+@@ -529,6 +593,12 @@
      case rex::ui::MouseEvent::Button::kMiddle:
        SetKeyState(static_cast<uint16_t>(VirtualKey::kMButton), false);
        break;

@@ -27,6 +27,7 @@ public class Fable2ConfigValues
     public int MouseLookScaleY { get; set; } = 256;
     public bool MouseInvertY { get; set; } = false;
     public int MouseDeadzoneCompensation { get; set; } = 0;
+    public int MouseFlickBufferPolls { get; set; } = 4;
     // [patches]
     public bool UnlockWebsite { get; set; } = true;
     public bool UnlockCe { get; set; } = true;
@@ -149,6 +150,7 @@ public static class Fable2ConfigFile
                     }
                     else if (key == "mouse_invert_y") values.MouseInvertY = ParseBool(rawValue, values.MouseInvertY);
                     else if (key == "mouse_deadzone_compensation") values.MouseDeadzoneCompensation = ParseInt(rawValue, values.MouseDeadzoneCompensation);
+                    else if (key == "mouse_flick_buffer_polls") values.MouseFlickBufferPolls = ParseInt(rawValue, values.MouseFlickBufferPolls);
                     break;
                 case "patches":
                     if (key == "unlock_website") values.UnlockWebsite = ParseBool(rawValue, values.UnlockWebsite);
@@ -200,6 +202,7 @@ public static class Fable2ConfigFile
             ("input", "mouse_look_scale_y", Math.Clamp(values.MouseLookScaleY, 1, 4096).ToString(CultureInfo.InvariantCulture)),
             ("input", "mouse_invert_y", values.MouseInvertY ? "true" : "false"),
             ("input", "mouse_deadzone_compensation", Math.Clamp(values.MouseDeadzoneCompensation, 0, 12000).ToString(CultureInfo.InvariantCulture)),
+            ("input", "mouse_flick_buffer_polls", Math.Clamp(values.MouseFlickBufferPolls, 0, 12).ToString(CultureInfo.InvariantCulture)),
             ("patches", "unlock_website", values.UnlockWebsite ? "true" : "false"),
             ("patches", "unlock_ce", values.UnlockCe ? "true" : "false"),
             ("patches", "skip_intro_videos", values.SkipIntroVideos ? "true" : "false"),
