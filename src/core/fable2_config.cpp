@@ -90,6 +90,13 @@ mouse_invert_y = false
 # Leave at 0 unless slow movement gets swallowed by the game's stick deadzone.
 mouse_deadzone_compensation = 0
 
+# Retain fast mouse movement clipped at full right-stick deflection for a
+# limited number of additional game input polls. 0 drops excess like the
+# original mapping; larger values make fast flicks rotate farther, but may
+# keep turning briefly after a flick. 0..12; default 4.
+# This does not increase the game's maximum instantaneous turning speed.
+mouse_flick_buffer_polls = 4
+
 # Log the active camera's orientation fields once, the first frame the mouse
 # moves, to confirm the offsets above. Default: false
 mouse_look_camera_diag = false
@@ -283,6 +290,9 @@ bool Load(const std::filesystem::path& path) {
     values.mouse_deadzone_compensation = static_cast<int32_t>(Read<int64_t>(
         input_table, "input", "mouse_deadzone_compensation", "integer",
         values.mouse_deadzone_compensation));
+    values.mouse_flick_buffer_polls = static_cast<int32_t>(Read<int64_t>(
+        input_table, "input", "mouse_flick_buffer_polls", "integer",
+        values.mouse_flick_buffer_polls));
     values.mouse_look_camera_diag =
         Read<bool>(input_table, "input", "mouse_look_camera_diag", "boolean",
                    values.mouse_look_camera_diag);

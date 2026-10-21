@@ -298,6 +298,7 @@ try
         MouseLookScaleY = 768,
         MouseInvertY = true,
         MouseDeadzoneCompensation = 4000,
+        MouseFlickBufferPolls = 7,
         UnlockWebsite = true,
         UnlockCe = false,
         SkipIntroVideos = true,
@@ -317,6 +318,7 @@ try
     Require(readBack.MouseLookScaleY == 768, "vertical mouse scale roundtrip failed");
     Require(readBack.MouseInvertY, "invert Y roundtrip failed");
     Require(readBack.MouseDeadzoneCompensation == 4000, "deadzone roundtrip failed");
+    Require(readBack.MouseFlickBufferPolls == 7, "mouse flick buffer roundtrip failed");
     Require(!readBack.UnlockCe, "unlock_ce roundtrip failed");
     Require(readBack.SkipIntroVideos, "skip_intro_videos roundtrip failed");
     Require(readBack.DisableMotionBlur, "disable_motion_blur roundtrip failed");
@@ -370,6 +372,7 @@ try
     var migratedInput = Fable2ConfigFile.Read(oldInputPath);
     Require(migratedInput.MouseLookScale == 768 && migratedInput.MouseLookScaleY == 768,
         "old single-axis sensitivity did not migrate to vertical axis");
+    Require(migratedInput.MouseFlickBufferPolls == 4, "old config did not receive default mouse buffer");
     // Second write: update a value and preserve unknown sections/keys.
     File.AppendAllText(advPath, "\n[custom_section]\nsome_key = \"keep me\"\n");
     advanced.MouseLookScale = 1024;

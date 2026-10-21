@@ -663,6 +663,8 @@ public partial class MainWindow : Window
             MouseInvertYCheck.IsChecked = _advanced.MouseInvertY;
             MouseVerticalSensitivitySlider.Value = _advanced.MouseLookScaleY;
             MouseVerticalSensitivityBox.Text = _advanced.MouseLookScaleY.ToString(CultureInfo.InvariantCulture);
+            MouseFlickBufferSlider.Value = _advanced.MouseFlickBufferPolls;
+            MouseFlickBufferValue.Text = _advanced.MouseFlickBufferPolls.ToString(CultureInfo.InvariantCulture);
             MouseDeadzoneSlider.Value = _advanced.MouseDeadzoneCompensation;
             MouseDeadzoneBox.Text = _advanced.MouseDeadzoneCompensation.ToString(CultureInfo.InvariantCulture);
             MouseSensitivitySlider.Value = _advanced.MouseLookScale;
@@ -1086,6 +1088,12 @@ public partial class MainWindow : Window
             MouseVerticalSensitivityBox.Text = ((int)MouseVerticalSensitivitySlider.Value).ToString(CultureInfo.InvariantCulture);
     }
 
+    private void MouseFlickBufferSliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (MouseFlickBufferValue is not null)
+            MouseFlickBufferValue.Text = ((int)e.NewValue).ToString(CultureInfo.InvariantCulture);
+    }
+
     private void MouseDeadzoneSliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (MouseDeadzoneBox is not null)
@@ -1139,6 +1147,7 @@ public partial class MainWindow : Window
         _advanced.MouseInvertY = MouseInvertYCheck.IsChecked == true;
         _advanced.MouseLookScaleY = (int)MouseVerticalSensitivitySlider.Value;
         _advanced.MouseDeadzoneCompensation = (int)MouseDeadzoneSlider.Value;
+        _advanced.MouseFlickBufferPolls = (int)MouseFlickBufferSlider.Value;
         _advanced.MouseLookScale = (int)MouseSensitivitySlider.Value;
         _advanced.HotFuncYieldEvery = int.TryParse(HotFuncYieldBox.Text, NumberStyles.Integer,
             CultureInfo.InvariantCulture, out int yieldEvery)

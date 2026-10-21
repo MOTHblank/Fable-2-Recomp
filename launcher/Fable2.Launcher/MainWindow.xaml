@@ -316,6 +316,24 @@
                 <TextBlock Text="Increase compensation only if slow mouse motions are ignored by the game."
                            FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0"
                            TextWrapping="Wrap" />
+                <Grid Margin="0,14,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="FLICK BUFFER (EXTRA INPUT POLLS)" Style="{StaticResource FieldLabel}" />
+                    <Slider x:Name="MouseFlickBufferSlider" Minimum="0" Maximum="12" Value="4"
+                            TickFrequency="1" IsSnapToTickEnabled="True"
+                            ValueChanged="MouseFlickBufferSliderChanged" />
+                  </StackPanel>
+                  <TextBlock x:Name="MouseFlickBufferValue" Grid.Column="2" Width="64" Text="4"
+                             TextAlignment="Center" VerticalAlignment="Center" />
+                </Grid>
+                <TextBlock Text="Preserves motion clipped by the game's stick limit. Higher values turn farther per flick, but can continue turning briefly after you stop. Zero disables it."
+                           FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0"
+                           TextWrapping="Wrap" />
               </StackPanel>
             </Border>
           </StackPanel>

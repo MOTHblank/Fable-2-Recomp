@@ -47,6 +47,7 @@ struct Values {
   int32_t mouse_look_scale_y = 256;
   bool mouse_invert_y = false;
   int32_t mouse_deadzone_compensation = 0;
+  int32_t mouse_flick_buffer_polls = 4;
   // Log the active camera's orientation fields once, the first frame the mouse
   // moves, to confirm the offset guesses above (and to spot which fields are
   // position vs. angle vs. the transform). Off by default.
