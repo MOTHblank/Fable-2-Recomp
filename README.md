@@ -218,6 +218,13 @@ to Native stick mode** and are disabled in the launcher while Direct is selected
 Direct mode uses the observed hero-follow camera layout and may not preserve
 wall collision or special scene framing; switch back to Native if necessary.
 No gamepad controller input is changed.
+
+Enable **Log mouse input and camera hook diagnostics** in Advanced → Mouse
+(`mouse_look_camera_diag = true`) to write periodic `[mouse-camera]` lines
+to the normal game `logs/`. The counters show raw SDL input events, hero
+camera hook calls, applied view updates and invalid output buffers. Direct
+mode now modifies the guest `r1+0x60` output produced by the virtual
+camera method, not just the camera's stored fields that could be overwritten.
 The retired `direct_mouse_look` and `mouse_look_legacy_orbit` modes and
 related orbit tuning keys are not supported; remove them from older config
 files. Use the settings above instead. Camera telemetry

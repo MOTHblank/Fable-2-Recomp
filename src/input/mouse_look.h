@@ -1,8 +1,9 @@
-// fable_2 - Camera diagnostic guest-memory helpers.
+// fable_2 - Raw mouse transport, direct camera orbit and guest-memory helpers.
 //
-// Mouse input uses the native right-stick pipeline in keyboard_gamepad.h.
-// The camera hook uses these helpers only for opt-in field diagnostics.
-// Older delta/orbit helpers remain for research, but are not active inputs.
+// Native mode synthesizes a right stick through the ReXGlue input driver.
+// Direct mode accumulates fractional SDL3 relative mouse deltas on the UI
+// thread and consumes them from the camera post-dispatch hook. The hook
+// reads and writes big-endian guest state and the frame's view scratch.
 #pragma once
 
 #include <cmath>
@@ -26,11 +27,24 @@ inline std::atomic<float>& dy_acc() {
   return v;
 }
 
+// Diagnostic counters: raw UI motion can be distinguished from a hook that
+// fires but never receives input. 64-bit atomics avoid races with SDL's UI thread.
+inline std::atomic<uint64_t>& raw_motion_events() {
+  static std::atomic<uint64_t> events{0};
+  return events;
+}
+inline std::atomic<uint64_t>& capture_resets() {
+  static std::atomic<uint64_t> resets{0};
+  return resets;
+}
+
 // Host input driver: add this poll's cursor displacement.
 inline void add_delta(float dx, float dy) {
   if (std::isfinite(dx) && std::isfinite(dy)) {
     dx_acc().fetch_add(dx, std::memory_order_relaxed);
     dy_acc().fetch_add(dy, std::memory_order_relaxed);
+    if (dx != 0.0f || dy != 0.0f)
+      raw_motion_events().fetch_add(1, std::memory_order_relaxed);
   }
 }
 
@@ -44,6 +58,7 @@ inline std::atomic<bool>& reset_requested() {
   return pending;
 }
 inline void request_reset() {
+  capture_resets().fetch_add(1, std::memory_order_relaxed);
   dx_acc().store(0.0f, std::memory_order_relaxed);
   dy_acc().store(0.0f, std::memory_order_relaxed);
   reset_requested().store(true, std::memory_order_release);

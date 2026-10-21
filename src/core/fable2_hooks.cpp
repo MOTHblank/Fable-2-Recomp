@@ -185,74 +185,164 @@ bool fable2_hook_high_hf_tick_rate_skip_store() {
   return enabled;
 }
 
-// Experimental two-axis orbit applied after the original camera update.
-// The default native-stick path is unchanged; gamepad state is never modified.
-static void ApplyDirectMouseOrbit(rex::memory::Memory* mem, uint32_t cam,
-                                 int32_t sensitivity_x, int32_t sensitivity_y,
-                                 bool invert_y) {
+// This hook runs *after* the camera controller writes the view transform
+// into CECCameraUpdateFrame's temporary output at guest r1+0x60, but BEFORE
+// the frame update copies/consumes that output. The previous implementation
+// changed only cam+0x90 / +0xA0 / +0xB0 and was invisible if those values were
+// subsequently replaced by the stack result. Keep the authoritative output
+// and the camera state in sync rather than relying on a discarded write.
+//
+// Returns an explicit outcome so misidentified stack layouts cannot silently
+// present themselves as a working mouse camera.
+enum class DirectMouseResult {
+  kApplied,
+  kNotHero,
+  kInvalidPose,
+  kInvalidOutput
+};
+static DirectMouseResult ApplyDirectMouseOrbit(rex::memory::Memory* mem,
+                                                uint32_t cam, uint32_t sp,
+                                                int32_t sensitivity_x,
+                                                int32_t sensitivity_y,
+                                                bool invert_y) {
   using namespace fable2::mouselook;
   if (take_reset_request()) reset_cumulative();
-  // Identified hero-follow camera flag; skip scripted/UI camera objects.
-  if (read_guest_u32(mem, cam + 108) == 0) return;
+  // The true hero-follow camera has a 1.0f marker at +0x6c.
+  // Reject secondary and cinematic cameras without consuming deltas.
+  const float hero_flag = read_guest_float(mem, cam + 108);
+  if (!std::isfinite(hero_flag) || hero_flag < 0.5f || hero_flag > 1.5f)
+    return DirectMouseResult::kNotHero;
+
+  // r1 is the current guest stack pointer; the method at 0x822A47F8 has
+  // just produced the 16-byte camera position in its r1+0x60 scratch.
+  // Only touch it when it agrees with the camera's output position, to
+  // avoid corrupting an unrelated temporary on another guest build.
+  if (sp < 0x10000u || (sp & 0xFu) != 0 || sp > 0xFFFF0000u)
+    return DirectMouseResult::kInvalidOutput;
   const Vec3 eye = read_guest_vec3(mem, cam + 144);
+  const Vec3 view_out = read_guest_vec3(mem, sp + 96);
+  auto valid_vec = [](const Vec3& v) {
+    return std::isfinite(v.x) && std::isfinite(v.y) &&
+           std::isfinite(v.z) && std::abs(v.x) < 1.0e7f &&
+           std::abs(v.y) < 1.0e7f && std::abs(v.z) < 1.0e7f;
+  };
+  if (!valid_vec(eye) || !valid_vec(view_out))
+    return DirectMouseResult::kInvalidOutput;
+  const Vec3 view_delta{view_out.x - eye.x, view_out.y - eye.y,
+                        view_out.z - eye.z};
+  if (vec3_len(view_delta) > 12.0f)
+    return DirectMouseResult::kInvalidOutput;
+
   const Quat native_q = read_guest_quat(mem, cam + 160);
   const float norm = native_q.x * native_q.x + native_q.y * native_q.y +
                      native_q.z * native_q.z + native_q.w * native_q.w;
-  if (!std::isfinite(norm) || norm < 0.5f || norm > 1.5f ||
-      !std::isfinite(eye.x) || !std::isfinite(eye.y) || !std::isfinite(eye.z))
-    return;
-
-  float dx = 0.0f, dy = 0.0f;
-  take_delta(dx, dy);
-  // 256 sensitivity -> 0.15 degrees per pixel; independent of poll frequency.
-  constexpr float kRadPerPixel = 0.00261799388f;
-  cum_yaw() = std::remainder(cum_yaw() +
-      dx * kRadPerPixel * (float(sensitivity_x) / 256.0f), 6.283185307f);
-  cum_pitch() = std::clamp(cum_pitch() +
-      dy * kRadPerPixel * (float(sensitivity_y) / 256.0f) *
-        (invert_y ? 1.0f : -1.0f), -1.15f, 1.15f);
-
-  // Rebase each frame onto the native follow pose, avoiding pivot drift.
+  if (!std::isfinite(norm) || norm < 0.5f || norm > 1.5f)
+    return DirectMouseResult::kInvalidPose;
   const Vec3 up{0.0f, 0.0f, 1.0f};
   const Vec3 native_forward = vec3_normalize(
       quat_rotate_vec(native_q, Vec3{0.0f, 1.0f, 0.0f}));
   const Vec3 native_right = vec3_normalize(
       quat_rotate_vec(native_q, Vec3{1.0f, 0.0f, 0.0f}));
-  if (vec3_len(native_forward) < 0.9f || vec3_len(native_right) < 0.9f) return;
+  if (vec3_len(native_forward) < 0.9f || vec3_len(native_right) < 0.9f)
+    return DirectMouseResult::kInvalidPose;
+
+  float dx = 0.0f, dy = 0.0f;
+  take_delta(dx, dy);
+  // 256 sensitivity = 0.15 degrees per pixel, no virtual-stick rate cap.
+  constexpr float kRadPerPixel = 0.00261799388f;
+  cum_yaw() = std::remainder(cum_yaw() +
+      dx * kRadPerPixel * (float(sensitivity_x) / 256.0f), 6.283185307f);
+  cum_pitch() = std::clamp(cum_pitch() +
+      dy * kRadPerPixel * (float(sensitivity_y) / 256.0f) *
+      (invert_y ? 1.0f : -1.0f), -1.15f, 1.15f);
+
+  // Apply the orbit to the *native* per-frame eye from the output buffer,
+  // not an independently smoothed camera, retaining natural hero follow.
   const Vec3 pitched = quat_rotate_vec(
       axis_quat_vec(native_right, cum_pitch()), native_forward);
   const Vec3 forward = vec3_normalize(
       quat_rotate_vec(axis_quat_vec(up, cum_yaw()), pitched));
   const Vec3 right = vec3_normalize(vec3_cross(forward, up));
-  if (vec3_len(right) < 0.01f) return;
+  if (vec3_len(right) < 0.01f)
+    return DirectMouseResult::kInvalidPose;
   const Vec3 camera_up = vec3_normalize(vec3_cross(right, forward));
   const Quat new_q = quat_from_basis(right, forward, camera_up);
+  constexpr float radius = 3.1f;  // Observed native hero-camera radius.
+  const Vec3 pivot{view_out.x + native_forward.x * radius,
+                   view_out.y + native_forward.y * radius,
+                   view_out.z + native_forward.z * radius};
+  const Vec3 new_eye{pivot.x - forward.x * radius,
+                     pivot.y - forward.y * radius,
+                     pivot.z - forward.z * radius};
 
-  // Reverse-engineered default orbit radius; collision is not replicated.
-  constexpr float radius = 3.1f;
-  const Vec3 pivot{eye.x + native_forward.x * radius,
-                   eye.y + native_forward.y * radius,
-                   eye.z + native_forward.z * radius};
-  write_guest_vec3(mem, cam + 144,
-      Vec3{pivot.x - forward.x * radius,
-           pivot.y - forward.y * radius,
-           pivot.z - forward.z * radius});
+  // The next guest instructions consume r1+0x60. Changing cam+0x90 alone
+  // was too late because the already computed stack pose won the frame.
+  write_guest_vec3(mem, sp + 96, new_eye);
+  write_guest_vec3(mem, cam + 144, new_eye);
   write_guest_quat(mem, cam + 160, new_q);
   write_guest_quat(mem, cam + 176, new_q);
+  return DirectMouseResult::kApplied;
 }
 
-// Camera post-update hook: native stick remains the default.
-void fable2_hook_direct_mouse_look(PPCRegister& r31) {
+// r1 must be named in the manifest: it is a *guest* stack pointer, not a
+// pointer into host memory. Native/controller mode does not touch camera state.
+void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
   const auto& cfg = fable2::config::Get();
   rex::memory::Memory* mem =
       fable2::mouselook::memory_ref().load(std::memory_order_acquire);
   if (!mem) return;
   const uint32_t cam = r31.u32;
-  if (cam == 0) return;
-  if (REXCVAR_GET(mouse_look) && REXCVAR_GET(mouse_direct_look))
-    ApplyDirectMouseOrbit(mem, cam, REXCVAR_GET(mouse_look_scale),
-                          REXCVAR_GET(mouse_look_scale_y),
-                          REXCVAR_GET(mouse_invert_y));
+  if (!fable2::mouselook::is_plausible_guest_ptr(cam)) return;
+
+  static uint64_t calls = 0, applied = 0, not_hero = 0;
+  static uint64_t invalid_pose = 0, invalid_output = 0;
+  ++calls;
+  const bool direct = REXCVAR_GET(mouse_look) &&
+                      REXCVAR_GET(mouse_direct_look);
+  if (direct) {
+    const DirectMouseResult result = ApplyDirectMouseOrbit(
+        mem, cam, r1.u32, REXCVAR_GET(mouse_look_scale),
+        REXCVAR_GET(mouse_look_scale_y), REXCVAR_GET(mouse_invert_y));
+    switch (result) {
+      case DirectMouseResult::kApplied: ++applied; break;
+      case DirectMouseResult::kNotHero: ++not_hero; break;
+      case DirectMouseResult::kInvalidPose: ++invalid_pose; break;
+      case DirectMouseResult::kInvalidOutput: ++invalid_output; break;
+    }
+    if (cfg.mouse_look_camera_diag &&
+        result == DirectMouseResult::kInvalidOutput && invalid_output == 1) {
+      // One representative frame is enough to show whether r1+0x60 is
+      // actually the camera eye on this particular recompiled XEX.
+      if (r1.u32 >= 0x10000u && (r1.u32 & 0xFu) == 0 &&
+          r1.u32 <= 0xFFFF0000u) {
+        const auto native_eye = fable2::mouselook::read_guest_vec3(mem, cam + 144);
+        const auto scratch = fable2::mouselook::read_guest_vec3(mem, r1.u32 + 96);
+        REXSYS_WARN(
+            "[mouse-camera] rejected output: cam={} eye={:.2f},{:.2f},{:.2f} "
+            "scratch={:.2f},{:.2f},{:.2f} sp=0x{:08X}",
+            cam, native_eye.x, native_eye.y, native_eye.z,
+            scratch.x, scratch.y, scratch.z, r1.u32);
+      } else {
+        REXSYS_WARN("[mouse-camera] rejected invalid guest stack sp=0x{:08X}",
+                    r1.u32);
+      }
+    }
+    if (cfg.mouse_look_camera_diag &&
+        result == DirectMouseResult::kInvalidPose && invalid_pose == 1) {
+      REXSYS_WARN("[mouse-camera] rejected camera orientation; "
+                  "hero camera cam=0x{:08X}", cam);
+    }
+    if (cfg.mouse_look_camera_diag && calls % 300 == 0) {
+      REXSYS_INFO(
+          "[mouse-camera] enabled=1 hook={} applied={} not-hero={} "
+          "bad-pose={} bad-stack={} raw-events={} capture-resets={} "
+          "cam=0x{:08X} sp=0x{:08X}",
+          calls, applied, not_hero, invalid_pose, invalid_output,
+          fable2::mouselook::raw_motion_events().load(std::memory_order_relaxed),
+          fable2::mouselook::capture_resets().load(std::memory_order_relaxed),
+          cam, r1.u32);
+    }
+  }
 
   // Diagnostic: dump EVERY 4-byte field of the active camera object (offset
   // 0..260) once per frame (capped), to the [ml-dump] log, so we can see
