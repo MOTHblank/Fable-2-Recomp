@@ -184,8 +184,8 @@ inline void Log(const char* message, const std::string& extra = {}) {
   }
 }
 inline std::unique_ptr<std::jthread>& Worker() {
-  static auto worker = std::make_unique<std::unique_ptr<std::jthread>>();
-  return *worker;
+  static std::unique_ptr<std::jthread> worker;
+  return worker;
 }
 inline std::mutex& WorkerMutex() {
   static auto* mutex = new std::mutex;
