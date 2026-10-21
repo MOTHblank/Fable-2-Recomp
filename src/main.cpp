@@ -2,8 +2,7 @@
 
 #include "generated/default/fable_2_init.h"
 
-// F5 -> run external Lua file. Must be included before fable_2_app.h (which
-// pulls in keyboard_gamepad.h, which calls fable2::f5lua::poll_f5() per frame).
+// F5 polling is independent of the input driver (MainRenderLoop hook).
 #include "fable2_f5_lua.h"
 
 #include "fable_2_app.h"
@@ -42,7 +41,7 @@ REXCVAR_DEFINE_STRING(
     "StickLeft/StickRight). "
     "Default comes from fable2_config.toml [input] keyboard_gamepad_map.");
 
-// Mouse -> right stick (camera look). See src/input/keyboard_gamepad.h.
+// Mouse -> right stick through the SDK's SDL3 relative-input driver.
 // The defaults below are a fallback only: Fable2App::OnPostInitLogging
 // seeds these cvars from fable2_config.toml [input] at startup (when no
 // higher-priority source set them). Keep the values in sync with the
@@ -56,18 +55,21 @@ REXCVAR_DEFINE_INT32(mouse_look_scale, 256, "Input",
                      "mouse movement (larger = more sensitive). Default comes "
                      "from fable2_config.toml [input] mouse_look_scale.")
     .range(1, 4096);
+REXCVAR_DEFINE_INT32(mouse_look_scale_y, 256, "Input",
+                     "Vertical mouse sensitivity in right-stick units per pixel")
+    .range(1, 4096);
+REXCVAR_DEFINE_BOOL(mouse_invert_y, false, "Input", "Invert mouse look vertically");
+REXCVAR_DEFINE_INT32(mouse_deadzone_compensation, 0, "Input",
+                     "Additional right-stick threshold compensation for mouse motion")
+    .range(0, 12000);
 
-// Key that toggles the debug menu (F4). While the menu is open the mouse lock
-// is released (free cursor); closing it re-locks. This key is excluded from
-// the gamepad map so it doesn't double as a button. Set empty to always lock
-// while focused (no menu-based unlock).
+// The SDK manages cursor capture using focus and active UI state.
+// Reserve the debug menu key from gameplay bindings.
 REXCVAR_DEFINE_STRING(
     mouse_unlock_key,
     "F4",
     "Input",
-    "Key that toggles the debug menu; while the menu is open the mouse lock is "
-    "released (free cursor) and re-engaged when it closes. Empty = always lock "
-    "while focused. This key is excluded from the gamepad map.");
+    "Host key reserved from the synthetic gamepad map for the debug menu.");
 
 // Skip the default.xex SHA-256 integrity check at startup (see
 // Fable2App::OnLoadXexImage). When set, the XEX hash is still computed and

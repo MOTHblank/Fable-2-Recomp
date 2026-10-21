@@ -120,12 +120,10 @@ game recreates it with defaults on launch if it is ever missing. Loaded in
   read it in `Load()`, and document the key in `config/fable2_config.toml`
   **and** the embedded template in `src/core/fable2_config.cpp` (keep both in
   sync).
-- Settings that back an SDK cvar (currently the `[input]` section:
-  `keyboard_gamepad_map`, `mouse_look`, `mouse_look_scale`) are seeded into
-  the cvar at startup — but only when no higher-priority
-  source set it: `fable_2.toml` (cvar config), `REX_*` env vars, and the
-  command line (e.g. `--keyboard_gamepad_map`) still win, and the F3 console
-  can still change the value live.
+- Input settings are seeded into the SDK's native keyboard/mouse driver
+  at startup. Higher-priority `fable_2.toml`, `REX_*` environment and CLI
+  overrides are respected. Changing the legacy map or sensitivity cvars in
+  F3 also updates the active SDK bindings.
 - The `[patches]` section holds runtime toggles for the recomp-level
   (mid-asm hook) patches, consulted by the hook bodies on every call
   (`src/core/fable2_hooks.cpp`) — flip one and relaunch to A/B a patch with no
@@ -138,12 +136,12 @@ game recreates it with defaults on launch if it is ever missing. Loaded in
 
 ## Keyboard controls
 
-The game normally reads a gamepad via the Xbox 360 `XamInputGetState` API. A
-synthetic "keyboard gamepad" input driver (`src/input/keyboard_gamepad.h`) is added
-on top of the default SDL driver, so host keyboard keys can drive the guest on
-top of (OR-merged with) whatever a real gamepad reports. The physical pad
-keeps working; the keyboard just adds buttons. It is wired up in
-`Fable2App::OnPreSetup` via `config.input_factory`.
+The game normally reads a controller through the Xbox 360 `XamInputGetState`
+API. The SDK's existing `MnkInputDriver` now handles keyboard events, mouse
+buttons and relative mouse movement. It is registered by ReXGlue and enabled
+from the game's `fable2_config.toml`. Physical gamepads continue to work.
+The old `KeyboardGamepadDriver` has been removed; its binding parser is
+retained for launcher compatibility.
 
 The mapping is the `keyboard_gamepad_map` cvar, format `Key:Button,Key:Button,...`. Its default is no longer hardcoded in the binary: it comes from `[input] keyboard_gamepad_map` in `fable2_config.toml` (see User config above), which you can edit to remap permanently. The command line and the F3 console still override it per-launch / live.
 
@@ -181,19 +179,23 @@ fable_2.exe --keyboard_gamepad_map "E:A,B:B,Space:L3,Enter:Start"
 
 ### Mouse look (right stick)
 
-Mouse movement is mapped to the guest **right stick** for camera control. The
-movement since the previous poll is converted into stick deflection, so you
-**sweep the mouse to look and stop to stop**. Two cvars control it:
+Mouse movement now comes from **SDL3 relative mouse mode**, with cursor
+recentering used only as a fallback. Fractional mouse motion is accumulated
+until the guest input poll. The mouse drives the game's native right-stick
+camera path, preserving its camera limits. The following cvars control it:
 
 | Argument | Effect |
 |---|---|
 | `--mouse_look <bool>` | Enable/disable mouse look (default `true`) |
-| `--mouse_look_scale <n>` | Sensitivity: right-stick units per pixel of mouse movement (default `256`; larger = more sensitive) |
+| `--mouse_look_scale <n>` | Horizontal sensitivity (default `256`) |
+| `--mouse_look_scale_y <n>` | Vertical sensitivity (default `256`) |
+| `--mouse_invert_y <bool>` | Invert vertical movement (default `false`) |
+| `--mouse_deadzone_compensation <n>` | Optional mouse-only deadzone compensation, 0..12000 (default `0`) |
 
 The mouse always uses the game's native right-stick camera handling.
 The retired `direct_mouse_look` and `mouse_look_legacy_orbit` modes and
 related orbit tuning keys are not supported; remove them from older config
-files. Use `mouse_look` and `mouse_look_scale` instead. Camera telemetry
+files. Use the settings above instead. Camera telemetry
 (`mouse_look_camera_diag` / `mouse_look_camera_dump`) remains available.
 
 The defaults come from `[input] mouse_look` / `[input] mouse_look_scale` in
@@ -202,7 +204,11 @@ line overrides per launch, and both cvars are hot-reloadable from the in-game
 console, so you can dial in the sensitivity live. Example: `fable_2.exe
 --mouse_look_scale 512` for a more sensitive camera.
 
-All cvars above are hot-reloadable, so they can also be changed from the in-game console.
+The launcher edits `fable2_config.toml`, with individual SDK `keybind_*`
+overrides supported in `fable_2.toml`. F3 supports live remapping and
+sensitivity updates. The F4 debug-menu key is reserved from the gamepad map;
+F5 still executes its external Lua file independently of the input driver.
+SDK focus and UI activation govern cursor capture.
 
 ## F5 — run an external Lua script
 

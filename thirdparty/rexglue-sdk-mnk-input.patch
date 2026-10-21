@@ -1,0 +1,119 @@
+diff --git a/src/input/mnk/mnk_input_driver.cpp b/src/input/mnk/mnk_input_driver.cpp
+--- a/src/input/mnk/mnk_input_driver.cpp
++++ b/src/input/mnk/mnk_input_driver.cpp
+@@ -27,8 +27,14 @@
+ REXCVAR_DEFINE_BOOL(mnk_mouse, false, "Input",
+                     "Use the mouse for the right stick. Off means the right stick comes "
+                     "from the keybind_rstick_* keys only");
+-REXCVAR_DEFINE_DOUBLE(mnk_sensitivity, 1.0, "Input", "Mouse sensitivity for right stick")
+-    .range(0.01, 10.0);
++REXCVAR_DEFINE_DOUBLE(mnk_sensitivity, 1.0, "Input", "Mouse horizontal sensitivity")
++    .range(0.001, 32.0);
++REXCVAR_DEFINE_DOUBLE(mnk_sensitivity_y, 1.0, "Input", "Mouse vertical sensitivity")
++    .range(0.001, 32.0);
++REXCVAR_DEFINE_BOOL(mnk_invert_y, false, "Input", "Invert vertical mouse input");
++REXCVAR_DEFINE_INT32(mnk_deadzone_compensation, 0, "Input",
++                     "Additional mouse-only right-stick deadzone compensation")
++    .range(0, 12000);
+ 
+ REXCVAR_DEFINE_STRING(keybind_a, "Semicolon,Space", "Input/Keybinds/Controller", "A button");
+ REXCVAR_DEFINE_STRING(keybind_b, "Quote,Backspace", "Input/Keybinds/Controller", "B button");
+@@ -124,13 +130,17 @@
+ 
+ bool TokenPressed(const bool (&key_down)[256], std::string_view token, uint8_t live_mods) {
+   uint8_t want = TakeModifiers(token);
+-  if (want != live_mods) {
+-    return false;
+-  }
+   rex::ui::VirtualKey vk = rex::ui::ParseVirtualKey(token);
+   if (vk == rex::ui::VirtualKey::kNone) {
+     return false;
+   }
++  // Plain binds (WASD, E, etc.) must keep working while Shift is held.
++  // Explicit chords still check the specified modifier mask exactly.
++  uint8_t own = 0;
++  if (vk == rex::ui::VirtualKey::kShift) own = kModShift;
++  if (vk == rex::ui::VirtualKey::kControl) own = kModCtrl;
++  if (vk == rex::ui::VirtualKey::kMenu) own = kModAlt;
++  if (want != 0 && want != (live_mods & ~own)) return false;
+   uint16_t idx = static_cast<uint16_t>(vk);
+   return idx < 256 && key_down[idx];
+ }
+@@ -320,6 +330,12 @@
+   if (IsBindPressed(key_down_, REXCVAR_GET(keybind_lstick_down)))
+     ly -= INT16_MAX;
+ 
++  // WASD diagonals should not travel sqrt(2) times faster than cardinal
++  // movement when interpreted by games that do not normalize the stick.
++  if (lx != 0 && ly != 0) {
++    lx = (lx * 23170) / 32767;
++    ly = (ly * 23170) / 32767;
++  }
+   int32_t rx = 0;
+   int32_t ry = 0;
+   if (IsBindPressed(key_down_, REXCVAR_GET(keybind_rstick_left)))
+@@ -332,10 +348,22 @@
+     ry -= INT16_MAX;
+ 
+   if (REXCVAR_GET(mnk_mouse) && IsMouseLookActive()) {
+-    double sensitivity = REXCVAR_GET(mnk_sensitivity);
+-    constexpr double kBaseScale = 200.0;
+-    rx += static_cast<int32_t>(double(mouse_dx_) * sensitivity * kBaseScale);
+-    ry += static_cast<int32_t>(double(-mouse_dy_) * sensitivity * kBaseScale);
++    // Preserve fractional relative deltas until the guest poll. Clamp before
++    // narrowing, so a fast flick never overflows the signed 32-bit conversion.
++    constexpr double kBaseScale = 256.0;
++    const auto from_mouse = [](double motion) -> int32_t {
++      if (motion == 0.0) return 0;
++      const double magnitude = std::clamp(std::abs(motion), 0.0, 32767.0);
++      const int deadzone = REXCVAR_GET(mnk_deadzone_compensation);
++      const int value = static_cast<int>(std::lround(
++          deadzone + magnitude * (32767.0 - deadzone) / 32767.0));
++      return motion < 0.0 ? -value : value;
++    };
++    rx += from_mouse(double(mouse_dx_) * REXCVAR_GET(mnk_sensitivity) * kBaseScale);
++    const double vertical = -double(mouse_dy_) *
++        REXCVAR_GET(mnk_sensitivity_y) * kBaseScale *
++        (REXCVAR_GET(mnk_invert_y) ? -1.0 : 1.0);
++    ry += from_mouse(vertical);
+   }
+   // Drained unconditionally: deltas keep accumulating in OnMouseMove while the
+   // mouse is off, and toggling it on would otherwise dump the whole backlog
+@@ -510,6 +538,12 @@
+     case rex::ui::MouseEvent::Button::kMiddle:
+       SetKeyState(static_cast<uint16_t>(VirtualKey::kMButton), true);
+       break;
++    case rex::ui::MouseEvent::Button::kX1:
++      SetKeyState(static_cast<uint16_t>(VirtualKey::kXButton1), true);
++      break;
++    case rex::ui::MouseEvent::Button::kX2:
++      SetKeyState(static_cast<uint16_t>(VirtualKey::kXButton2), true);
++      break;
+     default:
+       break;
+   }
+@@ -529,6 +563,12 @@
+     case rex::ui::MouseEvent::Button::kMiddle:
+       SetKeyState(static_cast<uint16_t>(VirtualKey::kMButton), false);
+       break;
++    case rex::ui::MouseEvent::Button::kX1:
++      SetKeyState(static_cast<uint16_t>(VirtualKey::kXButton1), false);
++      break;
++    case rex::ui::MouseEvent::Button::kX2:
++      SetKeyState(static_cast<uint16_t>(VirtualKey::kXButton2), false);
++      break;
+     default:
+       break;
+   }
+diff --git a/src/ui/keybinds.cpp b/src/ui/keybinds.cpp
+--- a/src/ui/keybinds.cpp
++++ b/src/ui/keybinds.cpp
+@@ -141,6 +141,8 @@
+     {"LMB", VirtualKey::kLButton},
+     {"RMB", VirtualKey::kRButton},
+     {"MMB", VirtualKey::kMButton},
++    {"XMB1", VirtualKey::kXButton1},
++    {"XMB2", VirtualKey::kXButton2},
+ };
+ 
+ VirtualKey ParseVirtualKey(std::string_view name) {

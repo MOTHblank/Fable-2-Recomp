@@ -38,7 +38,8 @@
 // now that the cap is lifted via REX_VSYNC=0 (see tools/fable2-uncapped.cmd).
 // Re-enable to re-measure the frame pacing:
 // #include "fps_probe.h"
-#include "keyboard_gamepad.h"
+#include "mnk_config_bridge.h"
+#include <rex/input/mnk/mnk_input_driver.h>
 #ifdef FABLE2_REMOTE_CONTROL
 #include "remote_control_server.h"
 #include "remote_gamepad_driver.h"
@@ -121,16 +122,12 @@ class Fable2App : public rex::ReXApp {
     // Otherwise leave config.graphics null so ReXApp loads
     // LoadGpuPlugin("xenos") -> the prebuilt D3D12 plugin.
 
-    // Build on top of the default input system (SDL gamepad + NOP) and add a
-    // synthetic "keyboard gamepad" driver so host keys/mouse buttons can drive
-    // the guest. The mapping is the `keyboard_gamepad_map` cvar (default from
-    // fable2_config.toml [input], see fable2_config.h). See
-    // src/input/keyboard_gamepad.h.
+    // The SDK default input system already registers its event-driven
+    // MnkInputDriver alongside physical SDL/XInput pads. Do not add the old
+    // polling KeyboardGamepadDriver a second time.
     config.input_factory = [this](bool tool_mode) ->
         std::unique_ptr<rex::system::IInputSystem> {
       auto system = rex::input::CreateDefaultInputSystem(tool_mode);
-      system->AddDriver(
-          std::make_unique<fable2::KeyboardGamepadDriver>(system->window(), 0));
 #ifdef FABLE2_REMOTE_CONTROL
       // Remote (AI) pad: driven over localhost TCP by an external harness
       // (src/input/remote_control_server.h). OR-merges with the pads above; not
@@ -348,6 +345,25 @@ class Fable2App : public rex::ReXApp {
     seed_cvar("keyboard_gamepad_map", cfg.keyboard_gamepad_map);
     seed_cvar("mouse_look", cfg.mouse_look ? "true" : "false");
     seed_cvar("mouse_look_scale", std::to_string(cfg.mouse_look_scale));
+    seed_cvar("mouse_look_scale_y", std::to_string(cfg.mouse_look_scale_y));
+    seed_cvar("mouse_invert_y", cfg.mouse_invert_y ? "true" : "false");
+    seed_cvar("mouse_deadzone_compensation",
+              std::to_string(cfg.mouse_deadzone_compensation));
+    const auto binds = fable2::mnkconfig::Translate(
+        REXCVAR_GET(keyboard_gamepad_map), REXCVAR_GET(mouse_unlock_key));
+    for (size_t i = 0; i < binds.size(); ++i)
+      seed_cvar(fable2::mnkconfig::kNames[i], binds[i]);
+    // SDK cvars remain individually overridable via fable_2.toml / CLI.
+    seed_cvar("mnk_mouse", REXCVAR_GET(mouse_look) ? "true" : "false");
+    seed_cvar("mnk_sensitivity",
+              std::to_string(double(REXCVAR_GET(mouse_look_scale)) / 256.0));
+    seed_cvar("mnk_sensitivity_y",
+              std::to_string(double(REXCVAR_GET(mouse_look_scale_y)) / 256.0));
+    seed_cvar("mnk_invert_y", REXCVAR_GET(mouse_invert_y) ? "true" : "false");
+    seed_cvar("mnk_deadzone_compensation",
+              std::to_string(REXCVAR_GET(mouse_deadzone_compensation)));
+    // Keep mouse-only configurations working even when the keyboard map is empty.
+    seed_cvar("mnk_mode", "true");
     // NOTE: the hero/dog readback fix (readback_resolve_force_addresses) is a
     // GPU-PLUGIN cvar, so it is seeded in OnPostSetup() (after the plugin is
     // loaded) rather than here - see plans/hero-dog-texture-readback.md.

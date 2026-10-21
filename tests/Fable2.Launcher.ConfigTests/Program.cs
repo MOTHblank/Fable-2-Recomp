@@ -295,6 +295,9 @@ try
         KeyboardGamepadMap = "LMB:X,RMB:Y,Shift:A,E:A",
         MouseLook = true,
         MouseLookScale = 512,
+        MouseLookScaleY = 768,
+        MouseInvertY = true,
+        MouseDeadzoneCompensation = 4000,
         UnlockWebsite = true,
         UnlockCe = false,
         SkipIntroVideos = true,
@@ -311,6 +314,9 @@ try
     var readBack = Fable2ConfigFile.Read(advPath);
     Require(readBack.MouseLook, "mouse look roundtrip failed");
     Require(readBack.MouseLookScale == 512, "mouse scale roundtrip failed");
+    Require(readBack.MouseLookScaleY == 768, "vertical mouse scale roundtrip failed");
+    Require(readBack.MouseInvertY, "invert Y roundtrip failed");
+    Require(readBack.MouseDeadzoneCompensation == 4000, "deadzone roundtrip failed");
     Require(!readBack.UnlockCe, "unlock_ce roundtrip failed");
     Require(readBack.SkipIntroVideos, "skip_intro_videos roundtrip failed");
     Require(readBack.DisableMotionBlur, "disable_motion_blur roundtrip failed");
@@ -359,6 +365,11 @@ try
     // Old obsolete keys are left untouched, like any other unknown TOML key.
     File.AppendAllText(advPath, "\n# legacy setting\n[input_legacy]\ndirect_mouse_look = true\n");
 
+    string oldInputPath = Path.Combine(testDirectory, "old-fable2_config.toml");
+    File.WriteAllText(oldInputPath, "[input]\nmouse_look_scale = 768\n");
+    var migratedInput = Fable2ConfigFile.Read(oldInputPath);
+    Require(migratedInput.MouseLookScale == 768 && migratedInput.MouseLookScaleY == 768,
+        "old single-axis sensitivity did not migrate to vertical axis");
     // Second write: update a value and preserve unknown sections/keys.
     File.AppendAllText(advPath, "\n[custom_section]\nsome_key = \"keep me\"\n");
     advanced.MouseLookScale = 1024;
