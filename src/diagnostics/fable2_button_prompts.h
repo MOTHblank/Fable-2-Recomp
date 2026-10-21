@@ -154,10 +154,10 @@ inline void Scan(uint8_t* arena, const KeyLabels& labels,
 }
 
 inline KeyLabels CurrentKeys() {
-  return {DisplayKey(rex::cvar::Query<std::string>("keybind_a")),
-          DisplayKey(rex::cvar::Query<std::string>("keybind_b")),
-          DisplayKey(rex::cvar::Query<std::string>("keybind_x")),
-          DisplayKey(rex::cvar::Query<std::string>("keybind_y"))};
+  return {DisplayKey(rex::cvar::GetFlagByName("keybind_a")),
+          DisplayKey(rex::cvar::GetFlagByName("keybind_b")),
+          DisplayKey(rex::cvar::GetFlagByName("keybind_x")),
+          DisplayKey(rex::cvar::GetFlagByName("keybind_y"))};
 }
 
 inline void Loop(uint8_t* arena) {
@@ -165,9 +165,9 @@ inline void Loop(uint8_t* arena) {
   KeyLabels previous_keys{};
   auto last_scan = std::chrono::steady_clock::now() - std::chrono::seconds(3);
   for (;;) {
-    const auto mode = rex::cvar::Query<std::string>("ui_prompt_mode");
+    const auto mode = rex::cvar::GetFlagByName("ui_prompt_mode");
     const bool keyboard = mode == "keyboard" ||
-        (mode == "auto" && rex::cvar::Query<bool>("input_prompt_keyboard"));
+        (mode == "auto" && rex::cvar::GetFlagByName("input_prompt_keyboard") == "true");
     const auto keys = keyboard ? CurrentKeys() : KeyLabels{};
     if (!keyboard || keys != previous_keys) {
       Restore(patches);
