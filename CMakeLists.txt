@@ -483,3 +483,6 @@ elseif(WIN32)
         message(STATUS "Python3 not found; skipping stable-hash PE cleaning")
     endif()
 endif()
+
+# Native zlib-ng for the game's guest inflate paths.
+include(src/core/hotfunc/zlib/native_inflate.cmake)
