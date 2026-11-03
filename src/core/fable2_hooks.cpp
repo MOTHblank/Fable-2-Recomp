@@ -198,7 +198,8 @@ enum class DirectMouseResult {
   kApplied,
   kNotHero,
   kInvalidPose,
-  kInvalidOutput
+  kInvalidOutput,
+  kInvalidInput
 };
 static DirectMouseResult ApplyDirectMouseOrbit(rex::memory::Memory* mem,
                                                 uint32_t cam, uint32_t sp,
@@ -248,13 +249,22 @@ static DirectMouseResult ApplyDirectMouseOrbit(rex::memory::Memory* mem,
 
   float dx = 0.0f, dy = 0.0f;
   take_delta(dx, dy);
+  // Keep a malformed hot-reloaded sensitivity or an extreme SDL delta from
+  // producing NaN/Inf camera transforms. Reject the frame without touching
+  // guest memory; the caller resets accumulated orbit state on rejection.
+  if (!std::isfinite(dx) || !std::isfinite(dy) ||
+      sensitivity_x < 1 || sensitivity_x > 4096 ||
+      sensitivity_y < 1 || sensitivity_y > 4096)
+    return DirectMouseResult::kInvalidInput;
   // 256 sensitivity = 0.15 degrees per pixel, no virtual-stick rate cap.
   constexpr float kRadPerPixel = 0.00261799388f;
-  cum_yaw() = std::remainder(cum_yaw() +
-      dx * kRadPerPixel * (float(sensitivity_x) / 256.0f), 6.283185307f);
-  cum_pitch() = std::clamp(cum_pitch() +
-      dy * kRadPerPixel * (float(sensitivity_y) / 256.0f) *
-      (invert_y ? 1.0f : -1.0f), -1.15f, 1.15f);
+  const float yaw_delta = dx * kRadPerPixel * (float(sensitivity_x) / 256.0f);
+  const float pitch_delta = dy * kRadPerPixel * (float(sensitivity_y) / 256.0f) *
+                            (invert_y ? 1.0f : -1.0f);
+  if (!std::isfinite(yaw_delta) || !std::isfinite(pitch_delta))
+    return DirectMouseResult::kInvalidInput;
+  cum_yaw() = std::remainder(cum_yaw() + yaw_delta, 6.283185307f);
+  cum_pitch() = std::clamp(cum_pitch() + pitch_delta, -1.15f, 1.15f);
 
   // Apply the orbit to the *native* per-frame eye from the output buffer,
   // not an independently smoothed camera, retaining natural hero follow.
@@ -267,6 +277,9 @@ static DirectMouseResult ApplyDirectMouseOrbit(rex::memory::Memory* mem,
     return DirectMouseResult::kInvalidPose;
   const Vec3 camera_up = vec3_normalize(vec3_cross(right, forward));
   const Quat new_q = quat_from_basis(right, forward, camera_up);
+  if (!std::isfinite(new_q.x) || !std::isfinite(new_q.y) ||
+      !std::isfinite(new_q.z) || !std::isfinite(new_q.w))
+    return DirectMouseResult::kInvalidPose;
   constexpr float radius = 3.1f;  // Observed native hero-camera radius.
   const Vec3 pivot{view_out.x + native_forward.x * radius,
                    view_out.y + native_forward.y * radius,
@@ -274,6 +287,8 @@ static DirectMouseResult ApplyDirectMouseOrbit(rex::memory::Memory* mem,
   const Vec3 new_eye{pivot.x - forward.x * radius,
                      pivot.y - forward.y * radius,
                      pivot.z - forward.z * radius};
+
+  if (!valid_vec(new_eye)) return DirectMouseResult::kInvalidPose;
 
   // The next guest instructions consume r1+0x60. Changing cam+0x90 alone
   // was too late because the already computed stack pose won the frame.
@@ -292,14 +307,32 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
       fable2::mouselook::memory_ref().load(std::memory_order_acquire);
   if (!mem) return;
   const uint32_t cam = r31.u32;
-  if (!fable2::mouselook::is_plausible_guest_ptr(cam)) return;
-
-  static uint64_t calls = 0, applied = 0, not_hero = 0;
-  static uint64_t invalid_pose = 0, invalid_output = 0;
-  ++calls;
   const bool direct = REXCVAR_GET(mouse_look) &&
                       REXCVAR_GET(mouse_direct_look);
-  if (direct) {
+  // This hook can run on cinematic and secondary cameras. Never carry the
+  // hero's accumulated orbit or stale SDL input into another camera, or back
+  // into hero control after a scripted sequence. All state here is guest-thread
+  // local; request_reset also clears the cross-thread raw input accumulator.
+  static uint32_t last_cam = 0;
+  static bool was_direct = false;
+  const bool camera_changed = cam != last_cam;
+  const bool mode_changed = direct != was_direct;
+  last_cam = cam;
+  was_direct = direct;
+  if (camera_changed || mode_changed) {
+    fable2::mouselook::request_reset();
+    fable2::mouselook::reset_cumulative();
+  }
+  if (!direct || !fable2::mouselook::is_plausible_guest_ptr(cam))
+    return;
+
+  static uint64_t calls = 0, applied = 0, not_hero = 0;
+  static uint64_t invalid_pose = 0, invalid_output = 0, invalid_input = 0;
+  ++calls;
+  // One native frame after camera/mode changes avoids applying stale mouse
+  // motion to a newly selected camera before its native pose has settled.
+  if (camera_changed || mode_changed) return;
+  {
     const DirectMouseResult result = ApplyDirectMouseOrbit(
         mem, cam, r1.u32, REXCVAR_GET(mouse_look_scale),
         REXCVAR_GET(mouse_look_scale_y), REXCVAR_GET(mouse_invert_y));
@@ -308,6 +341,13 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
       case DirectMouseResult::kNotHero: ++not_hero; break;
       case DirectMouseResult::kInvalidPose: ++invalid_pose; break;
       case DirectMouseResult::kInvalidOutput: ++invalid_output; break;
+      case DirectMouseResult::kInvalidInput: ++invalid_input; break;
+    }
+    if (result != DirectMouseResult::kApplied) {
+      // The native camera output remains untouched for rejected frames.
+      // Drop accumulated motion so it cannot jump when hero control resumes.
+      fable2::mouselook::request_reset();
+      fable2::mouselook::reset_cumulative();
     }
     if (cfg.mouse_look_camera_diag &&
         result == DirectMouseResult::kInvalidOutput && invalid_output == 1) {
@@ -335,9 +375,9 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
     if (cfg.mouse_look_camera_diag && calls % 300 == 0) {
       REXSYS_INFO(
           "[mouse-camera] enabled=1 hook={} applied={} not-hero={} "
-          "bad-pose={} bad-stack={} raw-events={} capture-resets={} "
+          "bad-pose={} bad-stack={} bad-input={} raw-events={} capture-resets={} "
           "cam=0x{:08X} sp=0x{:08X}",
-          calls, applied, not_hero, invalid_pose, invalid_output,
+          calls, applied, not_hero, invalid_pose, invalid_output, invalid_input,
           fable2::mouselook::raw_motion_events().load(std::memory_order_relaxed),
           fable2::mouselook::capture_resets().load(std::memory_order_relaxed),
           cam, r1.u32);
