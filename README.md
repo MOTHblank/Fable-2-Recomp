@@ -587,6 +587,14 @@ tools\setup_sdk_src.cmd  rem Initialize the pinned thirdparty\rexglue-sdk
 
 Both backend builders use the **one pinned source tree** at
 `thirdparty/rexglue-sdk`, prepared by `tools/prepare_runtime_sdk.py`.
+The submodule tracks [MOTHblank/rexglue-sdk](https://github.com/MOTHblank/rexglue-sdk),
+our writable fork of the upstream SDK. Its currently pinned revision includes
+upstream's newer renderer/runtime changes plus the Fable-specific D3D12
+pipeline, frame-pacing, mouse-input and adaptive-prompt fixes. The five
+historical SDK follow-up patches remain in `thirdparty/` for older source
+revisions, but are **verified rather than reapplied** on the integrated SDK
+revision. Existing checkouts synchronize their submodule URL before updating;
+locally modified SDK sources are not overwritten automatically.
 The official binary SDK is retained only for its compatible codegen tool;
 `build.cmd` selects matching source-built native headers, libraries and
 renderer DLLs. No independent `rexglue-sdk-src` checkout or obsolete
