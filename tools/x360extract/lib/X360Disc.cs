@@ -346,6 +346,19 @@ public sealed class X360Disc : IDisposable
         return s.Length == 0 ? "_" : s;
     }
 
+    /// <summary>Resolve a disc entry within the extraction directory, rejecting traversal.</summary>
+    public static string ResolveInside(string root, string relativePath)
+    {
+        string fullRoot = Path.GetFullPath(root);
+        if (!Path.EndsInDirectorySeparator(fullRoot))
+            fullRoot += Path.DirectorySeparatorChar;
+        string normalized = relativePath.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+        string full = Path.GetFullPath(Path.Combine(fullRoot, normalized));
+        if (!full.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"unsafe path: {relativePath}");
+        return full;
+    }
+
     // ------------------------------------------------------------------
     //  Internals
     // ------------------------------------------------------------------
@@ -382,7 +395,7 @@ public sealed class X360Disc : IDisposable
         {
             if (e.IsDirectory) continue;
             string rel = relBase + "/" + container.GetPath(e);
-            string path = SafePath(Path.Combine(destDir, container.GetPath(e)));
+            string path = ResolveInside(destDir, container.GetPath(e));
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
             long size = (long)e.FileSize;
