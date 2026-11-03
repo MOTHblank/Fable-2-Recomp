@@ -21,7 +21,10 @@ SDK_PIN = "babc769a94be5618010abfd075ed84f3c2bc09f5"
 # fixes, but vendors libmspack as ordinary files. The old runtime patch
 # replaces a *gitlink*, so "git apply --reverse --check" cannot verify the
 # whole patch on this fork even when the code is present.
-BAKED_SDK_PINS = {\n    "92ddff153f98b9bdd385bbf72cf0dca9a7cda4b3",  # Original integrated fixes\n    "cc5f03dd0488720a0f277412d7c36b63964d5b18",  # Two-controller menu fix\n}
+BAKED_SDK_PINS = {
+    "92ddff153f98b9bdd385bbf72cf0dca9a7cda4b3",  # Original integrated fixes
+    "cc5f03dd0488720a0f277412d7c36b63964d5b18",  # Two-controller menu fix
+}
 
 # Verify every area affected by the original runtime-fixes patch and the
 # dependent debug-exports patch. Check the actual working files, not just HEAD:
