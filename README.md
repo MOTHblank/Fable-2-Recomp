@@ -54,6 +54,20 @@ Do not point the launcher at that folder. Rebuilds keep extracted content and
 saved settings in `out\game`. The launcher is built automatically by `build.cmd`. No wrapper scripts,
 extra commands or manual file copies.
 
+## Graphics PR #51 integration
+
+The launcher exposes a Renderer selector. Direct3D 12 remains the default;
+Vulkan uses the fork's existing independently staged, hash-verified runtime
+and plugin pairs rather than PR #51's unified SDK build. Build the Vulkan
+pair with `tools/build_sdk_vulkan.cmd` before selecting it.
+
+The original material shader sources, authoring scripts and compiled D3D12
+shader variants from [graphics PR #51](https://github.com/himdo/Fable-2-Recomp/pull/51)
+are included and staged by the build. **The F6 enhancements menu and enhanced
+rendering are not yet operational:** the graphics SDK changes require
+forward-porting onto this fork's newer pinned SDK. See
+[graphics port status](docs/GRAPHICS_PORT_STATUS.md).
+
 ## Windows launcher
 
 The optional WPF launcher detects the original game edition and configures

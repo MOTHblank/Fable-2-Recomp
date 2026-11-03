@@ -49,6 +49,8 @@ __pycache__/
 !tools/apply_recomp_patches.py
 !tools/fable2_control.py
 !tools/prepare_runtime_sdk.py
+!tools/build_material_shaders.py
+!tools/xenos_to_hlsl.py
 !tools/generate_game_versions.py
 !tests/*.py
 !tools/prepare_renderer_mspack.py

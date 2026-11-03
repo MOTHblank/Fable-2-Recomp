@@ -247,6 +247,15 @@ add_custom_target(fable_2_lua_staging
 )
 add_dependencies(fable_2 fable_2_lua_staging)
 
+# Stage material replacements from graphics PR #51. They remain inert until
+# the optional SDK graphics shader hook is forward-ported to the current pin.
+add_custom_target(fable_2_materials_staging
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/materials/d3d12"
+        "$<TARGET_FILE_DIR:fable_2>/materials/d3d12"
+    COMMENT "Staging optional D3D12 material shaders")
+add_dependencies(fable_2 fable_2_materials_staging)
+
 # The remote-control CLI client is a debug-only feature (see the
 # FABLE2_REMOTE_CONTROL gate above), so only stage it for Debug builds.
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
