@@ -323,7 +323,7 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
     fable2::mouselook::request_reset();
     fable2::mouselook::reset_cumulative();
   }
-  if (!direct || !fable2::mouselook::is_plausible_guest_ptr(cam))
+  if (!fable2::mouselook::is_plausible_guest_ptr(cam))
     return;
 
   static uint64_t calls = 0, applied = 0, not_hero = 0;
@@ -331,8 +331,7 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
   ++calls;
   // One native frame after camera/mode changes avoids applying stale mouse
   // motion to a newly selected camera before its native pose has settled.
-  if (camera_changed || mode_changed) return;
-  {
+  if (direct && !(camera_changed || mode_changed)) {
     const DirectMouseResult result = ApplyDirectMouseOrbit(
         mem, cam, r1.u32, REXCVAR_GET(mouse_look_scale),
         REXCVAR_GET(mouse_look_scale_y), REXCVAR_GET(mouse_invert_y));
