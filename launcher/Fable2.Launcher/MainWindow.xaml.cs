@@ -246,6 +246,7 @@ public partial class MainWindow : Window
                         "Vulkan renderer is not staged. Build it with tools\\build_sdk_vulkan.cmd " +
                         "and rebuild Release before selecting Vulkan.");
                 startInfo.FileName = "powershell.exe";
+                startInfo.RedirectStandardError = true;
                 foreach (string arg in new[] { "-NoProfile", "-NonInteractive",
                     "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
                     "-File", script, "-Backend", "vulkan" })
@@ -255,17 +256,68 @@ public partial class MainWindow : Window
             {
                 startInfo.ArgumentList.Add("--game_data_root=" + plan.GameRoot);
             }
-            Process.Start(startInfo);
+            Process process = Process.Start(startInfo) ??
+                throw new InvalidOperationException("Could not start the game process.");
+            if (renderer == "vulkan")
+            {
+                // The private renderer script can reject incompatible SDK pairs
+                // after PowerShell starts. Keep this launcher open to display
+                // that error, rather than silently closing before verification.
+                _ = ObserveVulkanSessionAsync(process);
+                StatusText.Text = "Starting verified Vulkan renderer session…";
+                ConfigStateText.Text = "Vulkan session";
+                return;
+            }
             StatusText.Text = "Fable II launched.";
             ConfigStateText.Text = "Game running";
-            // The game is a separate process, so the launcher can close itself
-            // now that it has started. Only close on a successful launch.
             Close();
         }
         catch (Exception exception)
         {
             MessageBox.Show(this, exception.Message, "Could not launch Fable II",
                 MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task ObserveVulkanSessionAsync(Process process)
+    {
+        try
+        {
+            using (process)
+            {
+                string errorText = await process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync();
+                int exitCode = process.ExitCode;
+                if (Dispatcher.HasShutdownStarted) return;
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    if (exitCode != 0)
+                    {
+                        StatusText.Text = "Vulkan session failed to start or exited with an error.";
+                        ConfigStateText.Text = "Vulkan failed";
+                        MessageBox.Show(this,
+                            string.IsNullOrWhiteSpace(errorText)
+                                ? $"Vulkan session exited with code {exitCode}. Check logs in the game folder."
+                                : errorText.Trim(),
+                            "Vulkan renderer error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                    else
+                    {
+                        StatusText.Text = "Vulkan session ended.";
+                        ConfigStateText.Text = "Session ended";
+                    }
+                });
+            }
+        }
+        catch (Exception exception)
+        {
+            if (Dispatcher.HasShutdownStarted) return;
+            await Dispatcher.InvokeAsync(() =>
+            {
+                StatusText.Text = "Could not monitor the Vulkan session.";
+                MessageBox.Show(this, exception.Message, "Vulkan session error",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            });
         }
     }
 
