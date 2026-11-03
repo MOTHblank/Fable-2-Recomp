@@ -21,7 +21,7 @@ SDK_PIN = "babc769a94be5618010abfd075ed84f3c2bc09f5"
 # fixes, but vendors libmspack as ordinary files. The old runtime patch
 # replaces a *gitlink*, so "git apply --reverse --check" cannot verify the
 # whole patch on this fork even when the code is present.
-BAKED_SDK_PIN = "92ddff153f98b9bdd385bbf72cf0dca9a7cda4b3"
+BAKED_SDK_PINS = {\n    "92ddff153f98b9bdd385bbf72cf0dca9a7cda4b3",  # Original integrated fixes\n    "cc5f03dd0488720a0f277412d7c36b63964d5b18",  # Two-controller menu fix\n}
 
 # Verify every area affected by the original runtime-fixes patch and the
 # dependent debug-exports patch. Check the actual working files, not just HEAD:
@@ -185,12 +185,20 @@ def main():
                 fail(f"SDK patch {name} conflicts with local edits:\n{detail}\n"
                      "The SDK work tree is not at a clean accepted revision. Restore it with:\n"
                      f"  git -C {source} checkout -- . && git -C {source} clean -fd")
-    elif head == BAKED_SDK_PIN:
+    elif head in BAKED_SDK_PINS:
         # This exact fork integrates both original patches, but differs from
         # their line-by-line history (including vendored vs gitlink libmspack).
         # Refuse incomplete/locally modified builds instead of bypassing the
         # patch check for every arbitrary revision.
         missing = missing_baked_runtime_features(source)
+        if head == "cc5f03dd0488720a0f277412d7c36b63964d5b18":
+            input_path = source / "src/kernel/xam/xam_input.cpp"
+            try:
+                input_code = input_path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                input_code = ""
+            if "PrimarySlotRemap" not in input_code:
+                missing.append("src/kernel/xam/xam_input.cpp: PrimarySlotRemap")
         if missing:
             fail("the pinned SDK fork is missing expected runtime fixes:\n  "
                  + "\n  ".join(missing)
