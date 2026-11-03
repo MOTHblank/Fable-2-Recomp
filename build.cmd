@@ -12,9 +12,17 @@ set "SDK=%ROOT%out\tooling\rexglue-sdk-0.10.0\win-amd64"
 set "RUNTIME=%ROOT%out\tooling\runtime-sdk\win-amd64"
 set "SDKSRC=%ROOT%thirdparty\rexglue-sdk"
 
+if /i "%~1"=="package" if "%~2"=="" (
+    rem Build the shared game directory first, then package only allowlisted
+    rem binaries, authored scripts and canonical defaults. Never zip out/game
+    rem wholesale: it contains extracted retail content, saves and user data.
+    call "%~f0" || exit /b 1
+    python "%ROOT%tools\package_release.py" || exit /b 1
+    exit /b 0
+)
 if /i "%~1"=="clean" if "%~2"=="" goto clean
 if not "%~1"=="" (
-    echo Usage: build.cmd [clean] 1>&2
+    echo Usage: build.cmd [clean^|package] 1>&2
     exit /b 2
 )
 
