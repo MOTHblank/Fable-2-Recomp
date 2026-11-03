@@ -260,8 +260,8 @@ def main():
                 if marker not in content:
                     missing_followups.append(f"{relative}: {marker}")
         if missing_followups:
-            fail("the Fable-specific SDK integrations are incomplete:\\n  "
-                 + "\\n  ".join(missing_followups))
+            fail("the Fable-specific SDK integrations are incomplete:\n  "
+                 + "\n  ".join(missing_followups))
         print("Fable-specific renderer/input fixes are baked into the SDK (verified).")
 
     # Keep follow-up fixes idempotent on the pinned checkout and on approved
@@ -324,10 +324,9 @@ def main():
             if result.returncode != 0:
                 fail("prepare_renderer_mspack.py failed.")
         else:
-            # The SDK's thirdparty/CMakeLists.txt treats a dependency as
-            # initialized when <dep>/.git exists. Vendored libmspack has no
-            # .git, so drop an empty marker directory (invisible to git
-            # status) to satisfy that check.
+            # Historical SDK revisions require a fake .git directory for their
+            # vendored libmspack initialization check. Our newer SDK fork has
+            # removed that faulty check, so avoid creating fake Git metadata.
             if head != BAKED_FOLLOWUP_PIN:
                 marker = source / "thirdparty" / "libmspack" / ".git"
                 if not marker.exists():
