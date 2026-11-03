@@ -31,10 +31,10 @@ fps_probe.log
 fable_2_manifest.toml.bak
 
 # --- Helper scripts & images (kept out of the repo) ---------------------------
-*.ps1
-*.py
-*.sh
-*.png
+/*.ps1
+/*.py
+/*.sh
+/*.png
 build_*.log
 rebuild.log
 rebuild2.log
