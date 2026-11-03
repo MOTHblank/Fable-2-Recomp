@@ -25,6 +25,28 @@ if not defined OFFICIAL set "OFFICIAL=%ROOT%\out\tooling\rexglue-sdk-0.10.0\win-
 if not exist "%SOURCE%\CMakeLists.txt" (
   git -C "%ROOT%" submodule update --init thirdparty/rexglue-sdk || exit /b 1
 )
+rem The checked-out SDK can remain at an older commit after git pull. Synchronize
+rem clean checkouts with the gitlink, but never overwrite locally patched SDK files.
+set "EXPECTED_SDK="
+set "CURRENT_SDK="
+for /f %%H in ('git -C "%ROOT%" rev-parse ":thirdparty/rexglue-sdk" 2^>nul') do set "EXPECTED_SDK=%%H"
+for /f %%H in ('git -C "%SOURCE%" rev-parse HEAD 2^>nul') do set "CURRENT_SDK=%%H"
+if not defined EXPECTED_SDK (
+  echo Error: cannot determine the tracked ReXGlue SDK revision. 1>&2
+  exit /b 1
+)
+if /i not "%CURRENT_SDK%"=="%EXPECTED_SDK%" (
+  git -C "%SOURCE%" diff --quiet || (
+    echo Error: ReXGlue SDK has local edits. Preserve or restore them before changing revisions. 1>&2
+    exit /b 1
+  )
+  git -C "%SOURCE%" diff --cached --quiet || (
+    echo Error: ReXGlue SDK has staged local edits. Preserve them before updating. 1>&2
+    exit /b 1
+  )
+  echo Updating SDK checkout to tracked revision %EXPECTED_SDK% ...
+  git -C "%ROOT%" submodule update --init thirdparty/rexglue-sdk || exit /b 1
+)
 rem Auto-fetch the official prebuilt SDK only when using the default location.
 if not defined OFFICIAL_ARG if not exist "%OFFICIAL%\bin\rexglue.exe" (
   call "%~dp0setup_sdk.cmd" || exit /b 1
