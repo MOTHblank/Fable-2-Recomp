@@ -556,8 +556,10 @@ hardcoded paths**. Prerequisites (all standard tools):
   [official release](https://github.com/rexglue/rexglue-sdk/releases/tag/v0.10.0)
   into `out\tooling\rexglue-sdk-0.10.0`. A compatible official SDK on PATH
   is used instead if present. Downloads never replace the source submodule.
-- **Python and Git** for code generation and source-SDK preparation; **Visual
-  Studio Build Tools / Windows SDK** (x64 developer shell) for the native build.
+- **Python and Git** for code generation and source-SDK preparation. Install
+  **pefile** with `python -m pip install pefile` for the Release PE-cleaning step.
+  **Visual Studio Build Tools / Windows SDK** (x64 developer shell) are
+  required for the native build.
 
 ```bat
 build.cmd
@@ -570,6 +572,21 @@ missing. It extracts `out/game/default.xex` and `out/game/data`, then the
 same command resumes the native build. Start `out/game/Fable2Launcher.exe`;
 `fable_2.exe` is beside it. CMake intermediates stay in `out/build`, while
 rebuilds preserve game content, settings, and saves.
+
+To build player release archives from the existing source checkout:
+
+```bat
+build.cmd package
+```
+
+This builds the Release game and launcher, then creates a player ZIP, a
+separate symbols ZIP, and `SHA256SUMS` in `out/dist`. The player ZIP includes
+only the game and launcher binaries, matched renderer pairs, project-authored
+Lua scripts, and default configuration. It excludes all extracted disc
+content (including `default.xex` and `data/dir.manifest`), saves, logs,
+and player-edited settings. End users need to extract their own game files
+through the launcher. Ordinary Release builds apply the post-build PE
+cleaner; the profiling preset continues to skip that normalization.
 
 The first `build.cmd` run fetches the official SDK if needed under `out/tooling`.
 The Windows build uses the pinned, patched SDK from source; see
