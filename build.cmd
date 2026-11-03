@@ -110,6 +110,8 @@ if not exist "%ROOT%generated\default\sources.cmake" (
 )
 echo [3/4] Building matched source SDK ...
 call "%ROOT%tools\build_runtime_sdk.cmd" "%SDK%" Release || exit /b 1
+rem Catch guest symbols that would silently shadow imported runtime hooks.
+python "%ROOT%tools\check_manifest_collisions.py" "%ROOT%fable_2_manifest.toml" "%RUNTIME%\bin\rexruntime.dll" || exit /b 1
 
 rem Use the same tracked manifest for code generation and CMake rebuilds.
 echo [4/4] Configuring and building game ...
