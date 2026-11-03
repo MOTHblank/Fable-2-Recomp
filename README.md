@@ -39,6 +39,18 @@ Original GOTY USA/Europe and German GOTY dumps are supported by the default
 [x] Custom Launcher
   - [x] Built in ISO extractor
 
+## Playing a packaged Windows release
+
+If a Windows player ZIP has been published, extract it to a new folder and
+open `Fable2Launcher.exe`. Use **Extract from ISO** to select your own
+compatible Fable II GOTY disc image, then press **Play** in the launcher.
+An extracted disc is required; it is never included in release downloads.
+When updating, retain your existing game folder and back up its `saves`
+directory. Do not overwrite player-edited `fable2_config.toml` with the
+package's default template.
+
+Developers building from source should follow the unified workflow below.
+
 ## Windows: one build, one game folder
 
 On Windows, install the prerequisites listed under **Building** below, then run
