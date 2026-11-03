@@ -71,6 +71,16 @@ def gather_player_files(root: Path = ROOT, game: Path = GAME) -> dict[str, Path]
     for path in scripts:
         add(files, f"data/scripts/recomp/{path.name}", path)
 
+    # Original HLSL replacements from graphics PR #51 must ship with the
+    # source-built runtime that loads them. Read only project-owned compiled
+    # DXBC variants; never recurse through the user's extracted game folder.
+    materials_dir = root / "materials" / "d3d12"
+    materials = sorted(materials_dir.glob("*.dxbc"))
+    if not materials:
+        raise SystemExit("package_release: compiled material shader variants missing")
+    for path in materials:
+        add(files, f"materials/d3d12/{path.name}", path)
+
     # The renderer selector requires a matched, validated D3D12 pair. The
     # optional Vulkan pair is included only when its complete manifest exists.
     for backend in ("d3d12", "vulkan"):
