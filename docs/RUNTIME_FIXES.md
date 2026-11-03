@@ -1,66 +1,58 @@
 # Windows runtime fixes
 
-The tested source baseline is `himdo/rexglue-sdk` commit
-`1338ec1011739c7f00f8df9b9473e34d3dd9f2df` (upstream's dog rendering fix).
-`thirdparty/rexglue-sdk-runtime-fixes.patch` carries the additional audio,
-frame-pacing, Release FPS-counter and Windows export changes as source.
-`thirdparty/rexglue-sdk-debug-exports.patch` adds the performance-counter and cvar
-exports needed by Debug's GPU plugin, shutdown path and debug control server.
-It applies separately so an SDK checkout already carrying the original patch
-can upgrade without resetting it.
-It also removes the hardcoded `LIBRARY rexruntime` name from the export table:
-the linker must use its actual output name, so Debug imports `rexruntimed.dll`
-rather than accidentally loading a leftover Release `rexruntime.dll`.
-No SDK fork, binary download of a patched runtime, game files or saves are
-required from this contribution. Original GOTY game files are still required
-to generate and run the game.
+The active native SDK source is the tracked
+[MOTHblank/rexglue-sdk](https://github.com/MOTHblank/rexglue-sdk) submodule
+under `thirdparty/rexglue-sdk`. Its pinned revision combines newer upstream
+runtime and renderer improvements with Fable-specific D3D12 pipeline,
+frame pacing, mouse and adaptive-prompt changes.
+
+The historical base for these fixes was `himdo/rexglue-sdk` commit
+`1338ec1011739c7f00f8df9b9473e34d3dd9f2df`. The
+`thirdparty/rexglue-sdk-runtime-fixes.patch` and
+`thirdparty/rexglue-sdk-debug-exports.patch` document the older audio,
+frame-pacing and Windows-export changes. Those changes are already integrated
+in the current SDK fork; preparation verifies their source markers instead
+of applying old patches again. Five Fable-specific follow-up patch sets have
+also been incorporated into the SDK fork, and are verified rather than
+reapplied at its pinned revision.
+
+The prebuilt official ReXGlue v0.10.0 SDK remains separate, solely to
+provide compatible code generation tools. Game disc images and saves
+are not part of the SDK.
 
 ## Build
 
-Use a Visual Studio x64 developer shell with LLVM 20+, Ninja, CMake, Python
-and the .NET 8 SDK on PATH. From the repository root:
+In a Visual Studio Windows x64 developer shell with LLVM 20+, Ninja,
+CMake, Python (plus `pefile`), Git, and .NET 8 SDK on PATH:
 
 ```cmd
-build.cmd -release fable_2
-build.cmd launcher
-tests\run_native_tests.cmd
-dotnet run --project tests/Fable2.Launcher.ConfigTests -c Release
+build.cmd
 ```
 
-Both Debug and Release builds prepare the pinned SDK, apply the patch, build D3D12 runtime
-and GPU targets, and stage matched headers, integration sources, import
-libraries and DLLs. The host is rebuilt against that staged SDK. The official
-0.10.0 codegen executable remains in a separate directory with its original
-runtime; mixing newer native DLLs into its directory is not supported.
-Patch conflicts and unexpected SDK revisions fail rather than overwrite edits.
-`build.cmd fable_2` builds the Debug host and a patched Debug SDK;
-`build.cmd -release fable_2` builds the Release pair. Debug SDK build/staging directories
-are `out/build/runtime-sdk-debug` and `out/tooling/runtime-sdk-debug/win-amd64`;
-Release keeps `out/build/runtime-sdk` and `out/tooling/runtime-sdk/win-amd64`.
-Debug stages `rexruntimed.dll` and `rexgpu-xenosd.dll`, never substitutes the
-official unpatched Debug pair, and still uses the separate official codegen tool.
-After updating an existing checkout, rerun `build.cmd` rather than only building
-an old CMake cache. Keep the EXE and DLLs together in the resulting build folder.
-The startup log records `[native-build] configuration=... linked_sdk=...`.
-This identifies the host's configured SDK, not DLLs manually replaced afterward.
-CMake rejects a new staged SDK whose configuration does not match the host,
-instead of silently selecting the official package's unpatched other configuration.
-The unavailable upstream libmspack pin is replaced by its earlier public
-`305907723a4e7ab2018e58040059ffb5e77db837` revision. The Windows helper only
-materializes that revision's symlink blobs after validating their targets.
+The default Release workflow builds and stages the launcher in `out/game`,
+extracts a user-supplied retail ISO there if needed, generates guest code,
+builds a matched native SDK and game, then stages the renderer pair. The
+launcher and game executable are both in `out/game`. The Release preset
+enables post-build PE cleaning; profiling can opt out.
 
-`thirdparty/rexglue-sdk` remains the pinned source SDK and is still built for
-the runtime/renderer fixes. `out/tooling/rexglue-sdk-0.10.0` is only the official
-prebuilt codegen package, not a replacement source checkout. Keeping it outside
-the submodule avoids overwriting source/local edits: the previous download
-script could recursively delete that same directory before extraction. The
-staged native SDK also lives under `out/tooling`, keeping matched native
-headers/libraries separate from the codegen tool's own runtime dependencies.
-Put the published launcher beside the Release game EXE, `fable2_build.json`,
-`app-icon.png` and its matched DLLs. The previous experimental Vulkan build
-path is not the default for these fixes; do not replace this pair with DLLs
-left over from that build. Other-platform configurations and Vulkan have not
-been validated for this contribution; full Debug gameplay remains unverified.
+For distributable artifacts:
+
+```cmd
+build.cmd package
+```
+
+Only allowlisted binaries, renderer pairs, project Lua scripts and canonical
+config are archived in `out/dist`. Retail ISO contents, `default.xex`,
+`dir.manifest`, saves, caches, logs and user configuration are not shipped.
+
+`tools/setup_sdk_src.cmd` synchronizes the SDK fork remote and checks out
+the tracked submodule revision. `tools/prepare_runtime_sdk.py` refuses
+partial SDK modifications or missing integrated fixes; it does not overwrite
+local edits. A Debug SDK may also be built separately using
+`tools/build_runtime_sdk.cmd` with its Debug argument. The Vulkan SDK uses
+the same source through `tools/build_sdk_vulkan.cmd` and retains a separate
+runtime snapshot. If its provenance is incompatible with D3D12, the
+renderer staging process rejects the mismatched pair.
 
 ## Behavior
 
