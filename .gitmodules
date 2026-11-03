@@ -1,4 +1,4 @@
 [submodule "thirdparty/rexglue-sdk"]
 	path = thirdparty/rexglue-sdk
-	url = https://github.com/himdo/rexglue-sdk.git
+	url = https://github.com/MOTHblank/rexglue-sdk.git
 	branch = main

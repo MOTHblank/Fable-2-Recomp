@@ -24,6 +24,34 @@ SDK_PIN = "babc769a94be5618010abfd075ed84f3c2bc09f5"
 BAKED_SDK_PINS = {
     "92ddff153f98b9bdd385bbf72cf0dca9a7cda4b3",  # Original integrated fixes
     "cc5f03dd0488720a0f277412d7c36b63964d5b18",  # Two-controller menu fix
+    "8f89aeee12738818ccf8d10b4273f6aa3016d77f",  # Fable fixes incorporated into SDK fork
+}
+
+# When these exact SDK source improvements are committed to our SDK fork,
+# do not try to apply the old downstream patches again. Verify each area so
+# a partial or edited SDK checkout still fails rather than silently drifting.
+BAKED_FOLLOWUP_PIN = "8f89aeee12738818ccf8d10b4273f6aa3016d77f"
+BAKED_FOLLOWUP_MARKERS = {
+    "src/graphics/d3d12/pipeline_cache.cpp": (
+        "creation_threads_.size() < creation_thread_needed_count",
+        "storage_write_thread_shutdown_ && storage_write_shader_queue_.empty()",
+    ),
+    "src/ui/d3d12/d3d12_presenter.cpp": (
+        "const bool vsync_gate_allows = VsyncPresentGateAllows();",
+        "if (!vsync_gate_allows || !GuestVblankPaceAllows())",
+    ),
+    "src/graphics/graphics_system.cpp": ("REXCVAR_DEFINE_INT32(fast_guest_vblank_hz",),
+    "src/input/mnk/mnk_input_driver.cpp": (
+        "mnk_mouse_flick_buffer_polls",
+        "mnk_direct_mouse",
+        "mouse_motion_callback.store(callback",
+    ),
+    "src/ui/keybinds.cpp": ("kXButton1",),
+    "include/rex/input/mnk/mnk_input_driver.h": ("using MouseMotionCallback",),
+    "src/input/input_system.cpp": (
+        "REXCVAR_DEFINE_BOOL(input_prompt_keyboard",
+        "active_devices_.Observe(user_index",
+    ),
 }
 
 # Verify every area affected by the original runtime-fixes patch and the
@@ -194,7 +222,7 @@ def main():
         # Refuse incomplete/locally modified builds instead of bypassing the
         # patch check for every arbitrary revision.
         missing = missing_baked_runtime_features(source)
-        if head == "cc5f03dd0488720a0f277412d7c36b63964d5b18":
+        if head in ("cc5f03dd0488720a0f277412d7c36b63964d5b18", "8f89aeee12738818ccf8d10b4273f6aa3016d77f"):
             input_path = source / "src/kernel/xam/xam_input.cpp"
             try:
                 input_code = input_path.read_text(encoding="utf-8")
@@ -220,6 +248,22 @@ def main():
                  f"Restore the base with: git -C {source} checkout {SDK_PIN}")
         print(f"SDK revision {head} already carries all runtime fixes (baked in).")
 
+    if head == BAKED_FOLLOWUP_PIN:
+        missing_followups = []
+        for relative, markers in BAKED_FOLLOWUP_MARKERS.items():
+            try:
+                content = (source / relative).read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                missing_followups.append(f"{relative} (missing or unreadable)")
+                continue
+            for marker in markers:
+                if marker not in content:
+                    missing_followups.append(f"{relative}: {marker}")
+        if missing_followups:
+            fail("the Fable-specific SDK integrations are incomplete:\\n  "
+                 + "\\n  ".join(missing_followups))
+        print("Fable-specific renderer/input fixes are baked into the SDK (verified).")
+
     # Keep follow-up fixes idempotent on the pinned checkout and on approved
     # SDK forks which already bake in the original runtime fixes.
     for followup_name in (
@@ -229,6 +273,8 @@ def main():
         "rexglue-sdk-direct-mouse.patch",
         "rexglue-sdk-adaptive-prompts.patch",
     ):
+        if head == BAKED_FOLLOWUP_PIN:
+            continue  # Verified above; never reapply the old downstream diff.
         followup_patch = patch_directory / followup_name
         if not followup_patch.is_file():
             fail(f"SDK patch file is missing: {followup_patch}")
@@ -282,9 +328,10 @@ def main():
             # initialized when <dep>/.git exists. Vendored libmspack has no
             # .git, so drop an empty marker directory (invisible to git
             # status) to satisfy that check.
-            marker = source / "thirdparty" / "libmspack" / ".git"
-            if not marker.exists():
-                marker.mkdir(parents=True, exist_ok=True)
+            if head != BAKED_FOLLOWUP_PIN:
+                marker = source / "thirdparty" / "libmspack" / ".git"
+                if not marker.exists():
+                    marker.mkdir(parents=True, exist_ok=True)
 
 
 if __name__ == "__main__":

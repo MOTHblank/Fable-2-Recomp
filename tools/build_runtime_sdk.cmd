@@ -22,6 +22,7 @@ if /i "%CONFIGURATION%"=="Debug" (
   exit /b 1
 )
 if not defined OFFICIAL set "OFFICIAL=%ROOT%\out\tooling\rexglue-sdk-0.10.0\win-amd64"
+git -C "%ROOT%" submodule sync -- thirdparty/rexglue-sdk || exit /b 1
 if not exist "%SOURCE%\CMakeLists.txt" (
   git -C "%ROOT%" submodule update --init thirdparty/rexglue-sdk || exit /b 1
 )

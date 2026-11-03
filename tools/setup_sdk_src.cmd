@@ -7,6 +7,7 @@ set "REPO=%~dp0.."
 set "SOURCE=%REPO%\thirdparty\rexglue-sdk"
 where git >nul 2>nul || (echo Error: Git not found on PATH. 1>&2 & exit /b 1)
 where python >nul 2>nul || (echo Error: Python not found on PATH. 1>&2 & exit /b 1)
+git -C "%REPO%" submodule sync -- thirdparty/rexglue-sdk || exit /b 1
 git -C "%REPO%" submodule update --init thirdparty/rexglue-sdk || exit /b 1
 if not exist "%SOURCE%\CMakeLists.txt" (
     echo Error: pinned SDK source missing at %SOURCE%. 1>&2

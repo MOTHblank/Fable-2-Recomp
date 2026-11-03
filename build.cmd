@@ -93,6 +93,7 @@ if not exist "%SDK%\bin\rexglue.exe" (
     exit /b 1
 )
 if not exist "%SDKSRC%\CMakeLists.txt" (
+    git submodule sync -- thirdparty/rexglue-sdk || exit /b 1
     git submodule update --init thirdparty/rexglue-sdk || exit /b 1
 )
 rem The tracked manifest points directly to out/game/default.xex.
