@@ -217,6 +217,14 @@ apply to either mode. Deadzone compensation and flick buffering apply **only
 to Native stick mode** and are disabled in the launcher while Direct is selected.
 Direct mode uses the observed hero-follow camera layout and may not preserve
 wall collision or special scene framing; switch back to Native if necessary.
+The camera hook now drops accumulated raw input and resets orbit offsets when
+camera objects or input modes change. It leaves the game's native camera output
+untouched on non-hero cameras, invalid input, and rejected view transforms, and
+skips direct modification on the first frame of a newly selected camera. This
+prevents stale mouse movement from carrying into scripted camera transitions;
+it does **not** yet route direct input through native collision constraints or
+switch mouse input automatically to stick emulation. Native stick mode remains
+the recommended choice for cinematic framing and tight spaces.
 No gamepad controller input is changed.
 
 Enable **Log mouse input and camera hook diagnostics** in Advanced → Mouse
