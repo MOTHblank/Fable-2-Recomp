@@ -9,12 +9,16 @@ public static class GraphicsSettings
     [
         "resolution", "window_width", "window_height", "resolution_scale",
         "anisotropic_override", "swap_post_effect", "vsync", "fullscreen", "fullscreen_exclusive",
-        "frame_limit", "guest_vblank_pacing", "fast_guest_vblank_hz"
+        "frame_limit", "guest_vblank_pacing", "fast_guest_vblank_hz", "launcher_renderer"
     ];
+
+    // A launcher-only preference, not a ReXGlue SDK cvar.
+    public static readonly string[] SdkManagedKeys =
+        ManagedKeys.Where(key => key != "launcher_renderer").ToArray();
 
     public static Dictionary<string, string> Create(string resolution, string scale,
         string anisotropic, string antiAliasing, string displayMode, bool vsync,
-        string frameLimit = "0")
+        string frameLimit = "0", string backend = "d3d12")
     {
         (int width, int height) = resolution switch
         {
@@ -26,6 +30,7 @@ public static class GraphicsSettings
             !new[] { "-1", "1", "2", "3", "4", "5" }.Contains(anisotropic) ||
             !new[] { "none", "fxaa", "fxaa_extreme" }.Contains(antiAliasing) ||
             !new[] { "windowed", "borderless", "exclusive" }.Contains(displayMode) ||
+            !new[] { "d3d12", "vulkan" }.Contains(backend) ||
             !GraphicsOptions.FrameLimits.Any(option => option.Value == frameLimit))
             throw new ArgumentException("Unsupported graphics setting");
 
@@ -51,7 +56,8 @@ public static class GraphicsSettings
                 Math.Min(1000, int.Parse(frameLimit, CultureInfo.InvariantCulture) * 6)
                     .ToString(CultureInfo.InvariantCulture),
             ["fullscreen"] = (displayMode != "windowed").ToString().ToLowerInvariant(),
-            ["fullscreen_exclusive"] = (displayMode == "exclusive").ToString().ToLowerInvariant()
+            ["fullscreen_exclusive"] = (displayMode == "exclusive").ToString().ToLowerInvariant(),
+            ["launcher_renderer"] = $"\"{backend}\""
         };
     }
 }

@@ -137,6 +137,16 @@
               </Grid>
 
               <StackPanel Margin="0,18,0,0">
+                <TextBlock Text="RENDERER" Style="{StaticResource FieldLabel}" />
+                <ComboBox x:Name="BackendCombo" SelectionChanged="SettingChanged">
+                  <ComboBoxItem Tag="d3d12">Direct3D 12 — recommended</ComboBoxItem>
+                  <ComboBoxItem Tag="vulkan">Vulkan — experimental</ComboBoxItem>
+                </ComboBox>
+                <TextBlock Text="Vulkan requires a separately built, verified renderer pair. Without it, choose Direct3D 12."
+                           FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
+              </StackPanel>
+
+              <StackPanel Margin="0,18,0,0">
                 <TextBlock Text="ANTI-ALIASING (POST-PROCESS)" Style="{StaticResource FieldLabel}" />
                 <ComboBox x:Name="AntiAliasingCombo" SelectionChanged="SettingChanged">
                   <ComboBoxItem Tag="none">Off — game-controlled AA</ComboBoxItem>

@@ -70,6 +70,7 @@ public partial class MainWindow : Window
         SelectByTag(AnisotropicCombo, "5");
         SelectByTag(AntiAliasingCombo, "none");
         SelectByTag(DisplayModeCombo, "borderless");
+        SelectByTag(BackendCombo, "d3d12");
         if (FrameLimitCombo.Items.Count == 0)
             foreach (var option in Constants.GraphicsOptions.FrameLimits)
                 FrameLimitCombo.Items.Add(new ComboBoxItem { Tag = option.Value, Content = option.Label });
@@ -137,6 +138,7 @@ public partial class MainWindow : Window
             bool fullscreen = ParseBool(GetValue("fullscreen", "true"), true);
             bool exclusive = ParseBool(GetValue("fullscreen_exclusive", "false"), false);
             SelectByTag(DisplayModeCombo, !fullscreen ? "windowed" : exclusive ? "exclusive" : "borderless");
+            SelectByTag(BackendCombo, Unquote(GetValue("launcher_renderer", "d3d12")));
             VsyncCheck.IsChecked = ParseBool(GetValue("vsync", "true"), true);
 
         }
@@ -176,7 +178,8 @@ public partial class MainWindow : Window
         return GraphicsSettings.Create(SelectedTag(ResolutionCombo) ?? "1080p",
             SelectedTag(RenderScaleCombo) ?? "2", SelectedTag(AnisotropicCombo) ?? "5",
             SelectedTag(AntiAliasingCombo) ?? "none", SelectedTag(DisplayModeCombo) ?? "borderless",
-            VsyncCheck.IsChecked == true, SelectedTag(FrameLimitCombo) ?? "0");
+            VsyncCheck.IsChecked == true, SelectedTag(FrameLimitCombo) ?? "0",
+            SelectedTag(BackendCombo) ?? "d3d12");
     }
 
     private bool SaveConfiguration()
@@ -190,9 +193,13 @@ public partial class MainWindow : Window
 
         string path = Path.Combine(_executableDirectory, "fable_2.toml");
         Dictionary<string, string> settings = CollectSettings();
+        // The launcher renderer is not an SDK cvar. Keep it out of fable_2.toml.
+        Dictionary<string, string> sdkSettings = settings
+            .Where(entry => entry.Key != "launcher_renderer")
+            .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
         try
         {
-            LauncherConfigFile.WriteValues(path, settings, GraphicsSettings.ManagedKeys);
+            LauncherConfigFile.WriteValues(path, sdkSettings, GraphicsSettings.SdkManagedKeys);
             LauncherConfigFile.WriteValues(Path.Combine(_executableDirectory,
                 "launcher-settings.toml"), settings, GraphicsSettings.ManagedKeys);
             _values.Clear();
@@ -226,7 +233,28 @@ public partial class MainWindow : Window
                 WorkingDirectory = plan.WorkingDirectory,
                 UseShellExecute = false
             };
-            startInfo.ArgumentList.Add("--game_data_root=" + plan.GameRoot);
+            string renderer = SelectedTag(BackendCombo) ?? "d3d12";
+            if (renderer == "vulkan")
+            {
+                // Keep the fork's independently snapshotted, hash-verified SDK
+                // runtime/plugin pairs rather than swap DLLs from PR #51.
+                string script = Path.Combine(plan.WorkingDirectory, "launch_renderer.ps1");
+                string manifest = Path.Combine(plan.WorkingDirectory,
+                    "renderers", "vulkan", "renderer-pair.json");
+                if (!File.Exists(script) || !File.Exists(manifest))
+                    throw new InvalidOperationException(
+                        "Vulkan renderer is not staged. Build it with tools\\build_sdk_vulkan.cmd " +
+                        "and rebuild Release before selecting Vulkan.");
+                startInfo.FileName = "powershell.exe";
+                foreach (string arg in new[] { "-NoProfile", "-NonInteractive",
+                    "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
+                    "-File", script, "-Backend", "vulkan" })
+                    startInfo.ArgumentList.Add(arg);
+            }
+            else
+            {
+                startInfo.ArgumentList.Add("--game_data_root=" + plan.GameRoot);
+            }
             Process.Start(startInfo);
             StatusText.Text = "Fable II launched.";
             ConfigStateText.Text = "Game running";

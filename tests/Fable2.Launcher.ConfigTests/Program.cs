@@ -48,7 +48,7 @@ try
         Require(graphics["resolution_scale"] == "3", "render scale failed");
         Require(graphics["anisotropic_override"] == "5", "16x filtering enum failed");
         Require(graphics["swap_post_effect"] == $"\"{aa}\"", "AA option failed");
-        LauncherConfigFile.WriteValues(configPath, graphics, GraphicsSettings.ManagedKeys);
+        LauncherConfigFile.WriteValues(configPath, graphics.Where(x => x.Key != "launcher_renderer").ToDictionary(), GraphicsSettings.SdkManagedKeys);
         Require(LauncherConfigFile.ReadValues(configPath)["swap_post_effect"] == $"\"{aa}\"", "AA roundtrip failed");
     }
     var windowed = GraphicsSettings.Create("720p", "1", "-1", "none", "windowed", false);
@@ -65,7 +65,7 @@ try
             Math.Min(1000, int.Parse(cap) * 6).ToString();
         Require(capped["fast_guest_vblank_hz"] == expectedFastRate, "capped guest vblank mapping failed");
         Require(capped["vsync"] == "false", "guest pacing changed host VSync");
-        LauncherConfigFile.WriteValues(configPath, capped, GraphicsSettings.ManagedKeys);
+        LauncherConfigFile.WriteValues(configPath, capped.Where(x => x.Key != "launcher_renderer").ToDictionary(), GraphicsSettings.SdkManagedKeys);
         Require(LauncherConfigFile.ReadValues(configPath)["frame_limit"] == cap, "FPS limit roundtrip failed");
         Require(!capped.ContainsKey("video_mode_refresh_rate"), "FPS cap changed guest refresh mode");
     }
@@ -74,7 +74,10 @@ try
     Require(GraphicsOptions.FrameLimits.Any(option => option.Value == "144"), "144 FPS preset missing");
     Console.WriteLine("30/60/120/144/165/240/unlimited mapping, validation and persistence passed.");
 
-    var preferred = GraphicsSettings.Create("4k", "3", "4", "fxaa", "windowed", false, "60");
+    var preferred = GraphicsSettings.Create("4k", "3", "4", "fxaa", "windowed", false, "60", "vulkan");
+    Require(preferred["launcher_renderer"] == "\"vulkan\"", "renderer preference missing");
+    Require(!GraphicsSettings.SdkManagedKeys.Contains("launcher_renderer"), "launcher preference leaked into SDK keys");
+    RequireThrows(() => GraphicsSettings.Create("1080p", "2", "4", "none", "windowed", true, "60", "invalid"), "invalid renderer accepted");
     string preferencesPath = Path.Combine(testDirectory, "launcher-settings.toml");
     LauncherConfigFile.WriteValues(preferencesPath, preferred, GraphicsSettings.ManagedKeys);
     // Simulate runtime serialization/replacement, then reopen the launcher.
@@ -83,7 +86,7 @@ try
     foreach ((string key, string value) in preferred)
         Require(restored[key] == value, "saved launcher choice was lost: " + key);
     Require(restored["custom_mod"] == "true", "runtime-only option was lost");
-    LauncherConfigFile.WriteValues(configPath, restored, GraphicsSettings.ManagedKeys);
+    LauncherConfigFile.WriteValues(configPath, restored.Where(x => x.Key != "launcher_renderer").ToDictionary(), GraphicsSettings.SdkManagedKeys);
     Require(LauncherConfigFile.ReadValues(configPath)["resolution_scale"] == "3", "launch writeback lost scale");
     File.Delete(preferencesPath);
     Require(LauncherConfigFile.ReadLauncherValues(testDirectory)["window_width"] == "3840", "legacy config import failed");

@@ -74,6 +74,11 @@ try {
         New-Item -ItemType Directory -Path $source -Force | Out-Null
         New-Item -ItemType Junction -Path (Join-Path $session $folder) -Target $source | Out-Null
     }
+    # Share staged material shaders with the isolated runtime session when present.
+    $materials = Join-Path $root "materials"
+    if (Test-Path -LiteralPath $materials -PathType Container) {
+        New-Item -ItemType Junction -Path (Join-Path $session "materials") -Target $materials | Out-Null
+    }
     $gpu = if ($Backend -eq "vulkan") { "xenos-vulkan" } else { "xenos" }
     Write-Host "Fable 2: $Backend renderer, verified private runtime/plugin pair."
     $args = @("--gpu_plugin=$gpu", "--game_data_root=`"$root`"")
@@ -106,7 +111,7 @@ try {
         # Remove the *junctions*, not their shared contents. rmdir without /s
         # on a Windows junction unlinks it safely; only then delete the tree.
         $unremovedJunction = $false
-        foreach ($folder in @("saves", "cache", "logs")) {
+        foreach ($folder in @("saves", "cache", "logs", "materials")) {
             $junction = Join-Path $session $folder
             if (Test-Path -LiteralPath $junction) {
                 & cmd.exe /d /c "rmdir `"$junction`"" 2>$null | Out-Null
