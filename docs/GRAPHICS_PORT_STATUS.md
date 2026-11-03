@@ -1,50 +1,76 @@
-# Graphics PR #51 — integration status
+# Graphics PR #51 — source integration status
 
-Game PR: https://github.com/himdo/Fable-2-Recomp/pull/51
-SDK PR: https://github.com/himdo/rexglue-sdk/pull/4
+Upstream game PR: https://github.com/himdo/Fable-2-Recomp/pull/51
+Upstream SDK graphics PR: https://github.com/himdo/rexglue-sdk/pull/4
+SDK Vulkan present fix: https://github.com/himdo/rexglue-sdk/pull/3
 
-## Integrated on MOTHblank/master
+## Integrated into the MOTHblank repositories
 
-- WPF launcher renderer selector (D3D12 by default, Vulkan experimental).
-  Uses verified renderer pair snapshots and the existing isolated
-  `launch_renderer.ps1`, not the proposed unified SDK DLL path.
-- Renderer choice persisted as `launcher_renderer` solely in
-  `launcher-settings.toml`, avoiding unsupported `gpu_backend` cvars
-  in the current SDK's `fable_2.toml`.
-- Original HLSL material shader sources and includes, three compiled DXBC
-  variants, the `build_material_shaders.py` compiler utility, and
-  `xenos_to_hlsl.py` shader study tool.
-- CMake stages `materials/d3d12` into the game's install directory.
-  Isolated Vulkan renderer sessions can see the same material directory.
-  Neither the SDK submodule nor runtime/plugin hashes were changed.
+- **SDK graphics source:** Ported SDK PR #4's F6 effects overlay, scene-effect
+  render-target integration, D3D12 and Vulkan effect implementations, original
+  shader sources and precompiled shader arrays, and D3D12 material-shader
+  replacement engine into `MOTHblank/rexglue-sdk`.
+- **Newest SDK changes preserved:** Overlapping SDK files were reconciled with
+  the current upstream base plus our pipeline warmup, mouse, present-pacing and
+  adaptive-prompt changes. The Vulkan pre-acquire present-gate fix from SDK PR
+  #3 was already upstream and retained.
+- **Configuration saving:** Recovered individual parseable TOML settings on
+  malformed files, kept unknown/default-valued existing keys, and preserved
+  on-disk values over command-line or environment launch overrides.
+- **F6 input:** The SDK input-activity callback now deactivates game MnK input
+  while the F6 overlay is open, allowing the event-driven mouse driver to
+  release pointer capture for UI interaction.
+- **Default behavior:** The new effect passes and replacement material
+  shaders are off by default. Players may opt in using F6 presets or cvars.
+- **Game-specific shaders:** Original HLSL, includes, compiled DXBC variants,
+  shader-building tools, and shader-analysis tools are tracked and staged.
+  `build.cmd package` includes the compiled material files.
+- **Rendering selection:** The fork continues to use the WPF launcher's
+  renderer selector and *separate*, provenance-checked D3D12 and Vulkan SDK
+  snapshots. Private renderer sessions share the staged materials through a
+  junction. The original PR's `gpu_backend` cvar, unified dual-backend DLL,
+  and SDK build-command replacement are intentionally not imported.
+- **SDK pin:** The game submodule references
+  `MOTHblank/rexglue-sdk`; `tools/prepare_runtime_sdk.py` explicitly
+  verifies the integrated F6, effects, materials and save components and
+  avoids reapplying the historic patches.
 
-## Still required: SDK graphics forward-port
+See [Graphics enhancements](GRAPHICS_ENHANCEMENTS.md) for effects, controls,
+shader sources, and known limitations.
 
-**F6 effects and material replacement are NOT available with the currently
-pinned SDK.** The compiled shaders will be staged but not loaded.
+## Remaining work: Windows build and real rendering verification
 
-The current fork pins `himdo/rexglue-sdk` at
-`92ddff153f98b9bdd385bbf72cf0dca9a7cda4b3`.
-Upstream SDK graphics PR #4 targets an older tree ending at
-`9b4ec5c3ac4d7ec40af81b1fa34a1a7fc578c624`. The pin contains 29
-commits not present on that graphics branch; switching the submodule
-pointer directly would discard important SDK changes.
+This port has been committed and statically checked at the source level, but
+the combined code has **not** been compiled or played on Windows. No assertion
+is made that the F6 overlay, saved settings, shaders, or renderer paths are
+runtime-correct yet. Verification should cover:
 
-To complete this port:
+1. A clean D3D12 source SDK build and game link with the integrated
+   `EffectsDialog` and material shader loader.
+2. First launch with defaults off, followed by enabling individual effects
+   and the High preset in F6, saving, restarting and confirming persistence.
+3. D3D12 material replacements and scene-effect render order (before game
+   bloom/tonemapping, UI remains clear).
+4. Open/close F6 while mouselook is active: cursor release, no delayed mouse
+   movement, game inputs restored on close.
+5. A separately rebuilt Vulkan runtime/plugin pair with matching SDK source
+   provenance, including the present-gate fix; remember the upstream PR
+   documented missing ground rendering and weaker shadow support on Vulkan.
+6. ZIP packaging: both runtime pairs where available, and exactly the
+   authored material DXBC variants with no retail content.
 
-1. Forward-port SDK PR #4's render-target processing, postprocessing
-   effects, material replacement hooks, overlay, and cvar save fixes onto
-   the newer SDK, resolving overlapping changes explicitly.
-2. Preserve input, native mouse/camera integration, runtime patches,
-   function tracing and per-backend SDK snapshot provenance. Update
-   `tools/prepare_runtime_sdk.py` validation for the new verified SDK pin.
-3. Build matching SDK headers/runtime/plugin and the native game for Windows.
-   Keep enhancement effects disabled by default until the result is inspected.
-4. Only then expose F6, replacement-material runtime controls and the
-   graphics settings. Do not expose controls that are inert.
-5. Vulkan is separately experimental. The original PR documents missing
-   ground rendering and broken effect shadows.
+## Other PR #51 components intentionally not copied wholesale
 
-Do not wholesale merge PR #51's `.gitmodules`, renderer build scripts,
-`fable2.cmd` or CMake replacement: that would conflict with the fork's
-verified, independent D3D12/Vulkan runtime pair system.
+- `src/core/gpu_backend.h` and the corresponding `fable2_config.toml`
+  graphics/backend section (fork's launcher already selects isolated
+  renderer pairs through `launch_renderer.ps1`).
+- Replacement `tools/build_runtime_sdk.cmd`, deleted
+  `tools/build_sdk_vulkan.cmd`, and rewritten renderer CMake glue (would
+  discard independently checked runtime provenance).
+- The PR's historical keyboard gamepad F6 capture code: the fork uses the
+  event-driven SDK MnK driver and gates capture at the SDK overlay instead.
+- Legacy PR build/tests commands and game output paths. The fork's canonical
+  install and extraction root remains `out/game`.
+
+Source integration is complete for the F6 renderer and material codepaths;
+successful gameplay validation remains outstanding.
