@@ -26,6 +26,7 @@ BAKED_SDK_PINS = {
     "cc5f03dd0488720a0f277412d7c36b63964d5b18",  # Two-controller menu fix
     "8f89aeee12738818ccf8d10b4273f6aa3016d77f",  # Fable input/renderer integration
     "8a60ee22668e499e674abdbd4c4a6926912d9c9b",  # PR #51 graphics effects and save fixes integrated
+    "633c0bae58127c0080a356d40bc76dc2169538bd",  # Refined config export serialization
 }
 
 # When these exact SDK source improvements are committed to our SDK fork,
@@ -34,6 +35,7 @@ BAKED_SDK_PINS = {
 BAKED_FOLLOWUP_PINS = {
     "8f89aeee12738818ccf8d10b4273f6aa3016d77f",
     "8a60ee22668e499e674abdbd4c4a6926912d9c9b",
+    "633c0bae58127c0080a356d40bc76dc2169538bd",
 }
 BAKED_FOLLOWUP_MARKERS = {
     "src/graphics/d3d12/pipeline_cache.cpp": (
@@ -60,7 +62,7 @@ BAKED_FOLLOWUP_MARKERS = {
 
 # F6/graphics integration in our writable SDK fork (himdo PR #51 / SDK #4).
 # A missing renderer component must fail before a partially updated DLL is built.
-GRAPHICS_SDK_PIN = "8a60ee22668e499e674abdbd4c4a6926912d9c9b"
+GRAPHICS_SDK_PIN = "633c0bae58127c0080a356d40bc76dc2169538bd"
 GRAPHICS_SDK_MARKERS = {
     "src/ui/overlay/effects_overlay.cpp": ("EffectsDialog", "scene_fx_ao"),
     "src/ui/rex_app.cpp": ("bind_effects_menu", "if (effects_overlay_)"),
@@ -240,7 +242,7 @@ def main():
         # Refuse incomplete/locally modified builds instead of bypassing the
         # patch check for every arbitrary revision.
         missing = missing_baked_runtime_features(source)
-        if head in ("cc5f03dd0488720a0f277412d7c36b63964d5b18", "8f89aeee12738818ccf8d10b4273f6aa3016d77f", "8a60ee22668e499e674abdbd4c4a6926912d9c9b"):
+        if head in ("cc5f03dd0488720a0f277412d7c36b63964d5b18", "8f89aeee12738818ccf8d10b4273f6aa3016d77f", "8a60ee22668e499e674abdbd4c4a6926912d9c9b", "633c0bae58127c0080a356d40bc76dc2169538bd"):
             input_path = source / "src/kernel/xam/xam_input.cpp"
             try:
                 input_code = input_path.read_text(encoding="utf-8")
