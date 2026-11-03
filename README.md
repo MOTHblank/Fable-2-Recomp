@@ -75,10 +75,19 @@ pair with `tools/build_sdk_vulkan.cmd` before selecting it.
 
 The original material shader sources, authoring scripts and compiled D3D12
 shader variants from [graphics PR #51](https://github.com/himdo/Fable-2-Recomp/pull/51)
-are included and staged by the build. **The F6 enhancements menu and enhanced
-rendering are not yet operational:** the graphics SDK changes require
-forward-porting onto this fork's newer pinned SDK. See
-[graphics port status](docs/GRAPHICS_PORT_STATUS.md).
+are included and staged by the build. The graphics effects and material
+replacement implementation has also been brought into
+[MOTHblank/rexglue-sdk](https://github.com/MOTHblank/rexglue-sdk). Press **F6**
+in-game to open the Graphics Enhancements menu, enable a preset, and adjust
+screen-space AO/GI, contact shadows, volumetrics, reflections, fog, grading
+and D3D12 material replacements. F6 releases game mouse capture while open.
+
+**All new effects and replacements default to off** until their behavior has
+been validated with this combined SDK/game build. This is source integration;
+a Windows compile and in-game visual verification are still outstanding.
+[Graphics features and settings](docs/GRAPHICS_ENHANCEMENTS.md) are documented,
+and [graphics port status](docs/GRAPHICS_PORT_STATUS.md) records the remaining
+compatibility and verification tasks.
 
 ## Windows launcher
 
@@ -594,7 +603,7 @@ build.cmd package
 This builds the Release game and launcher, then creates a player ZIP, a
 separate symbols ZIP, and `SHA256SUMS` in `out/dist`. The player ZIP includes
 only the game and launcher binaries, matched renderer pairs, project-authored
-Lua scripts, and default configuration. It excludes all extracted disc
+Lua scripts, compiled D3D12 material variants, and default configuration. It excludes all extracted disc
 content (including `default.xex` and `data/dir.manifest`), saves, logs,
 and player-edited settings. End users need to extract their own game files
 through the launcher. Ordinary Release builds apply the post-build PE
