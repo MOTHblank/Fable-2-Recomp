@@ -247,8 +247,9 @@ add_custom_target(fable_2_lua_staging
 )
 add_dependencies(fable_2 fable_2_lua_staging)
 
-# Stage material replacements from graphics PR #51. They remain inert until
-# the optional SDK graphics shader hook is forward-ported to the current pin.
+# Stage compiled D3D12 material replacements from graphics PR #51.
+# The pinned source SDK now contains the material shader loader; replacements
+# remain opt-in until validated on the combined Windows game/runtime build.
 add_custom_target(fable_2_materials_staging
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/materials/d3d12"
