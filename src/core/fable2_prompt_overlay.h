@@ -663,7 +663,8 @@ inline std::string ActionLabel(std::string_view action) {
   else if (action == "DOWN") cvar = "keybind_dpad_down";
   else if (action == "LEFT") cvar = "keybind_dpad_left";
   else if (action == "RIGHT") cvar = "keybind_dpad_right";
-  return cvar ? fable2::buttonprompts::DisplayKey(rex::cvar::GetFlagByName(cvar))
+  return cvar ? fable2::buttonprompts::DisplayKey(
+                    rex::cvar::GetFlagByName(cvar), 20)
               : std::string{};
 }
 
@@ -729,7 +730,7 @@ class PromptOverlayDialog final : public rex::ui::ImGuiDialog {
                                   const std::string& label) {
       std::vector<std::string_view> parts;
       std::string_view remaining = label;
-      while (!remaining.empty() && parts.size() < 3) {
+      while (!remaining.empty() && parts.size() < 4) {
         const size_t plus = remaining.find('+');
         parts.push_back(remaining.substr(0, plus));
         if (plus == std::string_view::npos) break;
