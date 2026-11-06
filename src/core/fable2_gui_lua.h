@@ -686,7 +686,7 @@ local function rewrite_prompt_text(t)
     {"LB", "LB"}, {"RB", "RB"}, {"LT", "LT"}, {"RT", "RT"},
     {"Start", "START"}, {"Back", "BACK"}, {"LS", "LS"}, {"RS", "RS"},
   }
-  for _, verb in ipairs({"Press", "Hold", "Tap"}) do
+  for _, verb in ipairs({"Press", "Hold", "Tap", "Select"}) do
     for i = 1, #tokens do
       local x = tokens[i]
       r = instruction_replace(r, verb, x[1], __labels[x[2]])
