@@ -49,16 +49,17 @@ keyboard_gamepad_map = "LMB:X,RMB:Y,MMB:B,Shift:A,E:A,Q:LT,Tab:RB,R:RT,Z:LB,B:B,
 # Default: true
 mouse_look = true
 
-# Hybrid two-axis raw mouse orbit. No virtual stick turning-speed cap.
-# Direct input is used only for verified ordinary hero-follow frames; when the
-# native frame reports a meaningful camera correction or a special camera is
-# active, mouse motion automatically falls back to native right-stick input.
-# Default: false.
+# Hybrid raw mouse input through the game's native camera pipeline.
+# On verified ordinary hero-follow frames, raw SDL deltas are injected into
+# the local XINPUT_STATE consumed by the native camera controller. Collision,
+# obstruction handling, authored framing, lock-ons, easing and clamps remain
+# game-owned. Special/constrained cameras automatically use the SDK's ordinary
+# virtual right-stick path instead. Default: false.
 mouse_direct_look = false
 
 # Mouse-look sensitivity: guest right-stick units per host mouse pixel.
-# Native mode maps to virtual stick. Direct mode scales raw deltas in radians
-# per pixel (256 = 0.15 degrees per pixel).
+# Both native and direct modes use these units; direct mode skips SDK flick
+# buffering/deadzone compensation and feeds the native camera consumer directly.
 # Range: 1..4096. Default: 256.
 mouse_look_scale = 256
 
