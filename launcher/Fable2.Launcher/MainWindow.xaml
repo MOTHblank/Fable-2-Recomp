@@ -90,12 +90,28 @@
 
                 <StackPanel>
                   <TextBlock Text="OUTPUT RESOLUTION" Style="{StaticResource FieldLabel}" />
-                  <ComboBox x:Name="ResolutionCombo" SelectionChanged="SettingChanged">
+                  <ComboBox x:Name="ResolutionCombo" SelectionChanged="ResolutionChanged">
                     <ComboBoxItem Tag="720p">1280 × 720</ComboBoxItem>
                     <ComboBoxItem Tag="1080p">1920 × 1080</ComboBoxItem>
                     <ComboBoxItem Tag="1440p">2560 × 1440</ComboBoxItem>
                     <ComboBoxItem Tag="4k">3840 × 2160</ComboBoxItem>
+                    <ComboBoxItem Tag="custom">Custom size</ComboBoxItem>
                   </ComboBox>
+                  <Grid Margin="0,7,0,0">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="24" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="CustomWidthBox" Text="1920" IsEnabled="False"
+                             TextChanged="CustomResolutionChanged"
+                             ToolTip="Custom output width in physical pixels" />
+                    <TextBlock Grid.Column="1" Text="×" HorizontalAlignment="Center"
+                               VerticalAlignment="Center" Foreground="#FF8A9992" />
+                    <TextBox x:Name="CustomHeightBox" Grid.Column="2" Text="1080"
+                             IsEnabled="False" TextChanged="CustomResolutionChanged"
+                             ToolTip="Custom output height in physical pixels" />
+                  </Grid>
                 </StackPanel>
 
                 <StackPanel Grid.Column="2">
