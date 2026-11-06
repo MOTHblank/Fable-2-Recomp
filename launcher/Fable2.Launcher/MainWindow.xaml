@@ -341,7 +341,7 @@
                            TextAlignment="Center" VerticalContentAlignment="Center"
                            LostFocus="MouseDeadzoneBoxLostFocus" />
                 </Grid>
-                <TextBlock Text="Native stick mode only: raise compensation if slow mouse motions are ignored."
+                <TextBlock Text="Both modes: raise compensation if slow mouse motions are swallowed by the game&apos;s stick deadzone. It affects only the mouse component, not a physical controller."
                            FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0"
                            TextWrapping="Wrap" />
                 <Grid Margin="0,14,0,0">
