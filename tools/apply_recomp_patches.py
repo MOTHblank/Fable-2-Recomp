@@ -94,7 +94,8 @@ def _patch_direct_mouse_native_camera(files) -> int:
             '#include "mouse_look.h"\n'
             '#include <algorithm>\n'
             '#include <cmath>\n'
-            '#include <rex/cvar.h>\n\n'
+            '#include <rex/cvar.h>\n'
+            '#include <rex/input/mnk/mnk_input_driver.h>\n\n'
             'REXCVAR_DECLARE(bool, mouse_direct_look);\n'
             'REXCVAR_DECLARE(bool, mouse_look);\n'
             'REXCVAR_DECLARE(int32_t, mouse_look_scale);\n'
@@ -120,10 +121,27 @@ def _patch_direct_mouse_native_camera(files) -> int:
 	// input remains additive and every downstream camera rule stays native.
 	if (REXCVAR_GET(mouse_direct_look) && REXCVAR_GET(mouse_look) &&
 	    REX_LOAD_U32(ctx.r10.u32 + 0) != 0) {
-		float mouse_dx = 0.0f;
-		float mouse_dy = 0.0f;
-		fable2::mouselook::take_delta(mouse_dx, mouse_dy);
-		if (std::isfinite(mouse_dx) && std::isfinite(mouse_dy)) {
+		// Camera-affecting native controls must own the mouse route. Standard
+		// XINPUT layout here: buttons +4, LT +6, RX +12, RY +14.
+		constexpr uint16_t kRightThumb = 0x0080;
+		constexpr uint16_t kLeftShoulder = 0x0100;
+		constexpr uint8_t kTriggerThreshold = 30;
+		const uint16_t buttons = REX_LOAD_U16(ctx.r10.u32 + 4);
+		const uint8_t left_trigger = REX_LOAD_U8(ctx.r10.u32 + 6);
+		const bool special_camera_input =
+		    left_trigger >= kTriggerThreshold ||
+		    (buttons & (kRightThumb | kLeftShoulder)) != 0;
+		if (special_camera_input) {
+			// LT = Look-At / Target Lock, LB = first-person, R3 = View Hero.
+			// Switch the SDK immediately so subsequent host motion uses its normal
+			// virtual-stick route; latch the reason for the later camera hook.
+			fable2::mouselook::request_native_fallback();
+			rex::input::mnk::SetDirectMouseEligible(false);
+		} else {
+			float mouse_dx = 0.0f;
+			float mouse_dy = 0.0f;
+			fable2::mouselook::take_delta(mouse_dx, mouse_dy);
+			if (std::isfinite(mouse_dx) && std::isfinite(mouse_dy)) {
 			if (mouse_dx != 0.0f || mouse_dy != 0.0f)
 				fable2::mouselook::note_native_injection();
 			const int32_t scale_x = REXCVAR_GET(mouse_look_scale);
@@ -153,8 +171,9 @@ def _patch_direct_mouse_native_camera(files) -> int:
 				REX_STORE_U16(ctx.r10.u32 + 14,
 				    add_axis(native_ry, mouse_dy, y_scale));
 			}
-		} else {
-			fable2::mouselook::request_reset();
+			} else {
+				fable2::mouselook::request_reset();
+			}
 		}
 	}
 '''
