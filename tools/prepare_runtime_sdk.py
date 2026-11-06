@@ -32,6 +32,7 @@ BAKED_SDK_PINS = {
     "58ac0fff6aed5813a867f27febbcfbb97da7e05e",  # Hybrid direct/native mouse routing and input handoff
     "803467dbaab2f7c0a2885d1ffd249511fffc1c14",  # High-resolution scale limits and guest-space alpha coverage
     "eb0fb0a61eace14b85a7180b0c5ef90d4345959b",  # Extended shadow distance material controls
+    "9540f310ad4f87813cf3f2cf21ef4de44d0bbdab",  # Stable host frame pacing and corrected presenter pacing telemetry
 }
 
 # When these exact SDK source improvements are committed to our SDK fork,
@@ -46,6 +47,7 @@ BAKED_FOLLOWUP_PINS = {
     "58ac0fff6aed5813a867f27febbcfbb97da7e05e",  # Hybrid direct/native mouse routing and input handoff
     "803467dbaab2f7c0a2885d1ffd249511fffc1c14",  # High-resolution scale limits and guest-space alpha coverage
     "eb0fb0a61eace14b85a7180b0c5ef90d4345959b",  # Extended shadow distance material controls
+    "9540f310ad4f87813cf3f2cf21ef4de44d0bbdab",  # Stable host frame pacing and corrected presenter pacing telemetry
 }
 BAKED_FOLLOWUP_MARKERS = {
     "src/graphics/d3d12/pipeline_cache.cpp": (
@@ -80,7 +82,22 @@ GRAPHICS_SDK_PINS = {
     "58ac0fff6aed5813a867f27febbcfbb97da7e05e",  # Hybrid direct/native mouse routing and input handoff
     "803467dbaab2f7c0a2885d1ffd249511fffc1c14",  # High-resolution scale limits and guest-space alpha coverage
     "eb0fb0a61eace14b85a7180b0c5ef90d4345959b",  # Extended shadow distance material controls
+    "9540f310ad4f87813cf3f2cf21ef4de44d0bbdab",  # Stable host frame pacing and corrected presenter pacing telemetry
 }
+NATIVE_PACING_PINS = {
+    "9540f310ad4f87813cf3f2cf21ef4de44d0bbdab",
+}
+NATIVE_PACING_MARKERS = {
+    "include/rex/graphics/frame_limiter.h": (
+        "phase_tolerance",
+        "deadline + phase_tolerance",
+    ),
+    "src/ui/presenter.cpp": (
+        "legacy option name is retained for config compatibility",
+        "guest_vblank_count_.load(std::memory_order_relaxed)",
+    ),
+}
+
 GRAPHICS_SDK_MARKERS = {
     "src/ui/overlay/effects_overlay.cpp": ("EffectsDialog", "scene_fx_ao"),
     "src/ui/rex_app.cpp": ("bind_effects_menu", "if (effects_overlay_)"),
@@ -301,6 +318,22 @@ def main():
             fail("the Fable-specific SDK integrations are incomplete:\n  "
                  + "\n  ".join(missing_followups))
         print("Fable-specific renderer/input fixes are baked into the SDK (verified).")
+
+    if head in NATIVE_PACING_PINS:
+        missing_pacing = []
+        for relative, markers in NATIVE_PACING_MARKERS.items():
+            try:
+                content = (source / relative).read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                missing_pacing.append(f"{relative} (missing or unreadable)")
+                continue
+            for marker in markers:
+                if marker not in content:
+                    missing_pacing.append(f"{relative}: {marker}")
+        if missing_pacing:
+            fail("native frame-pacing SDK integration is incomplete:\n  "
+                 + "\n  ".join(missing_pacing))
+        print("Native host frame pacing is baked into the SDK (verified).")
 
     if head in GRAPHICS_SDK_PINS:
         missing_graphics = []
