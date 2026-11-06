@@ -492,7 +492,10 @@ end
 
 local P = rawget(_G, "__f2_prompt_ui")
 if type(P) ~= "table" then
-  P = { changed = {}, icons = {}, mode = "", sig = "" }
+  P = {
+    changed = {}, icons = {}, overlay_icons = {},
+    mode = "", sig = "", refresh_count = 0, discovered = false
+  }
   rawset(_G, "__f2_prompt_ui", P)
 end
 local wanted_mode = __kbd and "keyboard" or "controller"
@@ -514,6 +517,9 @@ if mode_changed then
   end
   P.changed = {}
   P.icons = {}
+  P.overlay_icons = {}
+  P.refresh_count = 0
+  P.discovered = false
   P.mode = wanted_mode
   P.sig = __sig
 end
@@ -522,6 +528,8 @@ if not __kbd then
 end
 if type(P.changed) ~= "table" then P.changed = {} end
 if type(P.icons) ~= "table" then P.icons = {} end
+if type(P.overlay_icons) ~= "table" then P.overlay_icons = {} end
+P.refresh_count = (tonumber(P.refresh_count) or 0) + 1
 
 local aliases = {
   icon_button_a="A", icon_a="A", abutton="A", material2270="A",
@@ -747,22 +755,24 @@ local function hide_for_overlay(e)
   local target = e
   for _ = 1, 2 do
     if not target then break end
-    if hidden_by_adapter(target) then return true end
+    if hidden_by_adapter(target) then return target end
     local opacity = tonumber(attr(target, "opacity"))
     if opacity and opacity > 0.01 then
-      if remember_set(target, "opacity", 0) then return true end
+      if remember_set(target, "opacity", 0) then return target end
     end
     local active = attr(target, "active")
     if active == true or active == 1 then
-      if remember_set(target, "active", false) then return true end
+      if remember_set(target, "active", false) then return target end
     end
     target = parent(target)
   end
-  return false
+  return nil
 end
 
-local function add_overlay(action, e)
-  if not __overlay then return false end
+local function emit_overlay(action, e, target)
+  if not (__overlay and e and target and hidden_by_adapter(target)) then
+    return false
+  end
   local x, y = world_pos(e)
   if x ~= x or y ~= y or math.abs(x) > 8192 or math.abs(y) > 8192 then
     return false
@@ -770,15 +780,51 @@ local function add_overlay(action, e)
   for i = 1, #overlay_seen do
     local p = overlay_seen[i]
     if p.action == action and math.abs(p.x - x) < 4 and math.abs(p.y - y) < 4 then
-      return false
+      return true
     end
   end
-  if not hide_for_overlay(e) then return false end
   overlay_seen[#overlay_seen + 1] = { action=action, x=x, y=y }
   overlay_out[#overlay_out + 1] =
       string.format("%s,%.3f,%.3f", action, x, y)
   return true
 end
+
+local function add_overlay(action, e)
+  if not __overlay then return false end
+  local tracked = P.overlay_icons[e]
+  if tracked and tracked.action == action and tracked.target and
+     hidden_by_adapter(tracked.target) then
+    return emit_overlay(action, e, tracked.target)
+  end
+
+  P.overlay_icons[e] = nil
+  local target = hide_for_overlay(e)
+  if not target then return false end
+  P.overlay_icons[e] = { action=action, target=target }
+  return emit_overlay(action, e, target)
+end
+
+-- Existing unresolved icons may move every frame (HUD/world prompts), but a
+-- complete scene walk is unnecessary just to follow them. Refresh the stored
+-- element transforms on every lightweight sync. If the game has restored or
+-- destroyed the hidden target, drop it and let the next discovery pass decide
+-- whether it should be adapted again.
+for e, info in pairs(P.overlay_icons) do
+  if type(info) == "table" and info.action and info.target and
+     hidden_by_adapter(info.target) then
+    emit_overlay(info.action, e, info.target)
+  else
+    P.overlay_icons[e] = nil
+  end
+end
+
+-- With host overlay fallback active this function is called around 10 Hz.
+-- Preserve the old discovery/text cadence by doing the expensive tree walk
+-- only on the first pass, after a mode/signature change, and roughly every
+-- eighth refresh. Without the overlay fallback, calls remain slow and every
+-- call is a full pass so dynamic text rewriting is unchanged.
+local full_scan = not P.discovered or not __overlay or
+                  (P.refresh_count % 8) == 0
 
 local seen = 0
 local function walk(e, depth)
@@ -845,7 +891,10 @@ local function walk(e, depth)
   local ch = kids(e)
   for i = 1, #ch do walk(ch[i], depth + 1) end
 end
-walk(scene, 0)
+if full_scan then
+  walk(scene, 0)
+  P.discovered = true
+end
 return "__f2_prompt_overlay|k" .. (__overlay and "1" or "0") ..
        "|" .. table.concat(overlay_out, ";")
 )LUA";
