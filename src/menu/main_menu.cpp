@@ -16,6 +16,8 @@
 
 extern "C" void ConstructRefCounted_8222CF18(PPCContext& ctx, uint8_t* base);
 extern "C" void DestructRefCounted_82214F08(PPCContext& ctx, uint8_t* base);
+extern "C" void Allocate_SizeBucketed_Thunk_8221F3F0(PPCContext& ctx, uint8_t* base);
+extern "C" void Free_SizeBucketed_Thunk_8221BE68(PPCContext& ctx, uint8_t* base);
 extern "C" void ProcessAndProcessAndProcess2440_826CB808(PPCContext& ctx, uint8_t* base);
 
 namespace fable2::menu {
@@ -34,8 +36,6 @@ constexpr uint32_t kTextHandle = 112;
 constexpr uint32_t kNameChars = 0x100;
 constexpr uint32_t kParentChars = 0x120;
 constexpr uint32_t kIconChars = 0x130;
-constexpr uint32_t kTextChars = 0x160;
-constexpr size_t kMaxTextLength = (kFrameSize - kTextChars) / 2 - 1;
 
 // The game's main-menu items all use event type 2, hang off the "Root" item
 // and show an icon.
@@ -52,11 +52,23 @@ void WriteString(uint8_t* base, uint32_t addr, std::string_view text, size_t max
 }
 
 void WriteWideString(uint8_t* base, uint32_t addr, std::u16string_view text) {
-  text = text.substr(0, kMaxTextLength);
   for (size_t i = 0; i < text.size(); ++i) {
-    REX_STORE_U16(addr + i * 2, static_cast<uint16_t>(text[i]));
+    REX_STORE_U16(addr + static_cast<uint32_t>(i * 2),
+                  static_cast<uint16_t>(text[i]));
   }
-  REX_STORE_U16(addr + text.size() * 2, 0);
+  REX_STORE_U16(addr + static_cast<uint32_t>(text.size() * 2), 0);
+}
+
+uint32_t AllocateGuest(PPCContext& ctx, uint8_t* base, uint32_t size) {
+  ctx.r3.u64 = size;
+  Allocate_SizeBucketed_Thunk_8221F3F0(ctx, base);
+  return ctx.r3.u32;
+}
+
+void FreeGuest(PPCContext& ctx, uint8_t* base, uint32_t address) {
+  if (!address) return;
+  ctx.r3.u64 = address;
+  Free_SizeBucketed_Thunk_8221BE68(ctx, base);
 }
 
 void ConstructString(PPCContext& ctx, uint8_t* base, uint32_t slot, uint32_t chars) {
@@ -74,16 +86,31 @@ void DestructString(PPCContext& ctx, uint8_t* base, uint32_t slot) {
 // Mirrors one add-item call in sub_826CA6E0. The label is handed over as the
 // already-localized wide string the game would get from its string table.
 void AddItem(PPCContext& ctx, uint8_t* base, uint32_t menu, const MenuItem& item) {
+  const std::u16string_view label = LabelText(item.label);
+  if (label.size() > (UINT32_MAX / 2u) - 1u) {
+    REXSYS_WARN("[main-menu] label '{}' is too large for guest address space",
+                item.label);
+    return;
+  }
+  const uint32_t text_bytes =
+      static_cast<uint32_t>((label.size() + 1u) * sizeof(char16_t));
+  const uint32_t text_chars = AllocateGuest(ctx, base, text_bytes);
+  if (!text_chars) {
+    REXSYS_WARN("[main-menu] could not allocate {} bytes for label '{}'",
+                text_bytes, item.label);
+    return;
+  }
+  WriteWideString(base, text_chars, label);
+
   const uint32_t caller_sp = ctx.r1.u32;
   const uint32_t sp = caller_sp - kFrameSize;
   REX_STORE_U32(sp, caller_sp);
   REX_STORE_U32(sp + 84, 0);
   WriteString(base, sp + kNameChars, item.id, kParentChars - kNameChars - 1);
   WriteString(base, sp + kParentChars, kRootParent, kIconChars - kParentChars - 1);
-  WriteString(base, sp + kIconChars, kIcon, kTextChars - kIconChars - 1);
-  WriteWideString(base, sp + kTextChars, LabelText(item.label));
+  WriteString(base, sp + kIconChars, kIcon, kFrameSize - kIconChars - 1);
   REX_STORE_U32(sp + kTextSlot, sp + kTextHandle);
-  REX_STORE_U32(sp + kTextHandle, sp + kTextChars);
+  REX_STORE_U32(sp + kTextHandle, text_chars);
   ctx.r1.u64 = sp;
 
   ConstructString(ctx, base, sp + kNameSlot, sp + kNameChars);
@@ -104,6 +131,7 @@ void AddItem(PPCContext& ctx, uint8_t* base, uint32_t menu, const MenuItem& item
   DestructString(ctx, base, sp + kIconSlot);
   DestructString(ctx, base, sp + kNameSlot);
   ctx.r1.u64 = caller_sp;
+  FreeGuest(ctx, base, text_chars);
 }
 
 const MenuItem* FindChosenItem(uint8_t* base, uint32_t event) {
