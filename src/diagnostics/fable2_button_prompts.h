@@ -27,6 +27,19 @@
 #endif
 
 namespace fable2::buttonprompts {
+
+using GuiSyncCallback = void (*)(bool keyboard);
+inline std::atomic<GuiSyncCallback>& GuiSync() {
+  static std::atomic<GuiSyncCallback> callback{nullptr};
+  return callback;
+}
+inline void SetGuiSyncCallback(GuiSyncCallback callback) {
+  GuiSync().store(callback, std::memory_order_release);
+}
+inline void SyncGraphicalPrompts(bool keyboard) {
+  if (auto callback = GuiSync().load(std::memory_order_acquire)) callback(keyboard);
+}
+
 #ifdef _WIN32
 struct Patched {
   uint8_t* address;
@@ -198,6 +211,7 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
   auto next_fast = std::chrono::steady_clock::now();
   auto next_full = next_fast;
   auto next_report = next_fast;
+  auto next_gui_sync = next_fast;
   uint64_t matches = 0, replacements = 0;
   Log("started; scan is native UI source-string replacement, not a texture hook");
   while (!stop.stop_requested()) {
@@ -216,6 +230,9 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
       Log(keyboard ? "keyboard mode" : "controller mode",
           "input=" + active + " A=" + keys[0] +
           " B=" + keys[1] + " X=" + keys[2] + " Y=" + keys[3]);
+      SyncGraphicalPrompts(keyboard);
+      next_gui_sync = std::chrono::steady_clock::now() +
+                      std::chrono::milliseconds(750);
     }
     if (keyboard) {
       // Reused/freed guest strings may no longer belong to this list. Never
@@ -239,6 +256,14 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
       }
     }
     const auto now = std::chrono::steady_clock::now();
+    // Presentations are created and destroyed independently of the source
+    // strings. Re-broadcast periodically so a newly loaded HUD/menu receives
+    // the current prompt mode even when the player has not changed devices.
+    // enqueue_all() coalesces broadcasts by tag and the Lua side is idempotent.
+    if (now >= next_gui_sync) {
+      SyncGraphicalPrompts(keyboard);
+      next_gui_sync = now + std::chrono::milliseconds(750);
+    }
     if (now >= next_report) {
       Log("scan totals", "known_strings=" + std::to_string(matches) +
           " replaced=" + std::to_string(replacements) +
@@ -248,7 +273,8 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
     std::this_thread::sleep_for(std::chrono::milliseconds(15));
   }
   Restore(patches);
-  Log("stopped and restored tracked source strings");
+  SyncGraphicalPrompts(false);
+  Log("stopped and restored tracked source strings and graphical prompts");
 }
 
 inline void OnFrame(uint8_t* arena) {
