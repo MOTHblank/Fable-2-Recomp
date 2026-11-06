@@ -113,12 +113,15 @@ extern "C" void ProcessAndProcessAndProcess1013_822B2D60(
   if (left_trigger >= kTriggerThreshold ||
       (buttons & special_camera_buttons) != 0) {
     // LT = Look-At / Target Lock, LB = first-person, R3 = View Hero.
-    // Switch the SDK immediately so later host motion follows its ordinary
-    // virtual-stick path. The camera hook consumes the latch this frame.
-    fable2::mouselook::request_native_fallback();
+    // Those modes keep the SDK's ordinary virtual-stick mapping while active.
     rex::input::mnk::SetDirectMouseEligible(false);
     return;
   }
+
+  // Direct injection is safe for ordinary gameplay camera states because this
+  // is still only a native right-stick value; collision, authored framing and
+  // camera constraints remain downstream in the game's own controller.
+  rex::input::mnk::SetDirectMouseEligible(true);
 
   float mouse_dx = 0.0f;
   float mouse_dy = 0.0f;
