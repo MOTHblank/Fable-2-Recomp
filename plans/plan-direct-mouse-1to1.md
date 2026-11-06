@@ -7,51 +7,69 @@ simultaneously) just works — same angle, same feel, same native limits.
 ## Current implementation (November 6)
 
 The external orbit described in the historical sections below is **retired from the normal
-Direct path**. `fable2_hook_direct_mouse_look` is classification-only and never writes
-`cam+144/160/176`.
+Direct path**. `fable2_hook_direct_mouse_look` is classification/frame-boundary logic only and
+never writes `cam+144/160/176`.
 
 The active Direct pipeline is now:
 
 1. SDL relative mouse motion enters the SDK raw-motion side channel only while the previous
-   camera frame was classified as an ordinary, unconstrained hero-follow camera.
-2. `tools/apply_recomp_patches.py` patches the generated
-   `ProcessAndProcessAndProcess1253_832BB018` (`0x832BB018`) at its local `XINPUT_STATE`
-   construction (`r1+708`).
-3. Mouse X/Y are added to that local state's native `sThumbRX` / `sThumbRY` fields before the
-   original consumer runs. Existing controller stick input is additive.
-4. The original game then owns the camera result: easing, bounds, collision/obstruction,
-   authored framing, lock-ons and special-camera handling remain downstream.
-5. The `0x822A47F8` hook only classifies the resolved camera. Secondary/scripted cameras or
-   meaningful native pose corrections disable the raw side channel, causing the SDK's ordinary
-   virtual-stick mouse path to resume on the next poll.
-6. Native fallback is also explicit at the verified local `XINPUT_STATE`: LT (Look-At / Target
+   hero-follow frame is eligible for Direct input.
+2. The strong-symbol override
+   `src/core/hotfunc/input/ProcessAndProcessAndProcess1013_822B2D60.cpp` calls the original
+   11-line guest `XamInputGetState` wrapper, then modifies **only guest user 0's** successful
+   final merged `X_INPUT_STATE`.
+3. Mouse X/Y are added to that state's native `sThumbRX` / `sThumbRY`. Physical controller,
+   keyboard, and other merged input remain additive; guest users 1-3 are returned byte-for-byte
+   unchanged.
+4. The game may poll user 0 more than once before camera update, so the wrapper **peeks** the
+   frame's raw displacement rather than consuming it. The first later `CECCameraUpdateFrame`
+   hook drains the displacement; subsequent camera updates in the same frame drain zero.
+5. The original game therefore owns the camera result after input: easing, native bounds,
+   collision/obstruction behavior, authored framing, lock-ons and special-camera handling all
+   remain downstream.
+6. The `0x822A47F8` hook classifies camera state for routing. Persistent route state belongs
+   only to the hero-follow camera; secondary/cinematic camera updates are observational and no
+   longer look like false "camera changes" when two cameras update in one frame.
+7. Native fallback is explicit at the verified user-0 `X_INPUT_STATE`: LT (Look-At / Target
    Lock), LB (first-person), and R3 (View Hero / vanity camera) immediately disable raw routing
    and latch that decision through the later camera hook.
-7. Route selection has hysteresis: leave Direct when native pose correction exceeds 0.50; while
-   native fallback is active require correction below 0.20 for three consecutive ordinary
-   hero-follow frames before re-entering Direct. SDK and raw accumulators are cleared at each
-   handoff, so no mouse displacement can be replayed as a snap.
+8. Route selection has hysteresis: leave Direct when native pose correction exceeds 0.50; while
+   fallback is active require correction below 0.20 for three consecutive clear hero-follow
+   frames before re-entering Direct. SDK/raw accumulators are invalidated at route handoffs so
+   no old displacement can reappear as a snap.
 
-The old `LookStickProcess_83045778` HotFunc is **not an XINPUT handler**. Inspection of its own
-code proves `*(handler+24)+10` is reused as an input-tree entry count, `+12` contributes a
-table offset, and `handler+56` is later used as a result-table byte offset. Its older manifest
-comments are misleading; the checked-in override and generator comments now explicitly keep it
-behavior-identical. The stale `RightStickLookProcess_832BB018` generator alias was also removed
-because the manifest's actual function name is
-`ProcessAndProcessAndProcess1253_832BB018`; the small generated-code patch is preferable to
-checking in a 4,700+ line strong override.
+### Why `0x832BB018` is no longer the injection site
+
+Runtime work upstream remains valuable evidence: `0x832BB018` reads the local right-stick state
+and its RY path was confirmed to feed the camera. But the function is a 4,766-line dispatcher and
+runs multiple times per frame. Patching its generated local `XINPUT_STATE` made ownership
+ambiguous (which pass/user should consume the raw delta), tied Direct mode to generated partition
+text, and risked applying the mouse to another connected guest user.
+
+That generated-code patch has been removed. `tools/apply_recomp_patches.py` is generic again.
+The guest `XamInputGetState` boundary is superior because the user index is explicit and the
+state is already the final OR-merged pad state the game requested.
+
+The old `LookStickProcess_83045778` HotFunc is also **not an XINPUT handler**. Inspection of its
+own code proves `*(handler+24)+10` is reused as an input-tree entry count, `+12` contributes a
+table offset, and `handler+56` is later used as a result-table byte offset. Its checked-in
+override remains behavior-identical and its generator comments now warn against using it for
+mouse injection.
 
 ### Current limits
 
-The Direct path is now native-camera-safe but it still enters through signed 16-bit
-`sThumbRX/sThumbRY`, so a sufficiently large mouse delta can saturate at the same instantaneous
-axis limit as a stick. This is intentionally preferable to inventing a parallel camera pose.
-A genuinely uncapped mouse path would require a verified post-deadzone / pre-camera angular
-control stage; none has been identified safely yet. RX is injected alongside RY because the
-original game exposes the right stick as camera control, but the earlier RE logs only
-specifically confirmed the RY consumer, so horizontal parity remains a runtime-verification item.
+Direct mode still enters the native pipeline as signed 16-bit `sThumbRX/sThumbRY`, so a
+sufficiently large mouse delta can saturate at the same instantaneous axis limit as a real stick.
+This is intentionally preferable to inventing a parallel camera pose. A genuinely uncapped mouse
+path requires a verified **post-deadzone / pre-camera angular or normalized input stage**.
+
+The next RE target is therefore no longer "find a safe place to inject a pad": that is solved.
+It is specifically to trace user-0 right-stick RX/RY from the wrapper into the first normalized
+camera-control value after deadzone/clamping, then add raw mouse displacement there while leaving
+physical stick input additive.
 
 Everything below this section is retained as reverse-engineering history unless explicitly
+marked current.
 marked current.
 ## Why the current (re-implemented) orbit feels off
 
