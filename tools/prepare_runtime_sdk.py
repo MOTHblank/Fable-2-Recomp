@@ -37,6 +37,7 @@ BAKED_SDK_PINS = {
     "3a670a16f583b816f4dafcd765eb9d9f1dbab714",  # Debounced physical mouse ownership for adaptive prompts
     "545b63094bf0e7011c35f2a82bebfb696c3f9d2a",  # Mouse-wheel ownership for adaptive prompts
     "1f2af4a15e8fe8f0a764fdb5fbe148b55c50815a",  # Reset prompt history on device removal/reconnect
+    "b7bc6547efe1e14174d58ba2df0bbceda5036cd3",  # Ignore transition-only mouse motion for prompt ownership
 }
 
 # When these exact SDK source improvements are committed to our SDK fork,
@@ -56,6 +57,7 @@ BAKED_FOLLOWUP_PINS = {
     "3a670a16f583b816f4dafcd765eb9d9f1dbab714",  # Debounced physical mouse ownership for adaptive prompts
     "545b63094bf0e7011c35f2a82bebfb696c3f9d2a",  # Mouse-wheel ownership for adaptive prompts
     "1f2af4a15e8fe8f0a764fdb5fbe148b55c50815a",  # Reset prompt history on device removal/reconnect
+    "b7bc6547efe1e14174d58ba2df0bbceda5036cd3",  # Ignore transition-only mouse motion for prompt ownership
 }
 BAKED_FOLLOWUP_MARKERS = {
     "src/graphics/d3d12/pipeline_cache.cpp": (
@@ -73,12 +75,14 @@ BAKED_FOLLOWUP_MARKERS = {
         "mouse_motion_callback.store(callback",
         "MarkKeyboardPromptDevice",
         "prompt_mouse_accum_x",
+        "prompt_mouse_baseline_pending_",
         "OnMouseWheel(rex::ui::MouseEvent& e)",
     ),
     "src/ui/keybinds.cpp": ("kXButton1",),
     "include/rex/input/mnk/mnk_input_driver.h": (
         "using MouseMotionCallback",
         "void OnMouseWheel(rex::ui::MouseEvent& e) override",
+        "prompt_mouse_baseline_pending_",
     ),
     "include/rex/input/input_system.h": ("prompt_previous_states_",),
     "src/input/input_system.cpp": (
@@ -102,6 +106,7 @@ GRAPHICS_SDK_PINS = {
     "3a670a16f583b816f4dafcd765eb9d9f1dbab714",  # Debounced physical mouse ownership for adaptive prompts
     "545b63094bf0e7011c35f2a82bebfb696c3f9d2a",  # Mouse-wheel ownership for adaptive prompts
     "1f2af4a15e8fe8f0a764fdb5fbe148b55c50815a",  # Reset prompt history on device removal/reconnect
+    "b7bc6547efe1e14174d58ba2df0bbceda5036cd3",  # Ignore transition-only mouse motion for prompt ownership
 }
 NATIVE_PACING_PINS = {
     "9540f310ad4f87813cf3f2cf21ef4de44d0bbdab",
@@ -109,6 +114,7 @@ NATIVE_PACING_PINS = {
     "3a670a16f583b816f4dafcd765eb9d9f1dbab714",
     "545b63094bf0e7011c35f2a82bebfb696c3f9d2a",
     "1f2af4a15e8fe8f0a764fdb5fbe148b55c50815a",
+    "b7bc6547efe1e14174d58ba2df0bbceda5036cd3",
 }
 NATIVE_PACING_MARKERS = {
     "include/rex/graphics/frame_limiter.h": (
@@ -126,6 +132,7 @@ NATIVE_IO_PINS = {
     "3a670a16f583b816f4dafcd765eb9d9f1dbab714",
     "545b63094bf0e7011c35f2a82bebfb696c3f9d2a",
     "1f2af4a15e8fe8f0a764fdb5fbe148b55c50815a",
+    "b7bc6547efe1e14174d58ba2df0bbceda5036cd3",
 }
 NATIVE_IO_MARKERS = {
     "src/filesystem/devices/host_path_file.cpp": (
