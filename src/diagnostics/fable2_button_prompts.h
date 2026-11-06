@@ -160,9 +160,11 @@ inline size_t KnownTagCount(std::u16string_view text) {
 // strings containing known inline tags. The title prompt and main menu strings
 // were observed in 0x40000000..0x44000000. No asset or code pages are touched.
 inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
-                 const KeyLabels& labels, std::vector<Patched>& patches,
+                 const ActionLabels& actions, std::vector<Patched>& patches,
                  uint64_t& matches, uint64_t& replacements) {
   constexpr size_t kMaxChars = 160;
+  const KeyLabels labels{
+      actions[0], actions[1], actions[2], actions[3]};
   const uintptr_t base = reinterpret_cast<uintptr_t>(arena);
   for (uintptr_t offset = kStart; offset < kEnd;) {
     MEMORY_BASIC_INFORMATION m{};
@@ -183,20 +185,28 @@ inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
     uint8_t* data = arena + offset;
     const size_t length = static_cast<size_t>(next - offset);
     for (size_t i = 0; i + 16 < length; i += 2) {
-      if (data[i] != 0 || data[i + 1] != '<' ||
-          !HasKnownTag(data + i, std::min(size_t(14), length - i))) continue;
+      if (data[i] != 0) continue;
+      const bool tag_candidate =
+          data[i + 1] == '<' &&
+          HasKnownTag(data + i, std::min(size_t(14), length - i));
+      const bool instruction_candidate =
+          data[i + 1] == 'P' || data[i + 1] == 'H' || data[i + 1] == 'T';
+      if (!tag_candidate && !instruction_candidate) continue;
 
       size_t start = i;
       while (start >= 2 && i - start < kMaxChars * 2 &&
              TextUnit(Be16(data + start - 2))) start -= 2;
-      // Only edit a bounded string with a known start. In the title screen
-      // the source begins with "Press "; elsewhere require a NUL boundary.
-      const bool title = i >= start + 12 &&
+      // Recover the whole bounded source first. A known NUL boundary is
+      // required for ordinary strings. The title allocation historically
+      // appears without one in some heap layouts, so a leading "Press " is
+      // provisionally allowed and validated as title markup below.
+      const bool starts_press =
           Be16(data + start) == 'P' && Be16(data + start + 2) == 'r' &&
           Be16(data + start + 4) == 'e' && Be16(data + start + 6) == 's' &&
           Be16(data + start + 8) == 's' && Be16(data + start + 10) == ' ';
-      if (i - start >= kMaxChars * 2 ||
-          (!title && (start < 2 || Be16(data + start - 2) != 0))) continue;
+      if (i - start >= kMaxChars * 2) continue;
+      const bool nul_boundary = start >= 2 && Be16(data + start - 2) == 0;
+      if (!starts_press && !nul_boundary) continue;
       size_t end = start;
       std::u16string text;
       for (; end + 1 < length && text.size() < kMaxChars; end += 2) {
@@ -205,8 +215,18 @@ inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
         if (!TextUnit(c)) break;
         text.push_back(static_cast<char16_t>(c));
       }
-      if (end + 1 >= length || Be16(data + end) != 0 ||
-          end <= i || !HasKnownTag(data + start, end - start)) continue;
+      if (end + 1 >= length || Be16(data + end) != 0 || end <= i) continue;
+      const bool has_tag = HasKnownTag(data + start, end - start);
+      const bool title = starts_press && has_tag;
+      if (!title && !nul_boundary) continue;
+
+      const auto tag_rewritten = Rewrite(text, labels);
+      const auto rewritten = RewriteFixedInstructions(tag_rewritten, actions);
+      if (rewritten == text) {
+        i = end;
+        continue;
+      }
+
       ++matches;
       if (title) {
         const size_t tag_count = KnownTagCount(text);
@@ -221,8 +241,10 @@ inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
               std::memory_order_release);
         }
       }
-      const auto rewritten = Rewrite(text, labels);
-      if (rewritten == text || rewritten.size() > text.size()) continue;
+      if (rewritten.size() > text.size()) {
+        i = end;
+        continue;
+      }
       uint8_t* target = data + start;
       const size_t bytes = (text.size() + 1) * 2;
       if (!Writable(target, bytes)) continue;
@@ -245,11 +267,29 @@ inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
   }
 }
 
-inline KeyLabels CurrentKeys() {
-  return {DisplayKey(rex::cvar::GetFlagByName("keybind_a")),
-          DisplayKey(rex::cvar::GetFlagByName("keybind_b")),
-          DisplayKey(rex::cvar::GetFlagByName("keybind_x")),
-          DisplayKey(rex::cvar::GetFlagByName("keybind_y"))};
+inline ActionLabels CurrentActions() {
+  return {
+      DisplayKey(rex::cvar::GetFlagByName("keybind_a")),
+      DisplayKey(rex::cvar::GetFlagByName("keybind_b")),
+      DisplayKey(rex::cvar::GetFlagByName("keybind_x")),
+      DisplayKey(rex::cvar::GetFlagByName("keybind_y")),
+      DisplayKey(rex::cvar::GetFlagByName("keybind_left_shoulder")),
+      DisplayKey(rex::cvar::GetFlagByName("keybind_right_shoulder")),
+      DisplayKey(rex::cvar::GetFlagByName("keybind_left_trigger")),
+      DisplayKey(rex::cvar::GetFlagByName("keybind_right_trigger")),
+      DisplayKey(rex::cvar::GetFlagByName("keybind_start")),
+      DisplayKey(rex::cvar::GetFlagByName("keybind_back")),
+      DisplayKey(rex::cvar::GetFlagByName("keybind_lstick_press")),
+      DisplayKey(rex::cvar::GetFlagByName("keybind_rstick_press")),
+      DisplayKey(rex::cvar::GetFlagByName("keybind_dpad_up")),
+      DisplayKey(rex::cvar::GetFlagByName("keybind_dpad_down")),
+      DisplayKey(rex::cvar::GetFlagByName("keybind_dpad_left")),
+      DisplayKey(rex::cvar::GetFlagByName("keybind_dpad_right")),
+  };
+}
+
+inline KeyLabels FaceKeys(const ActionLabels& actions) {
+  return {actions[0], actions[1], actions[2], actions[3]};
 }
 
 // Diagnostic log: distinguishes "source replaced" from "visible UI relaid
@@ -278,7 +318,7 @@ inline std::mutex& WorkerMutex() {
 }
 inline void Loop(std::stop_token stop, uint8_t* arena) {
   std::vector<Patched> patches;
-  KeyLabels previous_keys{};
+  ActionLabels previous_actions{};
   bool previous_keyboard = false;
   auto next_fast = std::chrono::steady_clock::now();
   auto next_full = next_fast;
@@ -293,10 +333,11 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
     // conservative auto fallback instead of silently hiding the feature.
     const bool keyboard = mode == "keyboard" ||
         (mode != "controller" && active != "false");
-    const auto keys = keyboard ? CurrentKeys() : KeyLabels{};
-    if (keyboard != previous_keyboard || keys != previous_keys) {
+    const auto actions = keyboard ? CurrentActions() : ActionLabels{};
+    const auto keys = FaceKeys(actions);
+    if (keyboard != previous_keyboard || actions != previous_actions) {
       Restore(patches);
-      previous_keys = keys;
+      previous_actions = actions;
       previous_keyboard = keyboard;
       next_fast = next_full = std::chrono::steady_clock::now();
       Log(keyboard ? "keyboard mode" : "controller mode",
@@ -316,14 +357,14 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
       // Fast path for the documented title-prompt allocation neighborhood.
       // At 1 MiB per 40 ms this is bounded and runs only off the render thread.
       if (now >= next_fast) {
-        Scan(arena, 0x42600000u, 0x42700000u, keys, patches,
+        Scan(arena, 0x42600000u, 0x42700000u, actions, patches,
              matches, replacements);
         next_fast = now + std::chrono::milliseconds(40);
       }
       // Other front-end / localized strings are discovered more slowly; this
       // includes menu text and varied translations.
       if (now >= next_full) {
-        Scan(arena, 0x40000000u, 0x44000000u, keys, patches,
+        Scan(arena, 0x40000000u, 0x44000000u, actions, patches,
              matches, replacements);
         next_full = now + std::chrono::seconds(2);
       }
