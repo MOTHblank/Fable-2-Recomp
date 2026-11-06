@@ -68,12 +68,87 @@ inline std::atomic<int64_t>& LegacyTitleLastDrawNs() {
   static std::atomic<int64_t> value{0};
   return value;
 }
+inline std::atomic<int64_t>& LegacyTitleLastElementsNs() {
+  static std::atomic<int64_t> value{0};
+  return value;
+}
+inline std::atomic<uint32_t>& LegacyTitleBaselineElements() {
+  static std::atomic<uint32_t> value{0};
+  return value;
+}
+inline std::atomic<uint32_t>& LegacyTitleLatestElements() {
+  static std::atomic<uint32_t> value{0};
+  return value;
+}
+inline std::atomic<bool>& LegacyTitleKeyboardLayout() {
+  static std::atomic<bool> value{false};
+  return value;
+}
 
-// Called from the verified UITextPrompt per-element render path. A short
-// lifetime follows the game's own visibility/blink without keeping guest
-// pointers on the host render thread.
-inline void TouchLegacyTitleDraw() {
-  LegacyTitleLastDrawNs().store(ClockNanoseconds(), std::memory_order_release);
+inline thread_local uint32_t g_legacy_title_frame_elements = 0;
+inline thread_local bool g_legacy_title_frame_visible = false;
+
+inline void BeginLegacyTitleFrame() {
+  g_legacy_title_frame_elements = 0;
+  g_legacy_title_frame_visible = false;
+}
+
+inline void NoteLegacyTitleElement(bool visible) {
+  ++g_legacy_title_frame_elements;
+  g_legacy_title_frame_visible = g_legacy_title_frame_visible || visible;
+}
+
+inline void EndLegacyTitleFrame() {
+  const int64_t now = ClockNanoseconds();
+  const uint32_t count = g_legacy_title_frame_elements;
+  if (count == 0) {
+    constexpr int64_t kResetNs =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::seconds(2))
+            .count();
+    const int64_t last =
+        LegacyTitleLastElementsNs().load(std::memory_order_acquire);
+    if (last != 0 && now - last > kResetNs) {
+      LegacyTitleBaselineElements().store(0, std::memory_order_release);
+      LegacyTitleLatestElements().store(0, std::memory_order_release);
+      LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
+    }
+    return;
+  }
+
+  LegacyTitleLastElementsNs().store(now, std::memory_order_release);
+  LegacyTitleLatestElements().store(count, std::memory_order_release);
+
+  uint32_t baseline =
+      LegacyTitleBaselineElements().load(std::memory_order_acquire);
+  const bool source_rewritten =
+      fable2::buttonprompts::TitleSourceRewriteActive();
+  if (baseline == 0) {
+    // If the source was already rewritten before the first rendered frame,
+    // this first layout is the best baseline we have and is assumed current.
+    LegacyTitleBaselineElements().store(count, std::memory_order_release);
+    LegacyTitleKeyboardLayout().store(source_rewritten,
+                                      std::memory_order_release);
+  } else if (!source_rewritten) {
+    // Controller mode restores the source. Keep the original-layout baseline
+    // conservative so a later keyboard switch cannot inherit a stale success.
+    if (count < baseline) {
+      LegacyTitleBaselineElements().store(count, std::memory_order_release);
+    }
+    LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
+  } else {
+    // <a_img> is one laid-out inline sprite. The same seven UTF-16 units become
+    // seven ordinary glyphs after rewriting, so a successful relayout adds six
+    // elements. Allow a little slack for presentation bookkeeping while still
+    // requiring a clear structural change rather than scanner timing.
+    if (count >= baseline + 4) {
+      LegacyTitleKeyboardLayout().store(true, std::memory_order_release);
+    }
+  }
+
+  if (g_legacy_title_frame_visible) {
+    LegacyTitleLastDrawNs().store(now, std::memory_order_release);
+  }
 }
 
 inline bool LegacyTitleRecentlyDrawn() {
@@ -84,6 +159,10 @@ inline bool LegacyTitleRecentlyDrawn() {
   const int64_t last =
       LegacyTitleLastDrawNs().load(std::memory_order_acquire);
   return last != 0 && ClockNanoseconds() - last <= kAliveNs;
+}
+
+inline bool LegacyTitleUsesKeyboardLayout() {
+  return LegacyTitleKeyboardLayout().load(std::memory_order_acquire);
 }
 
 inline bool ParseFloat(std::string_view text, float& out) {
@@ -141,6 +220,10 @@ inline void Clear() {
     States().clear();
   }
   LegacyTitleLastDrawNs().store(0, std::memory_order_release);
+  LegacyTitleLastElementsNs().store(0, std::memory_order_release);
+  LegacyTitleBaselineElements().store(0, std::memory_order_release);
+  LegacyTitleLatestElements().store(0, std::memory_order_release);
+  LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
 }
 
 inline std::vector<Entry> Snapshot() {
@@ -216,7 +299,7 @@ class PromptOverlayDialog final : public rex::ui::ImGuiDialog {
     const bool legacy_fallback =
         REXCVAR_GET(ui_prompt_legacy_fallback) &&
         LegacyTitleRecentlyDrawn() &&
-        !fable2::buttonprompts::TitleSourceRewriteActive();
+        !LegacyTitleUsesKeyboardLayout();
 
     const std::vector<Entry> entries =
         gameface_fallback ? Snapshot() : std::vector<Entry>{};
