@@ -5,7 +5,8 @@
 #include <array>
 #include <cctype>
 #include <string>
-#include <string_view>\n#include <utility>
+#include <string_view>
+#include <utility>
 
 namespace fable2::buttonprompts {
 
