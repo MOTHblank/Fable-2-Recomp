@@ -237,7 +237,7 @@ camera path, preserving its camera limits. The following cvars control it:
 | Argument | Effect |
 |---|---|
 | `--mouse_look <bool>` | Enable/disable mouse look (default `true`) |
-| `--mouse_direct_look <bool>` | Use experimental raw-delta yaw/pitch gameplay camera (default `false`); no virtual stick turn-speed ceiling, but can bypass native collision and authored camera framing. |
+| `--mouse_direct_look <bool>` | Use hybrid raw-delta yaw/pitch for ordinary hero-follow frames (default `false`); constrained/special camera states automatically fall back to native stick input. |
 | `--mouse_look_scale <n>` | Horizontal sensitivity (default `256`) |
 | `--mouse_look_scale_y <n>` | Vertical sensitivity (default `256`) |
 | `--mouse_invert_y <bool>` | Invert vertical movement (default `false`) |
