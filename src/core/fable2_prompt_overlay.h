@@ -123,27 +123,37 @@ inline void EndLegacyTitleFrame() {
       LegacyTitleBaselineElements().load(std::memory_order_acquire);
   const bool source_rewritten =
       fable2::buttonprompts::TitleSourceRewriteActive();
-  if (baseline == 0) {
-    // If the source was already rewritten before the first rendered frame,
-    // this first layout is the best baseline we have and is assumed current.
+  const uint32_t expected_baked =
+      fable2::buttonprompts::TitleExpectedBakedElementCount();
+  const uint32_t expected_keyboard =
+      fable2::buttonprompts::TitleExpectedKeyboardElementCount();
+
+  // Prefer exact expectations derived from the localized source string. This
+  // handles English and every supported translation without hardcoded 16/22
+  // counts, and distinguishes a late scanner hit from a layout that actually
+  // consumed the rewritten keycap text.
+  if (expected_baked != 0 && expected_keyboard > expected_baked) {
+    if (count + 1 >= expected_keyboard) {
+      LegacyTitleKeyboardLayout().store(true, std::memory_order_release);
+    } else if (count <= expected_baked + 1) {
+      LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
+    }
+    LegacyTitleBaselineElements().store(expected_baked,
+                                        std::memory_order_release);
+  } else if (baseline == 0) {
+    // The scanner has not identified the localized source yet. Preserve the
+    // first observed structure as a fallback baseline.
     LegacyTitleBaselineElements().store(count, std::memory_order_release);
-    LegacyTitleKeyboardLayout().store(source_rewritten,
-                                      std::memory_order_release);
+    LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
   } else if (!source_rewritten) {
-    // Controller mode restores the source. Keep the original-layout baseline
-    // conservative so a later keyboard switch cannot inherit a stale success.
     if (count < baseline) {
       LegacyTitleBaselineElements().store(count, std::memory_order_release);
     }
     LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
-  } else {
-    // <a_img> is one laid-out inline sprite. The same seven UTF-16 units become
-    // seven ordinary glyphs after rewriting, so a successful relayout adds six
-    // elements. Allow a little slack for presentation bookkeeping while still
-    // requiring a clear structural change rather than scanner timing.
-    if (count >= baseline + 4) {
-      LegacyTitleKeyboardLayout().store(true, std::memory_order_release);
-    }
+  } else if (count >= baseline + 4) {
+    // Unknown localization/source: a seven-unit image tag becoming ordinary
+    // glyphs still creates a clear multi-element increase.
+    LegacyTitleKeyboardLayout().store(true, std::memory_order_release);
   }
 
   if (g_legacy_title_frame_visible) {
