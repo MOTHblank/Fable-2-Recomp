@@ -702,6 +702,10 @@ local function world_pos(e)
     local py = tonumber(attr(cur, "position.y")) or 0
     local sx = tonumber(attr(cur, "scale.x")) or 1
     local sy = tonumber(attr(cur, "scale.y")) or 1
+    -- Corrupt/unusual material attributes must not explode the parent-chain
+    -- transform. Ordinary GameFace node scales are small multipliers.
+    if math.abs(sx) > 16 then sx = 1 end
+    if math.abs(sy) > 16 then sy = 1 end
     x = px + x * sx
     y = py + y * sy
     cur = parent(cur)
@@ -709,10 +713,23 @@ local function world_pos(e)
   return x, y
 end
 
+local function hidden_by_adapter(target)
+  for i = 1, #P.changed do
+    local x = P.changed[i]
+    if x.e == target then
+      local current = attr(target, x.a)
+      if x.a == "opacity" and x.applied == 0 and current == 0 then return true end
+      if x.a == "active" and x.applied == false and current == false then return true end
+    end
+  end
+  return false
+end
+
 local function hide_for_overlay(e)
   local target = e
   for _ = 1, 2 do
     if not target then break end
+    if hidden_by_adapter(target) then return true end
     local opacity = tonumber(attr(target, "opacity"))
     if opacity and opacity > 0.01 then
       if remember_set(target, "opacity", 0) then return true end
