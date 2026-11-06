@@ -23,6 +23,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include <rex/input/input.h>
@@ -46,26 +47,36 @@ using rex::input::X_INPUT_CAPS_FFB_SUPPORTED;
 
 class GamepadDriver final : public rex::input::InputDriver {
  public:
+  // Keep synthetic sources distinct when more than one driver is registered.
+  static constexpr DeviceId kDefaultDeviceId{1ull << 61};
+  static constexpr DeviceId kConsoleDeviceId{1ull << 62};
+
   // InputDriver's constructor is protected, so expose a public one.
   GamepadDriver(rex::ui::Window* window, size_t window_z_order,
-                InputStateStore* state, std::atomic<bool>* enabled)
+                InputStateStore* state, std::atomic<bool>* enabled,
+                DeviceId device_id = kDefaultDeviceId,
+                std::string name = "Remote (AI) gamepad",
+                std::string guid = "fable2-remote-gamepad")
       : rex::input::InputDriver(window, window_z_order),
         state_(state),
-        enabled_(enabled) {}
+        enabled_(enabled),
+        device_id_(device_id),
+        name_(name),
+        guid_(guid) {}
 
   X_STATUS Setup() override { return X_STATUS_SUCCESS; }
 
   void EnumerateDevices(std::vector<DeviceInfo>& out) override {
     DeviceInfo info;
-    info.id = kDeviceId;
-    info.name = "Remote (AI) gamepad";
-    info.guid = "fable2-remote-gamepad";
+    info.id = device_id_;
+    info.name = name_;
+    info.guid = guid_;
     info.synthetic = true;  // routed to guest user 0 by the default assignment
     out.push_back(info);
   }
 
   X_RESULT GetDeviceState(DeviceId id, X_INPUT_STATE* out_state) override {
-    if (id != kDeviceId) return X_ERROR_DEVICE_NOT_CONNECTED;
+    if (id != device_id_) return X_ERROR_DEVICE_NOT_CONNECTED;
 
     InputSnapshot s;
     if (enabled_ && enabled_->load(std::memory_order_relaxed))
@@ -94,7 +105,7 @@ class GamepadDriver final : public rex::input::InputDriver {
   X_RESULT GetDeviceCapabilities(DeviceId id, uint32_t flags,
                                  X_INPUT_CAPABILITIES* out_caps) override {
     (void)flags;
-    if (id != kDeviceId) return X_ERROR_DEVICE_NOT_CONNECTED;
+    if (id != device_id_) return X_ERROR_DEVICE_NOT_CONNECTED;
     *out_caps = X_INPUT_CAPABILITIES{};
     out_caps->type = XINPUT_DEVTYPE_GAMEPAD;
     out_caps->sub_type = 0x05;  // XINPUT_SUBTYPE_GAMEPAD
@@ -104,14 +115,14 @@ class GamepadDriver final : public rex::input::InputDriver {
 
   X_RESULT SetDeviceVibration(DeviceId id, X_INPUT_VIBRATION* vibration) override {
     (void)vibration;
-    return id == kDeviceId ? X_ERROR_SUCCESS : X_ERROR_DEVICE_NOT_CONNECTED;
+    return id == device_id_ ? X_ERROR_SUCCESS : X_ERROR_DEVICE_NOT_CONNECTED;
   }
 
   X_RESULT GetDeviceKeystroke(DeviceId id, uint32_t flags,
                               X_INPUT_KEYSTROKE* out_keystroke) override {
     (void)flags;
     (void)out_keystroke;
-    return X_ERROR_EMPTY;  // never has queued keystrokes
+    return id == device_id_ ? X_ERROR_EMPTY : X_ERROR_DEVICE_NOT_CONNECTED;
   }
 
  private:
@@ -122,14 +133,11 @@ class GamepadDriver final : public rex::input::InputDriver {
     return static_cast<int16_t>(v);
   }
 
-  // Synthetic device id. MUST NOT collide with the SDL driver's sequential
-  // ids (they start at 1) or the keyboard driver's 1<<60 (see
-  // src/input/keyboard_gamepad.h): InputSystem::DriverForDevice() resolves an id by
-  // first match.
-  static constexpr DeviceId kDeviceId{1ull << 61};
-
   InputStateStore* state_;
   std::atomic<bool>* enabled_;
+  DeviceId device_id_;
+  std::string name_;
+  std::string guid_;
   uint32_t packet_number_ = 0;
   InputSnapshot prev_{};
   bool have_prev_ = false;
