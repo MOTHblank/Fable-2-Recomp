@@ -846,6 +846,13 @@ local function safe_visual_parent(child)
   local p = parent(child)
   if not p then return nil end
 
+  -- UIContract/event behavior nodes are traversal-only everywhere in this
+  -- adapter. Never promote one into a hide target merely because an icon or
+  -- material happens to be nested beneath it.
+  local okpt, pt = pcall(getElementType, p)
+  pt = okpt and tostring(pt):lower() or ""
+  if pt == "behavior" then return nil end
+
   -- Never climb through a wrapper that also owns another presentation branch.
   -- Behavior/material/texture siblings are implementation helpers for the same
   -- visual and are safe; text/components/groups are not, because hiding their
