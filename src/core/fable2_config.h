@@ -39,6 +39,19 @@ struct Values {
   bool native_save_snapshots = false;
   // [input]
   std::string keyboard_gamepad_map{std::string{kDefaultKeyboardGamepadMap}};
+  // Adaptive Xbox -> keyboard/mouse UI. "auto" follows the last meaningful
+  // physical device; "keyboard" / "controller" force one presentation.
+  std::string prompt_mode{"auto"};
+  // Host keycap fallback is used only when GameFace exposes controller artwork
+  // without a writable text representation.
+  bool prompt_overlay_fallback = true;
+  int32_t prompt_overlay_offset_x = 0;
+  int32_t prompt_overlay_offset_y = 0;
+  // Last-resort title UITextPrompt cover when the native source rewrite was
+  // too late to reach its already-built inline sprite layout.
+  bool prompt_legacy_fallback = true;
+  int32_t prompt_legacy_offset_x = 0;
+  int32_t prompt_legacy_offset_y = 0;
   // Keep in sync with the cvar defaults in main.cpp (mouse_look,
   // mouse_look_scale); the cvar keeps its compiled default as a fallback so
   // an empty/missing config can never wedge input.
