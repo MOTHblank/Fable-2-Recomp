@@ -309,6 +309,13 @@ inline void EndLegacyTitleFrame() {
       LegacyTitleBaselineElements().load(std::memory_order_acquire);
   const bool source_rewritten =
       fable2::buttonprompts::TitleSourceRewriteActive();
+  const bool source_proven =
+      source_rewritten || fable2::buttonprompts::TitleSourceRecentlySeen();
+  const uint32_t title_action =
+      fable2::buttonprompts::TitleExpectedIconActionIndex();
+  const bool presentation_label_available =
+      title_action < 16 &&
+      !fable2::buttonprompts::CurrentActionLabel(title_action, 20).empty();
   const uint32_t expected_baked =
       fable2::buttonprompts::TitleExpectedBakedElementCount();
   const uint32_t expected_keyboard =
@@ -346,8 +353,8 @@ inline void EndLegacyTitleFrame() {
   // fixed-position cover. A same-sized prompt elsewhere cannot pulse it.
   uint32_t cover_item =
       LegacyTitleCoverItemPointer().load(std::memory_order_acquire);
-  if (cover_item == 0 && source_rewritten && baked_count_match &&
-      plausible_item) {
+  if (cover_item == 0 && source_proven && presentation_label_available &&
+      baked_count_match && plausible_item) {
     cover_item = g_legacy_title_frame_item;
     LegacyTitleCoverItemPointer().store(cover_item,
                                         std::memory_order_release);
@@ -385,7 +392,8 @@ inline void EndLegacyTitleFrame() {
       // UITextPrompt with the same count/ordinal cannot replace the title
       // identity while its old heap source happens to remain allocated.
       const bool first_identity =
-          prior_icon == 0 && prior_item == 0 && source_rewritten;
+          prior_icon == 0 && prior_item == 0 && source_proven &&
+          presentation_label_available;
       const bool exact_icon =
           fable2::buttonprompts::TitleExpectedIconElementOrdinal() !=
               UINT32_MAX &&
@@ -479,6 +487,12 @@ inline bool ShouldSuppressLegacyTitleElement(uint32_t ordinal,
   }
   const uint32_t expected =
       fable2::buttonprompts::TitleExpectedIconElementOrdinal();
+  const uint32_t action =
+      fable2::buttonprompts::TitleExpectedIconActionIndex();
+  if (action >= 16 ||
+      fable2::buttonprompts::CurrentActionLabel(action, 20).empty()) {
+    return false;
+  }
   const uint32_t confirmed_item =
       LegacyTitleItemPointer().load(std::memory_order_acquire);
   const uint32_t confirmed_element =
