@@ -44,8 +44,8 @@ emulator binds for it:
   come from the system constants (`XeAlphaTest`, `XeAlphaToCoverage`,
   `XeColorOutput`).
 - **Settings:** `xe_material_params` in the system constants -
-  `XeMaterialFeatures()`, `XeShadowSoftness()`, `XeSpecularIntensity()`,
-  `XeRoughness()` (filled from the `material_*` cvars every draw, so they
+  `XeMaterialFeatures()`, `XeShadowSoftness()`, `XeShadowDistanceScale()`,
+  `XeSpecularIntensity()`, `XeRoughness()` (filled from the `material_*` cvars every draw, so they
   change live).
 
 `include/xenos_d3d12.hlsli` declares all of this and implements what the
