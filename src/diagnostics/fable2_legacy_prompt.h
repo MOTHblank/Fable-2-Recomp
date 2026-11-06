@@ -12,7 +12,10 @@
 // continue through the stock renderer unchanged.
 #pragma once
 
+#include <cmath>
 #include <cstdint>
+#include <cstring>
+#include <limits>
 
 #include <rex/cvar.h>
 #include <rex/ppc/context.h>
@@ -24,8 +27,12 @@ extern "C" void __imp__UITextPrompt_Render(PPCContext& ctx,
                                             uint8_t* base);
 extern "C" void __imp__UITextPrompt_RenderElement(PPCContext& ctx,
                                                    uint8_t* base);
+extern "C" void __imp__UITextPrompt_DrawableRender(PPCContext& ctx,
+                                                    uint8_t* base);
 
 namespace fable2::legacyprompt {
+
+inline thread_local uint32_t g_geometry_capture_drawable = 0;
 
 inline bool PlausibleElement(uint32_t element) {
   return element >= 0x10000u && element < 0xE0000000u &&
@@ -62,6 +69,89 @@ inline bool PlausiblyVisibleWithoutRender(uint32_t element, uint8_t* base) {
   return state8 != 2 && state32 != 2;
 }
 
+inline void ArmGeometryCapture(uint32_t ordinal, uint32_t element,
+                               uint8_t* base) {
+  g_geometry_capture_drawable = 0;
+  if (!base || !PlausibleElement(element) ||
+      ordinal != fable2::buttonprompts::TitleExpectedIconElementOrdinal()) {
+    return;
+  }
+  const uint32_t drawable = REX_LOAD_U32(element + 0x7C);
+  if (drawable >= 0x10000u && drawable < 0xE0000000u &&
+      (drawable & 3u) == 0) {
+    g_geometry_capture_drawable = drawable;
+  }
+}
+
+inline void DisarmGeometryCapture() {
+  g_geometry_capture_drawable = 0;
+}
+
+inline float GuestWordAsFloat(uint32_t word) {
+  float value = 0.0f;
+  static_assert(sizeof(value) == sizeof(word));
+  std::memcpy(&value, &word, sizeof(value));
+  return value;
+}
+
+inline bool ExtractPreparedCanvasPosition(uint32_t scratch, uint8_t* base,
+                                          float& out_x, float& out_y) {
+  if (!base || scratch < 0x10000u || scratch >= 0xE0000000u ||
+      (scratch & 3u) != 0) {
+    return false;
+  }
+
+  // The leaf receives a caller-prepared stack object in r3. Inspect only a
+  // bounded 96-byte prefix and accept coordinates near the already verified
+  // title position. This is intentionally an inference filter, not a generic
+  // structure parser: if the draw scratch uses another representation the
+  // fixed authored position remains active.
+  constexpr uint32_t kWords = 24;
+  constexpr float kReferenceX = 640.0f;
+  constexpr float kReferenceY = 560.0f;
+  constexpr float kMaxDx = 320.0f;
+  constexpr float kMaxDy = 180.0f;
+
+  float best_score = std::numeric_limits<float>::infinity();
+  float best_x = 0.0f;
+  float best_y = 0.0f;
+
+  const auto consider = [&](float x, float y) mutable {
+    if (!std::isfinite(x) || !std::isfinite(y) ||
+        x < kReferenceX - kMaxDx || x > kReferenceX + kMaxDx ||
+        y < kReferenceY - kMaxDy || y > kReferenceY + kMaxDy) {
+      return;
+    }
+    const float dx = x - kReferenceX;
+    const float dy = y - kReferenceY;
+    const float score = dx * dx + dy * dy;
+    if (score < best_score) {
+      best_score = score;
+      best_x = x;
+      best_y = y;
+    }
+  };
+
+  for (uint32_t i = 0; i + 1 < kWords; ++i) {
+    const uint32_t a = REX_LOAD_U32(scratch + i * 4);
+    const uint32_t b = REX_LOAD_U32(scratch + (i + 1) * 4);
+
+    consider(GuestWordAsFloat(a), GuestWordAsFloat(b));
+
+    // Some UI helpers retain canvas coordinates as integer words until the
+    // final draw. Recognize that representation too, under the same strict
+    // title-local bounds.
+    if (a <= 1280u && b <= 720u) {
+      consider(static_cast<float>(a), static_cast<float>(b));
+    }
+  }
+
+  if (!std::isfinite(best_score)) return false;
+  out_x = best_x;
+  out_y = best_y;
+  return true;
+}
+
 }  // namespace fable2::legacyprompt
 
 extern "C" void UITextPrompt_Render(PPCContext& ctx, uint8_t* base) {
@@ -76,6 +166,12 @@ extern "C" void UITextPrompt_RenderElement(PPCContext& ctx, uint8_t* base) {
       fable2::promptoverlay::CurrentLegacyTitleElementOrdinal();
   const bool suppress =
       fable2::promptoverlay::ShouldSuppressLegacyTitleElement(ordinal, element);
+
+  // Arm the leaf capture even before a baked layout has been confirmed. The
+  // first full frame must render normally so EndLegacyTitleFrame can classify
+  // it; if this ordinal is the source-derived image element, its leaf call can
+  // already provide geometry for that same confirmed frame.
+  fable2::legacyprompt::ArmGeometryCapture(ordinal, element, base);
 
   bool visible = false;
   if (suppress) {
@@ -94,5 +190,20 @@ extern "C" void UITextPrompt_RenderElement(PPCContext& ctx, uint8_t* base) {
   // Count every prompt element even when its baked image draw is suppressed.
   // The enclosing frame classifier must keep seeing the original layout shape
   // so a relayout/device switch immediately disables suppression.
+  fable2::legacyprompt::DisarmGeometryCapture();
   fable2::promptoverlay::NoteLegacyTitleElement(element, visible);
+}
+
+extern "C" void UITextPrompt_DrawableRender(PPCContext& ctx, uint8_t* base) {
+  if (fable2::legacyprompt::g_geometry_capture_drawable != 0 &&
+      ctx.r4.u32 == fable2::legacyprompt::g_geometry_capture_drawable) {
+    float x = 0.0f;
+    float y = 0.0f;
+    if (fable2::legacyprompt::ExtractPreparedCanvasPosition(
+            ctx.r3.u32, base, x, y)) {
+      fable2::promptoverlay::NoteLegacyTitleDrawPosition(x, y);
+    }
+  }
+
+  __imp__UITextPrompt_DrawableRender(ctx, base);
 }
