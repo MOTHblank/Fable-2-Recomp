@@ -93,7 +93,8 @@ compatibility and verification tasks.
 ## Windows launcher
 
 The optional WPF launcher detects the original game edition and configures
-output resolution, internal render scale (1×–7×, device-dependent), anisotropic filtering, FXAA, VSync,
+output resolution (including custom physical sizes from 4:3 through 4:1),
+internal render scale (1×–7×, device-dependent), anisotropic filtering, FXAA, VSync,
 window/fullscreen mode and a 30/60/120/144/165/240/unlimited FPS limit. It keeps its preferences
 in `launcher-settings.toml` and writes `fable_2.toml`, preserving other settings
 and a one-time backup. Preferences survive the runtime rewriting its config.
