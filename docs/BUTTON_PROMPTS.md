@@ -284,8 +284,12 @@ continuously visible. When the exact sprite is safely suppressed, the host
 draws a normal compact keycap. The named drawable leaf also exposes the
 caller's already-prepared scratch object; the adapter inspects only its first
 96 bytes for an adjacent float/integer canvas-coordinate pair within ±160 X
-and ±120 Y of the verified authored `(640,560)` title position. A trustworthy
-pair becomes the keycap anchor; otherwise `(640,560)` remains the fallback.
+and ±120 Y of the verified authored `(640,560)` title position. Because that
+scratch layout is inferred rather than decoded, one plausible frame is not
+enough: the **same prompt item and image element must report coordinates within
+2 canvas units on two consecutive confirmed baked frames** before runtime
+geometry replaces the authored anchor. Otherwise `(640,560)` remains the
+fallback.
 When only count-level evidence exists, the larger opaque cover is retained
 instead of risking a guest-renderer skip. `ui_prompt_legacy_offset_x` and
 `ui_prompt_legacy_offset_y` (default 0, range -128..128) still allow live
