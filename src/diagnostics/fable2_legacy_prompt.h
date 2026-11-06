@@ -4,12 +4,11 @@
 // markup before layout. If that source allocation has already disappeared,
 // UITextPrompt_RenderElement receives only baked element/drawable data.
 //
-// Ordinarily this forwards to the original function and uses its documented
-// post-render visibility state to pulse the host keycap overlay. Once the
-// localized source scanner has identified the exact baked <x_img> element
-// ordinal and a prior frame confirms the stale baked layout, keyboard mode may
-// suppress only that one sprite element. All text glyphs and unknown layouts
-// continue through the stock renderer unchanged.
+// The complete element renderer always runs so visibility, animation and
+// bookkeeping stay native. Once the localized source scanner identifies the
+// exact baked <x_img> element ordinal and a prior frame confirms the stale
+// baked layout, keyboard mode suppresses only that element's final drawable
+// vtable call. All text glyphs and unknown layouts remain stock.
 #pragma once
 
 #include <cmath>
@@ -33,6 +32,7 @@ extern "C" void __imp__UITextPrompt_DrawableRender(PPCContext& ctx,
 namespace fable2::legacyprompt {
 
 inline thread_local uint32_t g_geometry_capture_drawable = 0;
+inline thread_local bool g_suppress_capture_drawable = false;
 
 inline bool PlausibleElement(uint32_t element) {
   return element >= 0x10000u && element < 0xE0000000u &&
@@ -56,22 +56,10 @@ inline bool WasVisibleAfterRender(uint32_t element, uint8_t* base) {
   return REX_LOAD_U32(element + 0x7C) != 0;
 }
 
-inline bool PlausiblyVisibleWithoutRender(uint32_t element, uint8_t* base) {
-  if (!PlausibleElement(element) || !base) return false;
-  if (REX_LOAD_U32(element + 0x7C) == 0) return false;
-
-  // When suppressing the draw we intentionally do not run the element's
-  // renderer, so +0xBC is the state left by the preceding frame. Treat an
-  // explicit rejection as invisible and otherwise let the surrounding text
-  // elements determine the frame's blink/activity pulse.
-  const uint8_t state8 = REX_LOAD_U8(element + 0xBC);
-  const uint32_t state32 = REX_LOAD_U32(element + 0xBC);
-  return state8 != 2 && state32 != 2;
-}
-
 inline void ArmGeometryCapture(uint32_t ordinal, uint32_t element,
-                               uint8_t* base) {
+                               bool suppress_draw, uint8_t* base) {
   g_geometry_capture_drawable = 0;
+  g_suppress_capture_drawable = false;
   if (!base || !PlausibleElement(element) ||
       ordinal != fable2::buttonprompts::TitleExpectedIconElementOrdinal()) {
     return;
@@ -80,11 +68,13 @@ inline void ArmGeometryCapture(uint32_t ordinal, uint32_t element,
   if (drawable >= 0x10000u && drawable < 0xE0000000u &&
       (drawable & 3u) == 0) {
     g_geometry_capture_drawable = drawable;
+    g_suppress_capture_drawable = suppress_draw;
   }
 }
 
 inline void DisarmGeometryCapture() {
   g_geometry_capture_drawable = 0;
+  g_suppress_capture_drawable = false;
 }
 
 inline float GuestWordAsFloat(uint32_t word) {
@@ -109,8 +99,8 @@ inline bool ExtractPreparedCanvasPosition(uint32_t scratch, uint8_t* base,
   constexpr uint32_t kWords = 24;
   constexpr float kReferenceX = 640.0f;
   constexpr float kReferenceY = 560.0f;
-  constexpr float kMaxDx = 320.0f;
-  constexpr float kMaxDy = 180.0f;
+  constexpr float kMaxDx = 160.0f;
+  constexpr float kMaxDy = 120.0f;
 
   float best_score = std::numeric_limits<float>::infinity();
   float best_x = 0.0f;
@@ -164,44 +154,40 @@ extern "C" void UITextPrompt_RenderElement(PPCContext& ctx, uint8_t* base) {
   const uint32_t element = ctx.r3.u32;
   const uint32_t ordinal =
       fable2::promptoverlay::CurrentLegacyTitleElementOrdinal();
-  const bool suppress =
+  const bool suppress_draw =
       fable2::promptoverlay::ShouldSuppressLegacyTitleElement(ordinal, element);
 
-  // Arm the leaf capture even before a baked layout has been confirmed. The
-  // first full frame must render normally so EndLegacyTitleFrame can classify
-  // it; if this ordinal is the source-derived image element, its leaf call can
-  // already provide geometry for that same confirmed frame.
-  fable2::legacyprompt::ArmGeometryCapture(ordinal, element, base);
-
-  bool visible = false;
-  if (suppress) {
-    // The caller ignores this void-like element renderer's result. Skipping
-    // only the source-derived image ordinal removes the baked Xbox sprite
-    // without touching the prompt's glyph elements, tag table, material bank,
-    // or interaction behavior.
-    visible =
-        fable2::legacyprompt::PlausiblyVisibleWithoutRender(element, base);
-    fable2::promptoverlay::NoteLegacyTitleSpriteSuppressed();
-  } else {
-    __imp__UITextPrompt_RenderElement(ctx, base);
-    visible = fable2::legacyprompt::WasVisibleAfterRender(element, base);
-  }
-
-  // Count every prompt element even when its baked image draw is suppressed.
-  // The enclosing frame classifier must keep seeing the original layout shape
-  // so a relayout/device switch immediately disables suppression.
+  // Always run the complete stock element renderer. It owns visibility,
+  // animation and per-element bookkeeping that should continue even when the
+  // baked controller sprite itself is replaced. The source-derived image
+  // element arms the named drawable leaf below; only that final draw call may
+  // be skipped.
+  fable2::legacyprompt::ArmGeometryCapture(
+      ordinal, element, suppress_draw, base);
+  __imp__UITextPrompt_RenderElement(ctx, base);
   fable2::legacyprompt::DisarmGeometryCapture();
-  fable2::promptoverlay::NoteLegacyTitleElement(element, visible);
+
+  fable2::promptoverlay::NoteLegacyTitleElement(
+      element, fable2::legacyprompt::WasVisibleAfterRender(element, base));
 }
 
 extern "C" void UITextPrompt_DrawableRender(PPCContext& ctx, uint8_t* base) {
-  if (fable2::legacyprompt::g_geometry_capture_drawable != 0 &&
-      ctx.r4.u32 == fable2::legacyprompt::g_geometry_capture_drawable) {
+  const bool matched =
+      fable2::legacyprompt::g_geometry_capture_drawable != 0 &&
+      ctx.r4.u32 == fable2::legacyprompt::g_geometry_capture_drawable;
+  if (matched) {
     float x = 0.0f;
     float y = 0.0f;
     if (fable2::legacyprompt::ExtractPreparedCanvasPosition(
             ctx.r3.u32, base, x, y)) {
       fable2::promptoverlay::NoteLegacyTitleDrawPosition(x, y);
+    }
+
+    if (fable2::legacyprompt::g_suppress_capture_drawable) {
+      // Preserve all enclosing UITextPrompt_RenderElement bookkeeping and
+      // suppress only vtable slot 8 for the exact confirmed title sprite.
+      fable2::promptoverlay::NoteLegacyTitleSpriteSuppressed();
+      return;
     }
   }
 
