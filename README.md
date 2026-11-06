@@ -262,8 +262,12 @@ The camera hook at `0x822A47F8` is now classification-only. It verifies the
 ordinary hero-follow camera and watches for meaningful native camera
 corrections. If the game switches to a secondary/scripted camera or resolves a
 constrained pose, the SDK automatically resumes its ordinary virtual-stick
-mouse route. Camera/mode transitions also clear pending raw displacement so no
-motion can accumulate and snap when hero-follow resumes.
+mouse route. The verified local `XINPUT_STATE` also makes special controls
+explicit: **LT target lock, LB first-person, and R3 View Hero** force Native
+stick immediately. Direct re-entry uses hysteresis (leave on a >0.50 native
+pose correction, re-enter only below 0.20 for three clear hero-follow frames),
+and every route change clears pending displacement so no input can accumulate
+and snap when hero-follow resumes.
 
 Deadzone compensation and flick buffering apply only to **Native stick** mode;
 Direct mode deliberately feeds the current raw displacement to the native
@@ -271,8 +275,8 @@ camera consumer without those delayed-input helpers.
 
 Enable **Log mouse input and camera hook diagnostics** in Advanced → Mouse
 (`mouse_look_camera_diag = true`) to write periodic `[mouse-camera]` lines
-to the normal game logs. The counters report camera eligibility/fallback,
-raw SDL motion, and capture resets. Camera telemetry
+to the normal game logs. The counters report camera eligibility/fallback, explicit special-input fallback,
+raw SDL motion, successful native injections, and capture resets. Camera telemetry
 (`mouse_look_camera_diag` / `mouse_look_camera_dump`) remains available.
 
 
