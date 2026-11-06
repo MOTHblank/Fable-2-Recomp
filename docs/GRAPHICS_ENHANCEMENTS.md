@@ -79,6 +79,7 @@ Settings (menu: **Materials**):
 | `material_shaders_path` | `materials` | Their folder, relative to the exe |
 | `material_soft_shadows` | `true` | PCSS soft shadows (off: a small fixed filter) |
 | `material_shadow_softness` | `1.0` | The sun's size: larger is softer |
+| `material_shadow_distance_scale` | `1.5` | Extends the far sun-shadow fade while the actual far cascade still covers the receiver |
 | `material_specular` | `true` | GGX highlights (off: the classic Phong lighting) |
 | `material_specular_intensity` | `1.0` | Highlight and reflection strength |
 | `material_roughness` | `0.45` | Surface roughness: lower is sharper |
