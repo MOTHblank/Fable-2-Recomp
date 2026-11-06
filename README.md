@@ -227,56 +227,53 @@ Remap at launch without recompiling, e.g.
 fable_2.exe --keyboard_gamepad_map "E:A,B:B,Space:L3,Enter:Start"
 ```
 
-### Mouse look (native stick or experimental direct orbit)
+### Mouse look (native stick or hybrid direct input)
 
-Mouse movement now comes from **SDL3 relative mouse mode**, with cursor
-recentering used only as a fallback. Fractional mouse motion is accumulated
-until the guest input poll. The mouse drives the game's native right-stick
-camera path, preserving its camera limits. The following cvars control it:
+Mouse movement comes from **SDL3 relative mouse mode**, with cursor recentering
+used only as a fallback. Both camera modes keep Fable II's own right-stick
+camera pipeline authoritative:
 
 | Argument | Effect |
 |---|---|
 | `--mouse_look <bool>` | Enable/disable mouse look (default `true`) |
-| `--mouse_direct_look <bool>` | Use hybrid raw-delta yaw/pitch for ordinary hero-follow frames (default `false`); constrained/special camera states automatically fall back to native stick input. |
+| `--mouse_direct_look <bool>` | Use raw mouse deltas through the native camera input consumer on ordinary hero-follow frames (default `false`); constrained/special cameras fall back automatically to SDK stick emulation. |
 | `--mouse_look_scale <n>` | Horizontal sensitivity (default `256`) |
 | `--mouse_look_scale_y <n>` | Vertical sensitivity (default `256`) |
 | `--mouse_invert_y <bool>` | Invert vertical movement (default `false`) |
-| `--mouse_deadzone_compensation <n>` | Optional mouse-only deadzone compensation, 0..12000 (default `0`) |
-| `--mouse_flick_buffer_polls <n>` | Retain clipped mouse flick movement for 0..12 extra input polls (default `4`). Larger values turn farther but may add turning after a flick; 0 is the original behavior. |
+| `--mouse_deadzone_compensation <n>` | Optional mouse-only deadzone compensation for Native stick mode, 0..12000 (default `0`) |
+| `--mouse_flick_buffer_polls <n>` | Retain clipped mouse flick movement for 0..12 extra Native-stick input polls (default `4`). |
 
-By default, mouse movement uses the game's native right-stick path. In the
-launcher, **Advanced → Mouse → Camera input mode** also offers **Direct mouse
-orbit (experimental)**. Direct mode uses SDL3 relative deltas for independent
-horizontal yaw and vertical pitch instead of converting movement into a capped
-Xbox right-stick value. The existing sensitivity X/Y and invert-Y controls
-apply to either mode. Deadzone compensation and flick buffering apply **only
-to Native stick mode** and are disabled in the launcher while Direct is selected.
-Direct mode uses the observed hero-follow camera layout. It now switches
-mouse input back to the game's native right-stick path whenever the frame's
-resolved camera eye differs meaningfully from the camera object's requested
-eye, treating that correction as native obstruction/collision/authored framing
-that direct orbit must not overwrite. The camera hook also drops accumulated
-raw input and resets orbit offsets when camera objects or input modes change.
-It leaves the game's native camera output untouched on non-hero cameras,
-constraint-corrected frames, invalid input, and rejected view transforms, and
-skips direct modification on the first frame of a newly selected camera.
-This makes Direct mode a hybrid rather than an all-or-nothing replacement:
-normal hero-follow frames use raw mouse yaw/pitch, while constrained or special
-camera states fall back automatically to native stick behavior. The direct
-path is still a post-camera transform rather than a verified pre-constraint
-injection point, so Native stick remains the most conservative option.
-No gamepad controller input is changed.
+The launcher exposes **Advanced → Mouse → Camera input mode**. **Native stick**
+lets the SDK turn mouse motion into a virtual Xbox right stick before the game
+polls it. **Direct mouse via native camera (hybrid)** instead keeps SDL motion
+as raw deltas until the game's per-frame input path has built its local
+`XINPUT_STATE`. The recomp patch then adds the mouse X/Y displacement to
+`sThumbRX` / `sThumbRY` in that local copy before the original camera
+consumer runs.
+
+That distinction is important: Direct mode no longer rotates the finished
+camera eye or writes replacement quaternions. Collision and obstruction
+handling, authored framing, lock-on behavior, easing, camera limits, and other
+special camera rules remain downstream in the original game code. Existing
+controller stick input is combined with mouse input rather than replaced.
+
+The camera hook at `0x822A47F8` is now classification-only. It verifies the
+ordinary hero-follow camera and watches for meaningful native camera
+corrections. If the game switches to a secondary/scripted camera or resolves a
+constrained pose, the SDK automatically resumes its ordinary virtual-stick
+mouse route. Camera/mode transitions also clear pending raw displacement so no
+motion can accumulate and snap when hero-follow resumes.
+
+Deadzone compensation and flick buffering apply only to **Native stick** mode;
+Direct mode deliberately feeds the current raw displacement to the native
+camera consumer without those delayed-input helpers.
 
 Enable **Log mouse input and camera hook diagnostics** in Advanced → Mouse
 (`mouse_look_camera_diag = true`) to write periodic `[mouse-camera]` lines
-to the normal game `logs/`. The counters show raw SDL input events, hero
-camera hook calls, applied view updates and invalid output buffers. Direct
-mode now modifies the guest `r1+0x60` output produced by the virtual
-camera method, not just the camera's stored fields that could be overwritten.
-The retired `direct_mouse_look` and `mouse_look_legacy_orbit` modes and
-related orbit tuning keys are not supported; remove them from older config
-files. Use the settings above instead. Camera telemetry
+to the normal game logs. The counters report camera eligibility/fallback,
+raw SDL motion, and capture resets. Camera telemetry
 (`mouse_look_camera_diag` / `mouse_look_camera_dump`) remains available.
+
 
 The defaults come from `[input] mouse_look` / `[input] mouse_look_scale` in
 `fable2_config.toml` (edit there to change them permanently), the command
