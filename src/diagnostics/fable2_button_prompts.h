@@ -214,7 +214,8 @@ inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
       const bool instruction_candidate =
           BeAsciiAt(data + i, remaining, "Press ") ||
           BeAsciiAt(data + i, remaining, "Hold ") ||
-          BeAsciiAt(data + i, remaining, "Tap ");
+          BeAsciiAt(data + i, remaining, "Tap ") ||
+          BeAsciiAt(data + i, remaining, "Select ");
       if (!tag_candidate && !instruction_candidate) continue;
 
       size_t start = i;
