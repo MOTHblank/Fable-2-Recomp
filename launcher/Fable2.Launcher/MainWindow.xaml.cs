@@ -65,7 +65,10 @@ public partial class MainWindow : Window
 
     private void SetDefaults()
     {
+        CustomWidthBox.Text = "1920";
+        CustomHeightBox.Text = "1080";
         SelectByTag(ResolutionCombo, "1080p");
+        UpdateCustomResolutionState();
         SelectByTag(RenderScaleCombo, "2");
         SelectByTag(AnisotropicCombo, "5");
         SelectByTag(AntiAliasingCombo, "none");
@@ -121,15 +124,37 @@ public partial class MainWindow : Window
             foreach ((string key, string value) in LauncherConfigFile.ReadLauncherValues(_executableDirectory!))
                 _values[key] = value;
 
-            string outputResolution = (GetValue("window_width", ""), GetValue("window_height", "")) switch
+            string configuredWidth = GetValue("window_width", "");
+            string configuredHeight = GetValue("window_height", "");
+            string? outputResolution = (configuredWidth, configuredHeight) switch
             {
                 ("1280", "720") => "720p",
                 ("1920", "1080") => "1080p",
                 ("2560", "1440") => "1440p",
                 ("3840", "2160") => "4k",
-                _ => Unquote(GetValue("resolution", "1080p"))
+                _ => null
             };
-            SelectByTag(ResolutionCombo, outputResolution);
+            if (outputResolution is not null)
+            {
+                SelectByTag(ResolutionCombo, outputResolution);
+            }
+            else if (int.TryParse(configuredWidth, NumberStyles.Integer,
+                         CultureInfo.InvariantCulture, out int customWidth) &&
+                     int.TryParse(configuredHeight, NumberStyles.Integer,
+                         CultureInfo.InvariantCulture, out int customHeight) &&
+                     customWidth > 0 && customHeight > 0)
+            {
+                CustomWidthBox.Text = customWidth.ToString(CultureInfo.InvariantCulture);
+                CustomHeightBox.Text = customHeight.ToString(CultureInfo.InvariantCulture);
+                SelectByTag(ResolutionCombo, "custom");
+            }
+            else
+            {
+                SelectByTag(ResolutionCombo, Unquote(GetValue("resolution", "1080p")));
+                if (ResolutionCombo.SelectedItem is null)
+                    SelectByTag(ResolutionCombo, "1080p");
+            }
+            UpdateCustomResolutionState();
             SelectByTag(RenderScaleCombo, GetValue("resolution_scale", "2"));
             SelectByTag(AnisotropicCombo, GetValue("anisotropic_override", "5"));
             SelectByTag(AntiAliasingCombo, Unquote(GetValue("swap_post_effect", "none")));
@@ -179,7 +204,7 @@ public partial class MainWindow : Window
             SelectedTag(RenderScaleCombo) ?? "2", SelectedTag(AnisotropicCombo) ?? "5",
             SelectedTag(AntiAliasingCombo) ?? "none", SelectedTag(DisplayModeCombo) ?? "borderless",
             VsyncCheck.IsChecked == true, SelectedTag(FrameLimitCombo) ?? "0",
-            SelectedTag(BackendCombo) ?? "d3d12");
+            SelectedTag(BackendCombo) ?? "d3d12", CustomWidthBox.Text, CustomHeightBox.Text);
     }
 
     private bool SaveConfiguration()
@@ -327,14 +352,12 @@ public partial class MainWindow : Window
             CultureInfo.InvariantCulture, out int parsedScale) ? parsedScale : 1;
         InternalResolutionText.Text = $"Internal: {1280 * scale:N0} × {720 * scale:N0}";
 
-        string output = SelectedTag(ResolutionCombo) switch
-        {
-            "720p" => "1280 × 720",
-            "1080p" => "1920 × 1080",
-            "1440p" => "2560 × 1440",
-            "4k" => "3840 × 2160",
-            _ => "Automatic"
-        };
+        string resolution = SelectedTag(ResolutionCombo) ?? "1080p";
+        string output = GraphicsSettings.TryResolveOutputResolution(
+            resolution, CustomWidthBox.Text, CustomHeightBox.Text,
+            out int outputWidth, out int outputHeight)
+            ? $"{outputWidth:N0} × {outputHeight:N0}"
+            : "Custom size invalid";
         OutputResolutionText.Text = $"Output: {output}";
 
         if (!_loading && markDirty)
@@ -351,6 +374,25 @@ public partial class MainWindow : Window
     private void SettingChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_loading) RefreshSummary(markDirty: true);
+    }
+
+    private void ResolutionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateCustomResolutionState();
+        if (!_loading) RefreshSummary(markDirty: true);
+    }
+
+    private void CustomResolutionChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!_loading && SelectedTag(ResolutionCombo) == "custom")
+            RefreshSummary(markDirty: true);
+    }
+
+    private void UpdateCustomResolutionState()
+    {
+        bool custom = SelectedTag(ResolutionCombo) == "custom";
+        if (CustomWidthBox is not null) CustomWidthBox.IsEnabled = custom;
+        if (CustomHeightBox is not null) CustomHeightBox.IsEnabled = custom;
     }
 
     private void MouseCameraModeChanged(object sender, SelectionChangedEventArgs e)
