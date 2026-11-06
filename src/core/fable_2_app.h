@@ -362,6 +362,11 @@ class Fable2App : public rex::ReXApp {
                   cvar);
     };
     const fable2::config::Values& cfg = fable2::config::Get();
+    // Fable's game:/d: mount is read-only by default. Let the SDK map those
+    // immutable files so small archive/VFS reads stay in the native OS page
+    // cache rather than crossing into ReadFile for every guest request.
+    seed_cvar("host_path_mapped_reads",
+              cfg.native_mapped_game_reads ? "true" : "false");
     // XLanguage profile default; config, environment and CLI still win.
     std::string profile_hash;
     if (fable2::xexverify::Sha256File(game_data_root() / "default.xex", profile_hash) &&
