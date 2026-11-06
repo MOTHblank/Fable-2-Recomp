@@ -44,6 +44,7 @@
 
 #include "fable2_f5_lua.h"
 #include "fable2_button_prompt_strings.h"
+#include "fable2_prompt_overlay.h"
 
 namespace fable2::guilua {
 
@@ -299,7 +300,10 @@ inline void drain(PPCContext& ctx, uint8_t* base) {
     // (at the back) until every captured state has had it or 600 calls pass.
     if (std::find(p.tried.begin(), p.tried.end(), L) == p.tried.end()) {
       try {
-        run_chunk(ctx, base, L, p.code, ok);
+        r = run_chunk(ctx, base, L, p.code, ok);
+        if (p.tag == "button-prompts") {
+          fable2::promptoverlay::UpdatePresentation(L, r);
+        }
       } catch (...) {
       }
       ctx = saved;
@@ -443,8 +447,12 @@ inline void SyncButtonPrompts(bool keyboard) {
       {"RIGHT", key("keybind_dpad_right")},
   }};
 
+  const bool overlay_fallback =
+      rex::cvar::GetFlagByName("ui_prompt_overlay_fallback") == "true";
   std::string code = std::string("local __kbd=") +
                      (keyboard ? "true" : "false") +
+                     "\nlocal __overlay=" +
+                     (overlay_fallback ? "true" : "false") +
                      "\nlocal __labels={";
   std::string signature = keyboard ? "k|" : "c|";
   for (const auto& [name, label] : labels) {
@@ -507,7 +515,7 @@ if mode_changed then
   P.mode = wanted_mode
   P.sig = __sig
 end
-if not __kbd then return end
+if not __kbd then return "__f2_prompt_overlay|" end
 if type(P.changed) ~= "table" then P.changed = {} end
 if type(P.icons) ~= "table" then P.icons = {} end
 
@@ -680,7 +688,61 @@ for icon, info in pairs(P.icons) do
 end
 local ok_scene, scene = pcall(getElement, "Scene")
 if not ok_scene or not scene then scene = rawget(_G, "SCENE") end
-if not scene then return end
+if not scene then return "__f2_prompt_overlay|" end
+
+local overlay_out, overlay_seen = {}, {}
+
+local function world_pos(e)
+  local x, y = 0, 0
+  local cur = e
+  for _ = 1, 12 do
+    if not cur then break end
+    local px = tonumber(attr(cur, "position.x")) or 0
+    local py = tonumber(attr(cur, "position.y")) or 0
+    local sx = tonumber(attr(cur, "scale.x")) or 1
+    local sy = tonumber(attr(cur, "scale.y")) or 1
+    x = px + x * sx
+    y = py + y * sy
+    cur = parent(cur)
+  end
+  return x, y
+end
+
+local function hide_for_overlay(e)
+  local target = e
+  for _ = 1, 2 do
+    if not target then break end
+    local opacity = tonumber(attr(target, "opacity"))
+    if opacity and opacity > 0.01 then
+      if remember_set(target, "opacity", 0) then return true end
+    end
+    local active = attr(target, "active")
+    if active == true or active == 1 then
+      if remember_set(target, "active", false) then return true end
+    end
+    target = parent(target)
+  end
+  return false
+end
+
+local function add_overlay(action, e)
+  if not __overlay then return false end
+  local x, y = world_pos(e)
+  if x ~= x or y ~= y or math.abs(x) > 8192 or math.abs(y) > 8192 then
+    return false
+  end
+  for i = 1, #overlay_seen do
+    local p = overlay_seen[i]
+    if p.action == action and math.abs(p.x - x) < 4 and math.abs(p.y - y) < 4 then
+      return false
+    end
+  end
+  if not hide_for_overlay(e) then return false end
+  overlay_seen[#overlay_seen + 1] = { action=action, x=x, y=y }
+  overlay_out[#overlay_out + 1] =
+      string.format("%s,%.3f,%.3f", action, x, y)
+  return true
+end
 
 local seen = 0
 local function walk(e, depth)
@@ -735,11 +797,13 @@ local function walk(e, depth)
         end
       end
     end
+    if not P.icons[e] then add_overlay(action, e) end
   end
   local ch = kids(e)
   for i = 1, #ch do walk(ch[i], depth + 1) end
 end
 walk(scene, 0)
+return "__f2_prompt_overlay|" .. table.concat(overlay_out, ";")
 )LUA";
 
   enqueue_all("button-prompts", code);
