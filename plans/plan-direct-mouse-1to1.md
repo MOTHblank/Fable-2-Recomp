@@ -23,13 +23,33 @@ The active Direct pipeline is now:
    authored framing, lock-ons and special-camera handling remain downstream.
 5. The `0x822A47F8` hook only classifies the resolved camera. Secondary/scripted cameras or
    meaningful native pose corrections disable the raw side channel, causing the SDK's ordinary
-   virtual-stick mouse path to resume on the next poll. Route changes clear pending raw motion.
+   virtual-stick mouse path to resume on the next poll.
+6. Native fallback is also explicit at the verified local `XINPUT_STATE`: LT (Look-At / Target
+   Lock), LB (first-person), and R3 (View Hero / vanity camera) immediately disable raw routing
+   and latch that decision through the later camera hook.
+7. Route selection has hysteresis: leave Direct when native pose correction exceeds 0.50; while
+   native fallback is active require correction below 0.20 for three consecutive ordinary
+   hero-follow frames before re-entering Direct. SDK and raw accumulators are cleared at each
+   handoff, so no mouse displacement can be replayed as a snap.
 
-The old `LookStickProcess_83045778` HotFunc was an ambiguous earlier candidate and is no longer
-the intended injection site. The stale `RightStickLookProcess_832BB018` generator alias was also
-removed because the manifest's actual function name is
+The old `LookStickProcess_83045778` HotFunc is **not an XINPUT handler**. Inspection of its own
+code proves `*(handler+24)+10` is reused as an input-tree entry count, `+12` contributes a
+table offset, and `handler+56` is later used as a result-table byte offset. Its older manifest
+comments are misleading; the checked-in override and generator comments now explicitly keep it
+behavior-identical. The stale `RightStickLookProcess_832BB018` generator alias was also removed
+because the manifest's actual function name is
 `ProcessAndProcessAndProcess1253_832BB018`; the small generated-code patch is preferable to
 checking in a 4,700+ line strong override.
+
+### Current limits
+
+The Direct path is now native-camera-safe but it still enters through signed 16-bit
+`sThumbRX/sThumbRY`, so a sufficiently large mouse delta can saturate at the same instantaneous
+axis limit as a stick. This is intentionally preferable to inventing a parallel camera pose.
+A genuinely uncapped mouse path would require a verified post-deadzone / pre-camera angular
+control stage; none has been identified safely yet. RX is injected alongside RY because the
+original game exposes the right stick as camera control, but the earlier RE logs only
+specifically confirmed the RY consumer, so horizontal parity remains a runtime-verification item.
 
 Everything below this section is retained as reverse-engineering history unless explicitly
 marked current.
