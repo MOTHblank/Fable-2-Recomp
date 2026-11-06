@@ -25,28 +25,28 @@ extern "C" void __savegprlr_25(PPCContext& ctx, uint8_t* base);
 #define SV16(x, y)  (*(uint16_t*)(REX_RAW_ADDR(x)) = __builtin_bswap16(y))
 #define SV32(x, y)  (*(uint32_t*)(REX_RAW_ADDR(x)) = __builtin_bswap32(y))
 #define SV64(x, y)  (*(uint64_t*)(REX_RAW_ADDR(x)) = __builtin_bswap64(y))
-// LookStickProcess_83045778 — per-controller right/look-stick input handler.
+// LookStickProcess_83045778 — recursive input-tree handler.
 //
-// `ctx.r3` (captured into r31) is the "handler" object. Guest layout (big-endian offsets):
-//   +0   context/state pointer (shared per-controller object, re-read throughout)
-//   +24  pointer to the polled XINPUT_STATE buffer (RY stick at +10, RX stick at +12)
-//   +32  running result total, accumulated across the per-entry dispatches (r25)
-//   +56  cached normalized right-stick value: written in phase 1, re-read in phase 2 as a store offset
+// Earlier reverse-engineering notes incorrectly described *(handler+24) as an
+// XINPUT_STATE and +10/+12 as right-stick axes. The function itself disproves
+// that interpretation:
+//   +10 is repeatedly used as the number of input-tree entries (the dispatch
+//       loop terminates when r27 reaches it),
+//   +12 is a 32-bit table offset/base contribution, and
+//   handler+56 is used as a byte offset into the caller's result table after
+//       the helper result is stored there.
 //
-// Return value (r3):
-//   0          right stick at center — nothing to do
-//   0x80004005 stick magnitude exceeded the per-controller bound (clamped)
-//   0x8000000E a dispatch slot came back empty — no active action to drive
-//   <other>    the accumulated running total (r25) from the per-entry dispatches
+// Therefore this override must stay behavior-identical. Direct mouse input is
+// injected into the verified local XINPUT_STATE in generated 0x832BB018 by
+// tools/apply_recomp_patches.py, not here.
 //
-// Flow:
-//   Phase 1  RY != 0: normalize RY via VectorMathThunk_821F4D88 (rotl(RY,2) into a SIMD rotation) and
-//             cache the result at handler+56.
-//   Phase 2  cached != 0: magnitude-check (rotl(RY,3) + RX against the bound at context+12). If in
-//             range, walk a per-entry table (indexed by RX) and, per entry, run
-//             InputAccumulate_83041408 (accumulate the stick combination) then
-//             InputModeDispatch_83045410 (dispatch to the concrete action handler), folding each
-//             result into the running total.
+// ctx.r3 (captured into r31) is the handler object. Observed layout:
+//   +0   context/state pointer
+//   +4..+20 five per-entry descriptors copied to stack scratch
+//   +24  pointer to an input-tree/table descriptor
+//   +32  running result total
+//   +56  helper result later used as a result-table byte offset
+//
 extern "C" void LookStickProcess_83045778(PPCContext& __restrict ctx, uint8_t* base) {
 	REX_FUNC_PROLOGUE();
 	uint32_t ea{};
@@ -62,7 +62,7 @@ extern "C" void LookStickProcess_83045778(PPCContext& __restrict ctx, uint8_t* b
 	// r31 = the per-controller "handler" object (see header comment).
 	// mr r31,r3
 	ctx.r31.u64 = ctx.r3.u64;
-	// r11 = XINPUT_STATE buffer pointer (handler+24); r10 = raw RY (u16; 0 = stick centered).
+	// r11 = input-tree descriptor pointer (handler+24); r10 = entry count at +10.
 	// lwz r11,24(r31)
 	ctx.r11.u64 = GV32(ctx.r31.u32 + 24);
 	// lhz r10,10(r11)
@@ -71,7 +71,7 @@ extern "C" void LookStickProcess_83045778(PPCContext& __restrict ctx, uint8_t* b
 	ctx.cr0.compare<uint32_t>(ctx.r10.u32, 0, ctx.xer);
 	// beq 0x83045994
 	if (!ctx.cr0.eq) {
-		// --- Phase 1: RY is nonzero, normalize the right stick. ---
+		// --- Phase 1: non-empty input-tree descriptor. ---
 		// clrlwi r11,r10,16
 		ctx.r11.u64 = ctx.r10.u32 & 0xFFFF;
 		// lis r4,9345
@@ -87,7 +87,7 @@ extern "C" void LookStickProcess_83045778(PPCContext& __restrict ctx, uint8_t* b
 		SV32(ctx.r31.u32 + 56, ctx.r3.u32);
 		// bne 0x830457c0
 		if (!ctx.cr0.eq) {
-			// --- Phase 2: the normalized RY is nonzero, so run the per-entry dispatch. ---
+			// --- Phase 2: helper returned a usable result-table offset. ---
 			// lwz r11,24(r31)
 			ctx.r11.u64 = GV32(ctx.r31.u32 + 24);
 			// li r4,0
@@ -134,8 +134,8 @@ extern "C" void LookStickProcess_83045778(PPCContext& __restrict ctx, uint8_t* b
 			ctx.r9.u64 = GV32(ctx.r9.u32 + 12);
 			// rotlwi r8,r10,3
 			ctx.r8.u64 = __builtin_rotateleft32(ctx.r10.u32, 3);
-			// Magnitude gate: rotl(RY,3) + RX must not exceed the per-controller bound (context+12);
-			// otherwise the input is clamped and we bail with 0x80004005.
+			// Bounds gate over descriptor count/offset data; exceeding context+12
+			// returns E_FAIL. This is not a raw stick-magnitude check.
 			// lwz r7,12(r11)
 			ctx.r7.u64 = GV32(ctx.r11.u32 + 12);
 			// add r8,r8,r9
@@ -159,7 +159,7 @@ extern "C" void LookStickProcess_83045778(PPCContext& __restrict ctx, uint8_t* b
 				ctx.r27.u64 = ctx.r26.u64;
 				// add r29,r11,r9
 				ctx.r29.u64 = ctx.r11.u64 + ctx.r9.u64;
-				// Per-entry dispatch loop: walk the RX-indexed table (r29) and process each entry.
+				// Per-entry dispatch loop: walk the descriptor-selected table and process each entry.
 				// beq cr6,0x83045994
 				if (!ctx.cr6.eq) {
 					while (true) {
