@@ -276,9 +276,10 @@ raw displacement, so it never continues moving after the mouse has stopped.
 
 Enable **Log mouse input and camera hook diagnostics** in Advanced → Mouse
 (`mouse_look_camera_diag = true`) to write periodic `[mouse-camera]` lines
-to the normal game logs. The counters report camera eligibility/fallback, explicit special-input fallback,
-raw SDL motion, successful native injections, and capture resets. Camera telemetry
-(`mouse_look_camera_diag` / `mouse_look_camera_dump`) remains available.
+plus capped `[mouse-native]` correlation records to the normal game logs.
+The latter pair each successful guest-user-0 injection (raw mouse plus pre/post
+RX/RY) with the next hero-camera native correction/classification. Camera
+telemetry (`mouse_look_camera_dump`) remains available for deeper RE.
 
 
 The defaults come from `[input] mouse_look` / `[input] mouse_look_scale` in
