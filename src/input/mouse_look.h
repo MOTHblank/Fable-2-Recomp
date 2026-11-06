@@ -45,6 +45,69 @@ inline void note_native_injection() {
   native_injections().fetch_add(1, std::memory_order_relaxed);
 }
 
+// Latest successful guest-user-0 Direct injection. Input and camera processing
+// are on the guest thread, so relaxed fields plus a release/acquire sequence
+// number are enough for diagnostic correlation without locks or allocations.
+struct NativeInputSample {
+  uint64_t sequence = 0;
+  int32_t native_rx = 0;
+  int32_t native_ry = 0;
+  int32_t injected_rx = 0;
+  int32_t injected_ry = 0;
+  float mouse_dx = 0.0f;
+  float mouse_dy = 0.0f;
+};
+inline std::atomic<uint64_t>& native_input_sequence() {
+  static std::atomic<uint64_t> v{0};
+  return v;
+}
+inline std::atomic<int32_t>& last_native_rx() {
+  static std::atomic<int32_t> v{0};
+  return v;
+}
+inline std::atomic<int32_t>& last_native_ry() {
+  static std::atomic<int32_t> v{0};
+  return v;
+}
+inline std::atomic<int32_t>& last_injected_rx() {
+  static std::atomic<int32_t> v{0};
+  return v;
+}
+inline std::atomic<int32_t>& last_injected_ry() {
+  static std::atomic<int32_t> v{0};
+  return v;
+}
+inline std::atomic<float>& last_injected_mouse_dx() {
+  static std::atomic<float> v{0.0f};
+  return v;
+}
+inline std::atomic<float>& last_injected_mouse_dy() {
+  static std::atomic<float> v{0.0f};
+  return v;
+}
+inline void record_native_input_sample(int32_t native_rx, int32_t native_ry,
+                                       int32_t injected_rx, int32_t injected_ry,
+                                       float mouse_dx, float mouse_dy) {
+  last_native_rx().store(native_rx, std::memory_order_relaxed);
+  last_native_ry().store(native_ry, std::memory_order_relaxed);
+  last_injected_rx().store(injected_rx, std::memory_order_relaxed);
+  last_injected_ry().store(injected_ry, std::memory_order_relaxed);
+  last_injected_mouse_dx().store(mouse_dx, std::memory_order_relaxed);
+  last_injected_mouse_dy().store(mouse_dy, std::memory_order_relaxed);
+  native_input_sequence().fetch_add(1, std::memory_order_release);
+}
+inline NativeInputSample latest_native_input_sample() {
+  NativeInputSample s;
+  s.sequence = native_input_sequence().load(std::memory_order_acquire);
+  s.native_rx = last_native_rx().load(std::memory_order_relaxed);
+  s.native_ry = last_native_ry().load(std::memory_order_relaxed);
+  s.injected_rx = last_injected_rx().load(std::memory_order_relaxed);
+  s.injected_ry = last_injected_ry().load(std::memory_order_relaxed);
+  s.mouse_dx = last_injected_mouse_dx().load(std::memory_order_relaxed);
+  s.mouse_dy = last_injected_mouse_dy().load(std::memory_order_relaxed);
+  return s;
+}
+
 // Input processing may discover a camera-affecting native control (target lock,
 // first person, vanity camera) before CECCameraUpdateFrame runs. Latch it until
 // the camera hook consumes the request later in the same guest frame.
