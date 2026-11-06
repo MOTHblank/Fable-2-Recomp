@@ -1,0 +1,64 @@
+// Last-resort keyboard prompt bridge for Fable II's legacy UITextPrompt path.
+//
+// The ordinary adaptive-prompt pipeline rewrites writable <a_img> source
+// markup before layout. If that source allocation has already disappeared,
+// UITextPrompt_RenderElement receives only baked element/drawable data.
+//
+// Do not mutate that renderer here. Forward to the original function and use
+// its documented post-render visibility state to pulse the host keycap overlay.
+// The overlay is additionally gated by TitleSourceRewriteActive(), so this path
+// remains dormant whenever the normal source rewrite succeeded.
+#pragma once
+
+#include <cstdint>
+
+#include <rex/cvar.h>
+#include <rex/ppc/context.h>
+
+#include "fable2_button_prompts.h"
+#include "fable2_prompt_overlay.h"
+
+extern "C" void __imp__UITextPrompt_RenderElement(PPCContext& ctx,
+                                                   uint8_t* base);
+
+namespace fable2::legacyprompt {
+
+inline bool Enabled() {
+  if (!fable2::promptoverlay::KeyboardModeActive()) return false;
+  if (!REXCVAR_GET(ui_prompt_legacy_fallback)) return false;
+  return !fable2::buttonprompts::TitleSourceRewriteActive();
+}
+
+inline bool PlausibleElement(uint32_t element) {
+  return element >= 0x10000u && element < 0xE0000000u &&
+         (element & 3u) == 0;
+}
+
+inline bool WasVisibleAfterRender(uint32_t element, uint8_t* base) {
+  if (!PlausibleElement(element) || !base) return false;
+
+  // TEXT_RENDERING_NOTES.md documents the early visibility rejection at
+  // element+0xBC as value 2. The original build may use either a byte-sized
+  // state or a word-sized field around this offset, so recognize both
+  // representations. This is one bounded read from the element the original
+  // function just used; unlike the old probes, there is no heap walking on
+  // the render thread.
+  const uint8_t state8 = REX_LOAD_U8(element + 0xBC);
+  const uint32_t state32 = REX_LOAD_U32(element + 0xBC);
+  if (state8 == 2 || state32 == 2) return false;
+
+  // The original renderer skips elements without a drawable at +0x7C.
+  return REX_LOAD_U32(element + 0x7C) != 0;
+}
+
+}  // namespace fable2::legacyprompt
+
+extern "C" void UITextPrompt_RenderElement(PPCContext& ctx, uint8_t* base) {
+  const uint32_t element = ctx.r3.u32;
+  __imp__UITextPrompt_RenderElement(ctx, base);
+
+  if (fable2::legacyprompt::Enabled() &&
+      fable2::legacyprompt::WasVisibleAfterRender(element, base)) {
+    fable2::promptoverlay::TouchLegacyTitleDraw();
+  }
+}
