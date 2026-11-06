@@ -247,10 +247,10 @@ camera pipeline authoritative:
 The launcher exposes **Advanced → Mouse → Camera input mode**. **Native stick**
 lets the SDK turn mouse motion into a virtual Xbox right stick before the game
 polls it. **Direct mouse via native camera (hybrid)** instead keeps SDL motion
-as raw deltas until the game's per-frame input path has built its local
-`XINPUT_STATE`. The recomp patch then adds the mouse X/Y displacement to
-`sThumbRX` / `sThumbRY` in that local copy before the original camera
-consumer runs.
+as raw deltas until Fable II polls **guest user 0** through its
+`XamInputGetState` wrapper. A small strong-symbol override adds mouse X/Y to
+the final merged `sThumbRX` / `sThumbRY` values returned to the game.
+Physical-pad input remains additive, and guest users 1–3 are left untouched.
 
 That distinction is important: Direct mode no longer rotates the finished
 camera eye or writes replacement quaternions. Collision and obstruction
@@ -262,7 +262,7 @@ The camera hook at `0x822A47F8` is now classification-only. It verifies the
 ordinary hero-follow camera and watches for meaningful native camera
 corrections. If the game switches to a secondary/scripted camera or resolves a
 constrained pose, the SDK automatically resumes its ordinary virtual-stick
-mouse route. The verified local `XINPUT_STATE` also makes special controls
+mouse route. The verified user-0 `XINPUT_STATE` also makes special controls
 explicit: **LT target lock, LB first-person, and R3 View Hero** force Native
 stick immediately. Direct re-entry uses hysteresis (leave on a >0.50 native
 pose correction, re-enter only below 0.20 for three clear hero-follow frames),
