@@ -717,6 +717,28 @@ if not scene then
   return "__f2_prompt_overlay|k" .. (__overlay and "1" or "0") .. "|"
 end
 
+-- One Lua state may host multiple presentation roots over its lifetime. A new
+-- Scene invalidates every element reference from the old one even though the
+-- prompt mode/signature is unchanged. Restore only attributes still equal to
+-- our exact applied values, then start discovery fresh on the new root.
+if P.scene ~= nil and P.scene ~= scene then
+  for i = #P.changed, 1, -1 do
+    local x = P.changed[i]
+    if x and x.e then
+      local current = attr(x.e, x.a)
+      if x.applied == nil or current == x.applied then
+        pcall(setAttribute, x.e, x.a, x.v)
+      end
+    end
+  end
+  P.changed = {}
+  P.icons = {}
+  P.overlay_icons = {}
+  P.refresh_count = 0
+  P.discovered = false
+end
+P.scene = scene
+
 local overlay_out, overlay_seen = {}, {}
 
 local function world_pos(e)
@@ -819,27 +841,29 @@ local function add_overlay(action, e)
   return emit_overlay(action, e, target)
 end
 
--- Existing unresolved icons may move every frame (HUD/world prompts), but a
--- complete scene walk is unnecessary just to follow them. Refresh the stored
--- element transforms on every lightweight sync. If the game has restored or
--- destroyed the hidden target, drop it and let the next discovery pass decide
--- whether it should be adapted again.
-for e, info in pairs(P.overlay_icons) do
-  if type(info) == "table" and info.action and info.target and
-     hidden_by_adapter(info.target) then
-    emit_overlay(info.action, e, info.target)
-  else
-    P.overlay_icons[e] = nil
-  end
-end
-
 -- With host overlay fallback active this function is called around 10 Hz.
 -- Preserve the old discovery/text cadence by doing the expensive tree walk
--- only on the first pass, after a mode/signature change, and roughly every
--- eighth refresh. Without the overlay fallback, calls remain slow and every
--- call is a full pass so dynamic text rewriting is unchanged.
+-- only on the first pass, after a mode/signature/scene change, and roughly
+-- every eighth refresh. Without the overlay fallback, calls remain slow and
+-- every call is a full pass so dynamic text rewriting is unchanged.
 local full_scan = not P.discovered or not __overlay or
                   (P.refresh_count % 8) == 0
+
+-- Existing unresolved icons may move every frame (HUD/world prompts), but a
+-- complete scene walk is unnecessary just to follow them. On lightweight
+-- refreshes, update only stored transforms. Full passes rediscover current
+-- icons directly, which also avoids emitting a detached element on the same
+-- pass that reconciliation removes it.
+if not full_scan then
+  for e, info in pairs(P.overlay_icons) do
+    if type(info) == "table" and info.action and info.target and
+       hidden_by_adapter(info.target) then
+      emit_overlay(info.action, e, info.target)
+    else
+      P.overlay_icons[e] = nil
+    end
+  end
+end
 
 local seen, truncated = 0, false
 local present = {}
