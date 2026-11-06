@@ -590,7 +590,7 @@ local function nearby_text(icon)
   local p = parent(icon)
   for scope = 1, 2 do
     if not p then break end
-    local best, best_text, best_score = nil, nil, -1
+    local best, best_text, best_score, best_nested = nil, nil, -1, false
     local second_score, candidates = -1, 0
     local function consider(e, nested)
       if e == icon then return end
@@ -606,7 +606,7 @@ local function nearby_text(icon)
       end
       if score > best_score then
         second_score = best_score
-        best, best_text, best_score = e, t, score
+        best, best_text, best_score, best_nested = e, t, score, nested
       elseif score > second_score then
         second_score = score
       end
@@ -626,7 +626,9 @@ local function nearby_text(icon)
       -- name. In a busier wrapper, require a text-like name plus a meaningful
       -- score advantage so traversal order never decides which label is
       -- rewritten. The outer scope is intentionally stricter.
-      local single_direct = candidates == 1 and best_score >= 20
+      local single_direct =
+          scope == 1 and candidates == 1 and not best_nested and
+          best_score >= 20
       local unambiguous_named =
           best_score >= (scope == 1 and 60 or 80) and
           best_score - second_score >= 20
