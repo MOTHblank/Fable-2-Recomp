@@ -91,12 +91,9 @@ FUNCTIONS = {
     # *(r31+24)+10/+12 as raw right-stick axes; inspection shows +10 is an entry
     # count, +12 contributes a table offset, and handler+56 is later used as a
     # result-table byte offset. Keep this override behavior-identical. Direct
-    # mouse injection belongs to the verified local XINPUT_STATE in 0x832BB018.
+    # mouse injection now belongs to the tiny guest-user-0 XamInputGetState
+    # wrapper under src/core/hotfunc/input/, not this input tree or 0x832BB018.
     "LookStickProcess_83045778": dict(dir="camera", nv=True),
-    # 0x832BB018 is intentionally NOT copied as a HotFunc override. It is the
-    # 4,700+ line ProcessAndProcessAndProcess1253_832BB018 in the manifest; the
-    # direct-mouse XINPUT edit is injected into generated code by
-    # tools/apply_recomp_patches.py instead of checking in a giant override.
     "Yield_82CBD098": dict(dir="yield", nv=True, batchyield=True),
     "FrameLimiterWait_82242628": dict(dir="vblank", hand_tuned=True),
 }
