@@ -83,8 +83,12 @@ specific visual branch and prefixes the label with the live binding, such as
 search as the texture-only fallback, so a material/texture node can still be
 hidden through its dedicated wrapper without hiding the sibling label or a
 different component. This native GameFace-text path is preferred over a host
-keycap whenever it is safe. Texture paths ending in `icon_button_*.tex`,
-named `AButton/BButton/XButton/YButton` widgets, and the documented
+keycap whenever it is safe. If a presentation initially exposes only the icon,
+the texture-only host fallback may be used temporarily; a later full discovery
+pass can promote that same adapter-owned hidden visual to native GameFace text
+as soon as its writable label appears, without flashing the Xbox artwork back
+on during the handoff. Texture paths ending in `icon_button_*.tex`, named
+`AButton/BButton/XButton/YButton` widgets, and the documented
 `Material2270` A-button material are recognized. It stores the original
 visual attribute and text in the presentation's Lua state. Switching back to
 controller mode restores both.
