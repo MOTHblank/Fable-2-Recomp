@@ -449,6 +449,7 @@ inline void SyncButtonPrompts(bool keyboard) {
 
   const bool overlay_fallback =
       rex::cvar::GetFlagByName("ui_prompt_overlay_fallback") == "true";
+  fable2::promptoverlay::BeginGameFaceTransition(keyboard, overlay_fallback);
   std::string code = std::string("local __kbd=") +
                      (keyboard ? "true" : "false") +
                      "\nlocal __overlay=" +
