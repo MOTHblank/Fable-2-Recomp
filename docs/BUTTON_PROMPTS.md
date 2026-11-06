@@ -222,8 +222,11 @@ allowed, while sibling text/components/groups stop the climb so unrelated UI
 can never be hidden with the icon.
 Visibility ownership is attribute-specific: if the adapter owns `opacity=0`
 but the game independently sets `active=false` or `diffuse.a=0`, that
-game-owned hide still suppresses the host keycap. Elements exposing none of
-these safe visual attributes remain native.
+game-owned hide still suppresses the host keycap. Zero `scale.x`/`scale.y`
+is also treated as a game-owned visibility state, so animated/scaled-away
+prompt branches do not leave a replacement floating behind. Wrapper promotion
+fails closed if the parent element type cannot be queried. Elements exposing
+none of these safe visual attributes remain native.
 
 If the presentation's pivot semantics need a small correction, the host overlay
 can be tuned live with `ui_prompt_overlay_offset_x` and
