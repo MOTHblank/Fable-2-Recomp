@@ -24,6 +24,14 @@
 
 #include <rex/cvar.h>
 
+namespace {
+const bool kPromptGuiBridgeInstalled = [] {
+  fable2::buttonprompts::SetGuiSyncCallback(
+      &fable2::guilua::SyncButtonPrompts);
+  return true;
+}();
+}  // namespace
+
 // Native guest UI button markup: automatic last-active device, or a manual
 // override when the user wants only keyboard or only controller prompts.
 REXCVAR_DEFINE_STRING(ui_prompt_mode, "auto", "Input",
