@@ -1,9 +1,9 @@
 // fable_2 - Raw mouse transport and guest-memory camera helpers.
 //
 // Native mode synthesizes a right stick through the ReXGlue input driver.
-// Hybrid Direct mode accumulates SDL3 relative deltas on the UI thread and
-// drains them from the generated 0x832BB018 input consumer, where they are
-// added to that frame's local XINPUT_STATE before the native camera pipeline.
+// Hybrid Direct mode accumulates SDL3 relative deltas on the UI thread. The
+// guest-user-0 XamInputGetState wrapper snapshots them into the final merged
+// right-stick state; the later camera-update boundary drains the frame delta.
 #pragma once
 
 #include <cmath>
