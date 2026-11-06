@@ -36,6 +36,7 @@
 #include "fable2_fit_window.h"
 #include "fable2_patches.h"
 #include "fable2_button_prompts.h"
+#include "fable2_prompt_overlay.h"
 // #include "fable2_deadbeef_overlay.h"
 // 30fps-cap instrumentation (writes fps_probe.log next to the exe). Disabled
 // now that the cap is lifted via REX_VSYNC=0 (see tools/fable2-uncapped.cmd).
@@ -85,6 +86,7 @@ class Fable2App : public rex::ReXApp {
 #ifdef FABLE2_ALLOC_WATCH
   std::jthread alloc_watch_thread_;
 #endif
+  std::unique_ptr<fable2::promptoverlay::PromptOverlayDialog> prompt_overlay_;
  public:
   using rex::ReXApp::ReXApp;
 
@@ -108,6 +110,11 @@ class Fable2App : public rex::ReXApp {
   fable2::remote::ControlServer remote_server_{remote_state_.get(),
                                                &remote_pad_enabled_};
 #endif  // FABLE2_REMOTE_CONTROL
+
+  void OnCreateDialogs(rex::ui::ImGuiDrawer* drawer) override {
+    prompt_overlay_ =
+        std::make_unique<fable2::promptoverlay::PromptOverlayDialog>(drawer);
+  }
 
   // Emulate the Xbox 360 Xenos GPU. Two plugins are staged next to the exe:
   //   rexgpu-xenos[d].dll        -> D3D12 (matched source-built SDK; default)
@@ -443,6 +450,8 @@ class Fable2App : public rex::ReXApp {
     // Join prompt scanner before guest memory unmaps. The old detached worker
     // could otherwise outlive this runtime and access freed arena pages.
     fable2::buttonprompts::Stop();
+    fable2::promptoverlay::Clear();
+    prompt_overlay_.reset();
 #ifdef FABLE2_ALLOC_WATCH
     alloc_watch_thread_.request_stop();
     if (alloc_watch_thread_.joinable()) alloc_watch_thread_.join();
