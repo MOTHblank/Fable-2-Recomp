@@ -282,7 +282,7 @@
                   <ComboBoxItem Content="Native stick (original)" Tag="native" />
                   <ComboBoxItem Content="Direct mouse via native camera (hybrid)" Tag="direct" />
                 </ComboBox>
-                <TextBlock Text="Direct mode feeds raw mouse deltas into the game&apos;s native camera input path. Collision/framing stay game-owned; target lock (LT), first-person (LB), View Hero (R3), scripted cameras and constrained poses fall back to Native stick automatically."
+                <TextBlock Text="Direct mode adds raw mouse deltas to guest user 0&apos;s final native right-stick state. Collision, obstruction and scripted framing stay entirely game-owned. Target lock (LT), first-person (LB) and View Hero (R3) temporarily use Native stick mouse mapping."
                            FontSize="12" Foreground="{StaticResource MutedTextBrush}"
                            Margin="0,5,0,0" TextWrapping="Wrap" />
                 <CheckBox x:Name="MouseCameraDiagnosticsCheck"
