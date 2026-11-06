@@ -285,7 +285,15 @@ inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
       }
       if (end + 1 >= length || Be16(data + end) != 0 || end <= i) continue;
       const bool has_tag = HasKnownTag(data + start, end - start);
-      const bool title = starts_press && has_tag;
+      const uintptr_t guest_string = offset + start;
+      // Runtime captures across multiple sessions consistently place the title
+      // prompt allocation in 0x4266xxxx. Broad scans may find many other
+      // "Press <x_img>..." strings; they are still eligible for ordinary
+      // source rewriting, but only this verified title page may publish
+      // element-count/ordinal metadata used by renderer-level suppression.
+      const bool in_title_page =
+          guest_string >= 0x42660000u && guest_string < 0x42670000u;
+      const bool title = starts_press && has_tag && in_title_page;
       if (!title && !nul_boundary) continue;
 
       const auto tag_rewritten = Rewrite(text, labels);
