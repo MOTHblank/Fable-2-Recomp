@@ -32,7 +32,7 @@
 #include "dir_manifest_heal.h"
 #include "fable2_address_scan.h"
 #include "fable2_config.h"
-#include "fable2_console.h"
+#include "console_gamepad_state.h"
 #include "fable2_fit_window.h"
 #include "fable2_patches.h"
 #include "fable2_button_prompts.h"
