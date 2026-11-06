@@ -8,8 +8,10 @@ rem The release zip contains a top-level "win-amd64" folder, so the SDK root
 rem (bin/, include/, lib/) ends up at:
 rem   out\tooling\rexglue-sdk-0.10.0\win-amd64
 rem
-rem Run automatically by build.cmd when the SDK is missing; can also be run
-rem manually.
+rem LEGACY FALLBACK ONLY. build.cmd no longer calls this helper: the supported
+rem workflow builds and installs rexglue.exe plus the runtime from the pinned
+rem source submodule. Keep this downloader only for historical comparison or
+rem manual recovery against the old v0.10.0 binary package.
 rem ===========================================================================
 setlocal
 set "REPO=%~dp0.."
