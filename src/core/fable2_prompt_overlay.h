@@ -142,9 +142,12 @@ inline void EndLegacyTitleFrame() {
     const uint32_t delta = count > expected ? count - expected : expected - count;
     return delta <= 1;
   };
+  const bool have_expectations =
+      expected_baked != 0 && expected_keyboard > expected_baked;
   const bool title_layout =
+      !have_expectations ||
       near_count(expected_baked) || near_count(expected_keyboard);
-  if (expected_baked != 0 && expected_keyboard != 0 && !title_layout) {
+  if (!title_layout) {
     return;
   }
 
@@ -152,7 +155,7 @@ inline void EndLegacyTitleFrame() {
   // handles English and every supported translation without hardcoded 16/22
   // counts, and distinguishes a late scanner hit from a layout that actually
   // consumed the rewritten keycap text.
-  if (expected_baked != 0 && expected_keyboard > expected_baked) {
+  if (have_expectations) {
     if (count + 1 >= expected_keyboard) {
       LegacyTitleKeyboardLayout().store(true, std::memory_order_release);
     } else if (count <= expected_baked + 1) {
