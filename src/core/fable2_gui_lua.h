@@ -38,6 +38,7 @@
 #include <vector>
 
 #include "fable2_f5_lua.h"
+#include "fable2_button_prompt_strings.h"
 
 namespace fable2::guilua {
 
@@ -380,6 +381,216 @@ inline void enqueue_all(const std::string& tag, const std::string& code) {
   p.tag = tag;
   p.expires = s.frame + 300;
   s.pending.push_back(p);
+}
+
+inline std::string prompt_lua_quote(std::string_view value) {
+  std::string out = "\"";
+  for (char ch : value) {
+    switch (ch) {
+      case '\\': out += "\\\\"; break;
+      case '"': out += "\\\""; break;
+      case '\n': out += "\\n"; break;
+      case '\r': out += "\\r"; break;
+      default: out += ch; break;
+    }
+  }
+  out += '"';
+  return out;
+}
+
+// Extends source-string prompt rewriting into live GameFace presentations.
+// Only icon widgets with a nearby writable text label are adapted. Ambiguous
+// or baked controller artwork stays native instead of being hidden blindly.
+// Originals are retained per Lua state, making controller switching reversible.
+inline void SyncButtonPrompts(bool keyboard) {
+  S().armed.store(true, std::memory_order_relaxed);
+
+  const auto key = [](const char* cvar) {
+    return fable2::buttonprompts::DisplayKey(rex::cvar::GetFlagByName(cvar));
+  };
+  const std::array<std::pair<const char*, std::string>, 16> labels{{
+      {"A", key("keybind_a")},
+      {"B", key("keybind_b")},
+      {"X", key("keybind_x")},
+      {"Y", key("keybind_y")},
+      {"LB", key("keybind_left_shoulder")},
+      {"RB", key("keybind_right_shoulder")},
+      {"LT", key("keybind_left_trigger")},
+      {"RT", key("keybind_right_trigger")},
+      {"START", key("keybind_start")},
+      {"BACK", key("keybind_back")},
+      {"LS", key("keybind_lstick_press")},
+      {"RS", key("keybind_rstick_press")},
+      {"UP", key("keybind_dpad_up")},
+      {"DOWN", key("keybind_dpad_down")},
+      {"LEFT", key("keybind_dpad_left")},
+      {"RIGHT", key("keybind_dpad_right")},
+  }};
+
+  std::string code = std::string("local __kbd=") +
+                     (keyboard ? "true" : "false") +
+                     "\nlocal __labels={";
+  std::string signature = keyboard ? "k|" : "c|";
+  for (const auto& [name, label] : labels) {
+    code += name;
+    code += '=';
+    code += prompt_lua_quote(label);
+    code += ',';
+    signature += name;
+    signature += '=';
+    signature += label;
+    signature += '|';
+  }
+  code += "}\nlocal __sig=" + prompt_lua_quote(signature) + "\n";
+  code += R"LUA(
+local function attr(e, n)
+  local okh, has = pcall(hasAttribute, e, n)
+  if not okh or not has then return nil end
+  local ok, v = pcall(getAttribute, e, n)
+  if ok then return v end
+  return nil
+end
+local function kids(e)
+  local ok, v = pcall(getChildren, e)
+  if ok and type(v) == "table" then return v end
+  return {}
+end
+local function parent(e)
+  local ok, p = pcall(getElement, "parent", e)
+  return ok and p or nil
+end
+local function element_name(e)
+  local n = attr(e, "name")
+  return n and tostring(n):lower() or ""
+end
+
+local P = rawget(_G, "__f2_prompt_ui")
+if type(P) ~= "table" then
+  P = { changed = {}, mode = "", sig = "" }
+  rawset(_G, "__f2_prompt_ui", P)
+end
+local wanted_mode = __kbd and "keyboard" or "controller"
+if P.mode == wanted_mode and P.sig == __sig then return end
+
+if type(P.changed) == "table" then
+  for i = #P.changed, 1, -1 do
+    local x = P.changed[i]
+    if x and x.e then pcall(setAttribute, x.e, x.a, x.v) end
+  end
+end
+P.changed = {}
+P.mode = wanted_mode
+P.sig = __sig
+if not __kbd then return end
+
+local aliases = {
+  icon_button_a="A", icon_a="A",
+  icon_button_b="B", icon_b="B",
+  icon_button_x="X", icon_x="X",
+  icon_button_y="Y", icon_y="Y",
+  icon_button_lb="LB", icon_button_left_shoulder="LB",
+  icon_button_rb="RB", icon_button_right_shoulder="RB",
+  icon_button_lt="LT", icon_button_left_trigger="LT",
+  icon_button_rt="RT", icon_button_right_trigger="RT",
+  icon_button_start="START", icon_start="START",
+  icon_button_back="BACK", icon_button_select="BACK", icon_back="BACK",
+  icon_button_ls="LS", icon_button_lstick="LS", icon_button_left_stick="LS",
+  icon_button_rs="RS", icon_button_rstick="RS", icon_button_right_stick="RS",
+  icon_dpad_up="UP", icon_button_dpad_up="UP",
+  icon_dpad_down="DOWN", icon_button_dpad_down="DOWN",
+  icon_dpad_left="LEFT", icon_button_dpad_left="LEFT",
+  icon_dpad_right="RIGHT", icon_button_dpad_right="RIGHT",
+}
+
+local function remember_set(e, a, v)
+  local old = attr(e, a)
+  if old == nil then return false end
+  local ok = pcall(setAttribute, e, a, v)
+  if not ok then return false end
+  P.changed[#P.changed + 1] = { e=e, a=a, v=old }
+  return true
+end
+local function text_of(e)
+  local t = attr(e, "textstring")
+  if type(t) == "string" and t ~= "" then return t end
+  return nil
+end
+
+-- Prefer a direct sibling such as the documented AButton/ButtonText pair.
+-- One nested level is allowed for presentations that wrap their text node.
+local function nearby_text(icon)
+  local p = parent(icon)
+  for scope = 1, 2 do
+    if not p then break end
+    local best, best_text, best_score = nil, nil, -1
+    local function consider(e, nested)
+      if e == icon then return end
+      local t = text_of(e)
+      if not t then return end
+      local n = element_name(e)
+      local score = nested and 5 or 20
+      if n == "buttontext" then score = score + 100
+      elseif n:find("buttontext", 1, true) then score = score + 80
+      elseif n:find("label", 1, true) or n:find("text", 1, true) then
+        score = score + 40
+      end
+      if score > best_score then
+        best, best_text, best_score = e, t, score
+      end
+    end
+    local siblings = kids(p)
+    for i = 1, #siblings do
+      local s = siblings[i]
+      consider(s, false)
+      if s ~= icon then
+        local nested = kids(s)
+        for j = 1, #nested do consider(nested[j], true) end
+      end
+    end
+    if best then return best, best_text end
+    p = parent(p)
+  end
+  return nil
+end
+
+local used_text = {}
+local ok_scene, scene = pcall(getElement, "Scene")
+if not ok_scene or not scene then scene = rawget(_G, "SCENE") end
+if not scene then return end
+
+local seen = 0
+local function walk(e, depth)
+  if depth > 16 or seen > 2500 then return end
+  seen = seen + 1
+  local n = element_name(e):gsub("\\", "/")
+  n = n:match("([^/]+)$") or n
+  local action = aliases[n]
+  local label = action and __labels[action] or nil
+  if label and label ~= "" then
+    local text_el, original = nearby_text(e)
+    if text_el and not used_text[text_el] then
+      local changed_before = #P.changed
+      local hidden = remember_set(e, "opacity", 0)
+      if not hidden then hidden = remember_set(e, "active", false) end
+      if hidden and
+         remember_set(text_el, "textstring", "[" .. label .. "] " .. original) then
+        used_text[text_el] = true
+      else
+        while #P.changed > changed_before do
+          local x = P.changed[#P.changed]
+          pcall(setAttribute, x.e, x.a, x.v)
+          P.changed[#P.changed] = nil
+        end
+      end
+    end
+  end
+  local ch = kids(e)
+  for i = 1, #ch do walk(ch[i], depth + 1) end
+end
+walk(scene, 0)
+)LUA";
+
+  enqueue_all("button-prompts", code);
 }
 
 inline std::vector<std::string> take_results() {
