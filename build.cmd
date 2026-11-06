@@ -8,9 +8,9 @@ rem out\build holds only intermediate CMake/SDK compilation artifacts.
 set "ROOT=%~dp0"
 set "GAME=%ROOT%out\game"
 set "BUILDDIR=%ROOT%out\build\win-amd64-release"
-set "SDK=%ROOT%out\tooling\rexglue-sdk-0.10.0\win-amd64"
 set "RUNTIME=%ROOT%out\tooling\runtime-sdk\win-amd64"
 set "SDKSRC=%ROOT%thirdparty\rexglue-sdk"
+set "CODEGEN=%RUNTIME%\bin\rexglue.exe"
 
 if /i "%~1"=="package" if "%~2"=="" (
     rem Build the shared game directory first, then package only allowlisted
@@ -63,9 +63,9 @@ if not exist "%GAME%\data\dir.manifest" (
 :content_ready
 echo [2/4] Game content found in out\game.
 
-rem ReXGlue needs Clang, Ninja, CMake, Python and the pinned SDK. The project
-rem downloads only the code-generation SDK; the native runtime is rebuilt from
-rem its checked-in source submodule.
+rem ReXGlue needs Clang, Ninja, CMake, Python and the pinned source SDK.
+rem Runtime, renderer, headers, CMake package and codegen tool are all built
+rem from the same tracked thirdparty\rexglue-sdk revision.
 where clang++ >nul 2>nul
 if errorlevel 1 (
     if exist "C:\Program Files\LLVM\bin\clang++.exe" set "PATH=C:\Program Files\LLVM\bin;%PATH%"
@@ -92,39 +92,41 @@ for %%T in (cmake python git) do (
     )
 )
 
-if not exist "%SDK%\lib\cmake\rexglue\rexglueConfig.cmake" (
-    echo Downloading pinned ReXGlue codegen SDK ...
-    call "%ROOT%tools\setup_sdk.cmd" || exit /b 1
-)
-if not exist "%SDK%\bin\rexglue.exe" (
-    echo Error: ReXGlue SDK is incomplete under "%SDK%". 1>&2
-    exit /b 1
-)
 if not exist "%SDKSRC%\CMakeLists.txt" (
     git submodule sync -- thirdparty/rexglue-sdk || exit /b 1
     git submodule update --init thirdparty/rexglue-sdk || exit /b 1
 )
+
+echo [3/4] Building matched source SDK and codegen tool ...
+call "%ROOT%tools\build_runtime_sdk.cmd" Release || exit /b 1
+if not exist "%RUNTIME%\lib\cmake\rexglue\rexglueConfig.cmake" (
+    echo Error: source-built ReXGlue CMake package was not installed under "%RUNTIME%". 1>&2
+    exit /b 1
+)
+if not exist "%CODEGEN%" (
+    echo Error: source-built ReXGlue codegen tool was not produced at "%CODEGEN%". 1>&2
+    exit /b 1
+)
+
 rem The tracked manifest points directly to out/game/default.xex.
-rem This also survives ReXGlue regenerating its own CMake integration file.
 rem First-time CMake configuration must see generated/default/sources.cmake
-rem already on disk; otherwise rexglue_setup_target cannot add guest code to
-rem the executable during configure, even though codegen runs later in Ninja.
+rem already on disk; generate it with the SAME source-built tool used later by
+rem the CMake codegen target.
 if not exist "%ROOT%generated\default\sources.cmake" (
-    echo Generating guest-code source list for first-time CMake setup ...
-    "%SDK%\bin\rexglue.exe" codegen "%ROOT%fable_2_manifest.toml" || exit /b 1
+    echo Generating guest-code source list with matched ReXGlue ...
+    "%CODEGEN%" codegen "%ROOT%fable_2_manifest.toml" || exit /b 1
     if not exist "%ROOT%generated\default\sources.cmake" (
         echo Error: ReXGlue did not produce generated\default\sources.cmake. 1>&2
         exit /b 1
     )
 )
-echo [3/4] Building matched source SDK ...
-call "%ROOT%tools\build_runtime_sdk.cmd" "%SDK%" Release || exit /b 1
+
 rem Catch guest symbols that would silently shadow imported runtime hooks.
 python "%ROOT%tools\check_manifest_collisions.py" "%ROOT%fable_2_manifest.toml" "%RUNTIME%\bin\rexruntime.dll" || exit /b 1
 
 rem Use the same tracked manifest for code generation and CMake rebuilds.
 echo [4/4] Configuring and building game ...
-cmake --preset win-amd64-release -DCMAKE_PREFIX_PATH="%RUNTIME%" -Drexglue_DIR="%RUNTIME%\lib\cmake\rexglue" -DREXGLUE_SDK_ROOT="%RUNTIME%" -DREXGLUE_SDK_SOURCE="%SDKSRC%" -DFABLE2_CODEGEN_TOOL="%SDK%\bin\rexglue.exe" || exit /b 1
+cmake --preset win-amd64-release -DCMAKE_PREFIX_PATH="%RUNTIME%" -Drexglue_DIR="%RUNTIME%\lib\cmake\rexglue" -DREXGLUE_SDK_ROOT="%RUNTIME%" -DREXGLUE_SDK_SOURCE="%SDKSRC%" -DFABLE2_CODEGEN_TOOL="%CODEGEN%" || exit /b 1
 cmake --build "%BUILDDIR%" --target fable_2 || exit /b 1
 if not exist "%GAME%\fable_2.exe" (
     echo Error: out\game\fable_2.exe not produced by the build. 1>&2
