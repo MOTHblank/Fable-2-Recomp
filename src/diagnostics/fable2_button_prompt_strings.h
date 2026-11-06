@@ -16,12 +16,15 @@ inline std::string Trim(std::string_view v) {
   return std::string(v);
 }
 
-inline std::string DisplayKey(std::string_view bindings) {
+inline std::string DisplayKey(std::string_view bindings,
+                              size_t max_length = 5) {
   // ReXGlue bindings are comma-separated alternatives. Prefer a keyboard key
   // over a mouse button, but preserve compact modifier chords such as
   // Shift+Up -> S+Up so D-pad and menu prompts can be represented too. SDK
-  // parser names longer than five characters are compacted to PC-facing
-  // labels (PageDown -> PgDn, Numpad7 -> N7, PrintScreen -> PrtSc, etc.).
+  // parser names are compacted to PC-facing labels (PageDown -> PgDn,
+  // Numpad7 -> N7, PrintScreen -> PrtSc, etc.). Callers rewriting fixed guest
+  // storage keep the default five-character ceiling; relayout-capable
+  // GameFace/host presentation layers may request a larger ceiling.
   auto compact = [](std::string_view raw, bool& mouse_key) -> std::string {
     std::string token = Trim(raw);
     mouse_key = false;
@@ -95,7 +98,7 @@ inline std::string DisplayKey(std::string_view bindings) {
     }
 
     shown = prefix + shown;
-    return shown.size() <= 5 ? shown : std::string{};
+    return shown.size() <= max_length ? shown : std::string{};
   };
 
   std::string mouse;
