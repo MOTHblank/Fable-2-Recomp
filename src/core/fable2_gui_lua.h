@@ -475,22 +475,34 @@ end
 
 local P = rawget(_G, "__f2_prompt_ui")
 if type(P) ~= "table" then
-  P = { changed = {}, mode = "", sig = "" }
+  P = { changed = {}, icons = {}, mode = "", sig = "" }
   rawset(_G, "__f2_prompt_ui", P)
 end
 local wanted_mode = __kbd and "keyboard" or "controller"
-if P.mode == wanted_mode and P.sig == __sig then return end
+local mode_changed = P.mode ~= wanted_mode or P.sig ~= __sig
 
-if type(P.changed) == "table" then
-  for i = #P.changed, 1, -1 do
-    local x = P.changed[i]
-    if x and x.e then pcall(setAttribute, x.e, x.a, x.v) end
+if mode_changed then
+  -- Restore only values that are still exactly ours. If the game changed an
+  -- attribute after the adapter touched it, that new game-owned value wins.
+  if type(P.changed) == "table" then
+    for i = #P.changed, 1, -1 do
+      local x = P.changed[i]
+      if x and x.e then
+        local current = attr(x.e, x.a)
+        if x.applied == nil or current == x.applied then
+          pcall(setAttribute, x.e, x.a, x.v)
+        end
+      end
+    end
   end
+  P.changed = {}
+  P.icons = {}
+  P.mode = wanted_mode
+  P.sig = __sig
 end
-P.changed = {}
-P.mode = wanted_mode
-P.sig = __sig
 if not __kbd then return end
+if type(P.changed) ~= "table" then P.changed = {} end
+if type(P.icons) ~= "table" then P.icons = {} end
 
 local aliases = {
   icon_button_a="A", icon_a="A", abutton="A", material2270="A",
@@ -512,12 +524,27 @@ local aliases = {
   icon_dpad_right="RIGHT", icon_button_dpad_right="RIGHT",
 }
 
+local function record_applied(e, a, old, applied)
+  for i = 1, #P.changed do
+    local x = P.changed[i]
+    if x.e == e and x.a == a then
+      -- If the game replaced our last value, treat that replacement as the new
+      -- restoration baseline instead of resurrecting stale UI contents later.
+      if x.applied ~= nil and old ~= x.applied then x.v = old end
+      x.applied = applied
+      return
+    end
+  end
+  P.changed[#P.changed + 1] = { e=e, a=a, v=old, applied=applied }
+end
+
 local function remember_set(e, a, v)
   local old = attr(e, a)
   if old == nil then return false end
+  if old == v then return true end
   local ok = pcall(setAttribute, e, a, v)
   if not ok then return false end
-  P.changed[#P.changed + 1] = { e=e, a=a, v=old }
+  record_applied(e, a, old, v)
   return true
 end
 local function text_of(e)
@@ -633,6 +660,13 @@ local function rewrite_prompt_text(t)
 end
 
 local used_text = {}
+for icon, info in pairs(P.icons) do
+  if info and info.text and
+     attr(icon, info.attr) == info.icon_value and
+     text_of(info.text) == info.text_value then
+    used_text[info.text] = true
+  end
+end
 local ok_scene, scene = pcall(getElement, "Scene")
 if not ok_scene or not scene then scene = rawget(_G, "SCENE") end
 if not scene then return end
@@ -652,19 +686,41 @@ local function walk(e, depth)
   local action = aliases[n]
   local label = action and __labels[action] or nil
   if label and label ~= "" then
-    local text_el, original = nearby_text(e)
-    if text_el and not used_text[text_el] then
-      local changed_before = #P.changed
-      local hidden = remember_set(e, "opacity", 0)
-      if not hidden then hidden = remember_set(e, "active", false) end
-      if hidden and
-         remember_set(text_el, "textstring", "[" .. label .. "] " .. original) then
-        used_text[text_el] = true
-      else
-        while #P.changed > changed_before do
-          local x = P.changed[#P.changed]
-          pcall(setAttribute, x.e, x.a, x.v)
-          P.changed[#P.changed] = nil
+    local prior = P.icons[e]
+    local prior_ok = prior and prior.text and
+                     attr(e, prior.attr) == prior.icon_value and
+                     text_of(prior.text) == prior.text_value
+    if prior_ok then
+      used_text[prior.text] = true
+    else
+      P.icons[e] = nil
+      local text_el, original = nearby_text(e)
+      if text_el and not used_text[text_el] then
+        local icon_attr, old_icon = "opacity", attr(e, "opacity")
+        local icon_value = 0
+        if old_icon == nil then
+          icon_attr, old_icon, icon_value = "active", attr(e, "active"), false
+        end
+        if old_icon ~= nil then
+          local old_text = attr(text_el, "textstring")
+          local new_text = type(old_text) == "string" and
+                           ("[" .. label .. "] " .. original) or nil
+          if new_text then
+            local text_ok = pcall(setAttribute, text_el, "textstring", new_text)
+            local icon_ok = text_ok and
+                            pcall(setAttribute, e, icon_attr, icon_value)
+            if text_ok and icon_ok then
+              record_applied(text_el, "textstring", old_text, new_text)
+              record_applied(e, icon_attr, old_icon, icon_value)
+              P.icons[e] = {
+                text=text_el, text_value=new_text,
+                attr=icon_attr, icon_value=icon_value
+              }
+              used_text[text_el] = true
+            elseif text_ok then
+              pcall(setAttribute, text_el, "textstring", old_text)
+            end
+          end
         end
       end
     end
