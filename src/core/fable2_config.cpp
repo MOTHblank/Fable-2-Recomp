@@ -76,6 +76,25 @@ native_save_snapshots = false
 #   Up:Up,Down:Down,Left:Left,Right:Right
 keyboard_gamepad_map = "LMB:X,RMB:Y,MMB:B,Shift:A,E:A,Q:LT,Tab:RB,R:RT,Z:LB,B:B,W:StickUp,S:StickDown,A:StickLeft,D:StickRight,Escape:Pause,M:Select,Up:Up,Down:Down,Left:Left,Right:Right"
 
+# Controller prompt presentation: "auto" follows the last meaningful physical
+# keyboard/mouse or controller input; "keyboard" and "controller" force one.
+# Default: "auto"
+prompt_mode = "auto"
+
+# Replace GameFace controller icons that have no writable companion text with
+# compact host-rendered keycaps. Default: true.
+prompt_overlay_fallback = true
+# Fine alignment in physical host pixels; range -128..128.
+prompt_overlay_offset_x = 0
+prompt_overlay_offset_y = 0
+
+# Last-resort title-screen fallback for a baked legacy <a_img> prompt that did
+# not consume the early native source rewrite. Default: true.
+prompt_legacy_fallback = true
+# Fine alignment in physical host pixels; range -128..128.
+prompt_legacy_offset_x = 0
+prompt_legacy_offset_y = 0
+
 # Map mouse movement to the guest right stick (camera look): sweep to look,
 # stop to stop. false disables mouse look entirely.
 # Default: true
@@ -301,6 +320,26 @@ bool Load(const std::filesystem::path& path) {
     values.keyboard_gamepad_map = Read<std::string>(
         input_table, "input", "keyboard_gamepad_map", "string",
         std::string{kDefaultKeyboardGamepadMap});
+    values.prompt_mode = Read<std::string>(
+        input_table, "input", "prompt_mode", "string", values.prompt_mode);
+    values.prompt_overlay_fallback = Read<bool>(
+        input_table, "input", "prompt_overlay_fallback", "boolean",
+        values.prompt_overlay_fallback);
+    values.prompt_overlay_offset_x = static_cast<int32_t>(Read<int64_t>(
+        input_table, "input", "prompt_overlay_offset_x", "integer",
+        values.prompt_overlay_offset_x));
+    values.prompt_overlay_offset_y = static_cast<int32_t>(Read<int64_t>(
+        input_table, "input", "prompt_overlay_offset_y", "integer",
+        values.prompt_overlay_offset_y));
+    values.prompt_legacy_fallback = Read<bool>(
+        input_table, "input", "prompt_legacy_fallback", "boolean",
+        values.prompt_legacy_fallback);
+    values.prompt_legacy_offset_x = static_cast<int32_t>(Read<int64_t>(
+        input_table, "input", "prompt_legacy_offset_x", "integer",
+        values.prompt_legacy_offset_x));
+    values.prompt_legacy_offset_y = static_cast<int32_t>(Read<int64_t>(
+        input_table, "input", "prompt_legacy_offset_y", "integer",
+        values.prompt_legacy_offset_y));
     // Defaults come from Values itself (single source of truth).
     values.mouse_look =
         Read<bool>(input_table, "input", "mouse_look", "boolean",
