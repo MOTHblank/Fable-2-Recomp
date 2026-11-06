@@ -43,8 +43,10 @@ struct Values {
   // mouse_look_scale); the cvar keeps its compiled default as a fallback so
   // an empty/missing config can never wedge input.
   bool mouse_look = true;
-  bool mouse_direct_look = false;  // Opt-in experimental orbit.
-  // Mouse movement always uses the native gamepad right-stick path.
+  bool mouse_direct_look = false;  // Opt-in raw mouse -> native camera input.
+  // Both modes keep the game's right-stick camera pipeline authoritative.
+  // Direct mode injects raw deltas into the camera's local XINPUT_STATE;
+  // fallback mode lets the SDK synthesize the right stick normally.
   // Sensitivity is guest stick units per host mouse pixel (1..4096).
   int32_t mouse_look_scale = 256;
   int32_t mouse_look_scale_y = 256;
