@@ -649,6 +649,10 @@ local function visible_for_prompt(e)
     if active == false or active == 0 then return false end
     local diffuse_a = tonumber(attr(cur, "diffuse.a"))
     if diffuse_a and diffuse_a <= 0.01 then return false end
+    local sx = tonumber(attr(cur, "scale.x"))
+    local sy = tonumber(attr(cur, "scale.y"))
+    if (sx and math.abs(sx) <= 0.0001) or
+       (sy and math.abs(sy) <= 0.0001) then return false end
     cur = parent(cur)
   end
   return true
@@ -837,6 +841,10 @@ local function visible_for_overlay(e)
     local diffuse_a = tonumber(attr(cur, "diffuse.a"))
     if diffuse_a and diffuse_a <= 0.01 and
        not hidden_attribute_by_adapter(cur, "diffuse.a") then return false end
+    local sx = tonumber(attr(cur, "scale.x"))
+    local sy = tonumber(attr(cur, "scale.y"))
+    if (sx and math.abs(sx) <= 0.0001) or
+       (sy and math.abs(sy) <= 0.0001) then return false end
     cur = parent(cur)
   end
   return true
@@ -850,7 +858,8 @@ local function safe_visual_parent(child)
   -- adapter. Never promote one into a hide target merely because an icon or
   -- material happens to be nested beneath it.
   local okpt, pt = pcall(getElementType, p)
-  pt = okpt and tostring(pt):lower() or ""
+  if not okpt then return nil end
+  pt = tostring(pt):lower()
   if pt == "behavior" then return nil end
 
   -- Never climb through a wrapper that also owns another presentation branch.
