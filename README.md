@@ -14,7 +14,10 @@ Original GOTY USA/Europe and German GOTY dumps are supported by the default
 [x] Can be used to beat the game\
 [x] Guild chest fully unlocked\
 [x] Uncapped framerate / increased framerate\
-[ ] Higher Resolution support\
+[x] Higher Resolution support
+  - [x] 1×–7× internal render scaling
+  - [x] Preset or custom physical output sizes from 4:3 through 4:1
+  - [x] Aspect-aware 3D projection, GameFace HUD placement, and native 2D correction
 [x] Built in Debug Menu
   - [x] Enabling custom lua to run in game
 
