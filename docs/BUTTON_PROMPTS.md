@@ -133,27 +133,53 @@ can be tuned live with `ui_prompt_overlay_offset_x` and
 Modifier chords are rendered as separate keycaps, for example
 `Shift+Up -> [S] + [Up]`, while in-GameFace text remains compact (`S+Up`).
 
+## Legacy UITextPrompt title fallback
+
+The verified title-screen prompt has a separate renderer:
+`UITextPrompt_Render -> UITextPrompt_RenderElement`. By that stage the
+`Press <a_img> to start` source string may already have been discarded and
+the renderer receives only laid-out element/drawable data.
+
+`src/diagnostics/fable2_legacy_prompt.h` now bridges that specific path. It
+always forwards to the original renderer first, then uses the documented
+post-render element state only as a visibility/blink signal. No legacy draw
+object, material, texture or element list is rewritten.
+
+The source scanner separately tracks whether a live rewritten title allocation
+still exists. The legacy host keycap is allowed only when all of the following
+are true:
+
+- keyboard/mouse is the active prompt device;
+- `ui_prompt_legacy_fallback = true`;
+- the title prompt's normal writable-source rewrite is not currently active;
+- `UITextPrompt_RenderElement` has just rendered a visible drawable.
+
+The visibility pulse expires after roughly 110 ms, so the host keycap follows
+the title prompt's original blink instead of remaining continuously visible.
+It covers the already-baked A sprite at the authored bottom-center title
+position. `ui_prompt_legacy_offset_x` and `ui_prompt_legacy_offset_y`
+(default 0, range -128..128) allow live alignment correction without a code
+change.
+
+This is deliberately a cover/fallback, not a global controller-texture
+replacement. Switching back to a controller makes it disappear immediately,
+and a recovered/live `<a_img>` source rewrite suppresses it automatically.
+
 ## Remaining hard boundary
 
-Ordinary GameFace controller artwork no longer needs a writable companion label:
-the host-overlay fallback can replace known, currently visible icon elements
-when a safe opacity/active target exists.
+Ordinary GameFace controller artwork and the verified legacy title prompt are
+now covered. The remaining unknown cases are narrower:
 
-The remaining hard cases are narrower:
-
-- prompt sprites produced by the separate legacy `UITextPrompt` inline-sprite
-  pipeline after their source markup has already been discarded;
+- other legacy `UITextPrompt` / inline-sprite users for which no stable
+  element-to-screen-position contract has yet been identified;
 - presentation artwork that never appears in the traversable GameFace scene;
-- icon nodes whose own element and immediate wrapper expose no safe visibility
-  attribute.
+- GameFace icon nodes whose own element and immediate wrapper expose no safe
+  visibility attribute.
 
-Those stay native rather than being guessed at. The title-screen
-`Press <a_img> to start` path is normally handled earlier by the pre-layout
-writable-string rewrite, so the unresolved legacy-renderer case is primarily a
-fallback for strings that escape that early pass.
-
-A future resolver hook at the `0x820D7B50` tag table / `UITextPrompt`
-layout boundary could close the final gap without global texture replacement.
+Those remain native rather than being assigned the title prompt's fixed
+position or globally replacing a shared Xbox texture. A future targeted hook at
+the `0x820D7B50` tag resolver/layout boundary could generalize the legacy
+fallback once the other call sites and their position data are identified.
 
 ## Diagnostics
 
@@ -165,7 +191,12 @@ the GUI bridge.
 If `replaced > 0` while a particular Xbox image remains visible, that image
 is likely already represented as a cached/baked GameFace element. If the
 element has a safe sibling text label, the GameFace adapter can handle it; if
-not, preserving the native icon is intentional.
+not, the texture-only overlay fallback is the next layer.
+
+For the title screen, a visible legacy keycap with `replaced=0` is expected:
+it means layout happened before a writable `<a_img>` allocation could be
+retained, so the verified `UITextPrompt` fallback is covering the baked A
+sprite instead.
 
 Actual visual coverage still depends on the presentation currently loaded.
 This source work has not been verified here against a captured Windows game
