@@ -376,6 +376,19 @@ class Fable2App : public rex::ReXApp {
       REXSYS_INFO("[build-profile] detected {}", version->name);
     }
     seed_cvar("keyboard_gamepad_map", cfg.keyboard_gamepad_map);
+    seed_cvar("ui_prompt_mode", cfg.prompt_mode);
+    seed_cvar("ui_prompt_overlay_fallback",
+              cfg.prompt_overlay_fallback ? "true" : "false");
+    seed_cvar("ui_prompt_overlay_offset_x",
+              std::to_string(cfg.prompt_overlay_offset_x));
+    seed_cvar("ui_prompt_overlay_offset_y",
+              std::to_string(cfg.prompt_overlay_offset_y));
+    seed_cvar("ui_prompt_legacy_fallback",
+              cfg.prompt_legacy_fallback ? "true" : "false");
+    seed_cvar("ui_prompt_legacy_offset_x",
+              std::to_string(cfg.prompt_legacy_offset_x));
+    seed_cvar("ui_prompt_legacy_offset_y",
+              std::to_string(cfg.prompt_legacy_offset_y));
     seed_cvar("mouse_look", cfg.mouse_look ? "true" : "false");
     seed_cvar("mouse_direct_look", cfg.mouse_direct_look ? "true" : "false");
     REXSYS_INFO("[mouse-camera] startup mode={} enabled={} "
