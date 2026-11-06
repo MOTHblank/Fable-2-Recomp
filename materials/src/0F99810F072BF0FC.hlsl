@@ -150,12 +150,18 @@ float SunVisibility(Cascade cascade, float4 clip, float2 rotation, bool soft) {
   reference += bias;
 
   float filter_radius = 1.25 * texel;
+  // The 48-texel search cap is in guest shadow-map texels. A scaled shadow
+  // target contains multiple host texels per guest texel, so preserve the same
+  // world-space search reach rather than shrinking it as render scale rises.
+  float guest_texel_scale =
+      XeIsTextureResolutionScaled(cascade.fetch) ? XeDrawResolutionScale().x : 1.0;
+  float max_search_radius = 48.0 * texel * guest_texel_scale;
   // Whether any caster is near enough to shadow the point at all.
   bool any_blocker = true;
   if (soft && scales_valid) {
     float tan_angle = tan(radians(kSunAngularRadius * XeShadowSoftness()));
     float search_radius =
-        clamp(kMaxCasterDistance * tan_angle * world_scales.x, filter_radius, 48.0 * texel);
+        clamp(kMaxCasterDistance * tan_angle * world_scales.x, filter_radius, max_search_radius);
     float blocker_sum = 0.0, blocker_count = 0.0;
     for (uint i = 0; i < cascade.blocker_taps; ++i) {
       float2 offset = Rotate(kPoissonDisk16[i], rotation) * search_radius;
