@@ -389,12 +389,14 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
           "input=" + active + " A=" + keys[0] +
           " B=" + keys[1] + " X=" + keys[2] + " Y=" + keys[3]);
     }
+    const auto gui_sync_interval =
+        keyboard && overlay ? std::chrono::milliseconds(100)
+                            : std::chrono::milliseconds(750);
     if (graphical_changed) {
       previous_overlay = overlay;
       have_previous = true;
       SyncGraphicalPrompts(keyboard);
-      next_gui_sync = std::chrono::steady_clock::now() +
-                      std::chrono::milliseconds(750);
+      next_gui_sync = std::chrono::steady_clock::now() + gui_sync_interval;
     }
     if (keyboard) {
       // Reused/freed guest strings may no longer belong to this list. Never
@@ -440,12 +442,14 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
     }
     const auto now = std::chrono::steady_clock::now();
     // Presentations are created and destroyed independently of the source
-    // strings. Re-broadcast periodically so a newly loaded HUD/menu receives
-    // the current prompt mode even when the player has not changed devices.
-    // enqueue_all() coalesces broadcasts by tag and the Lua side is idempotent.
+    // strings. In keyboard+overlay mode a lightweight Lua refresh runs around
+    // 10 Hz so moving HUD/world prompt keycaps track their element; the Lua
+    // side performs full discovery/text adaptation only about every eighth
+    // refresh. Other modes keep the older 750 ms full-sync cadence.
+    // enqueue_all() coalesces broadcasts by tag.
     if (now >= next_gui_sync) {
       SyncGraphicalPrompts(keyboard);
-      next_gui_sync = now + std::chrono::milliseconds(750);
+      next_gui_sync = now + gui_sync_interval;
     }
     if (now >= next_report) {
       Log("scan totals", "known_strings=" + std::to_string(matches) +
