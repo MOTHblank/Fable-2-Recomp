@@ -386,6 +386,12 @@ inline void enqueue_all(const std::string& tag, const std::string& code) {
   s.pending.push_back(p);
 }
 
+inline bool has_pending() {
+  State& s = S();
+  std::lock_guard<std::mutex> lock(s.mu);
+  return !s.pending.empty();
+}
+
 inline std::string prompt_lua_quote(std::string_view value) {
   std::string out = "\"";
   for (char ch : value) {
@@ -622,6 +628,7 @@ inline void note_state(const uint8_t* base, uint32_t L, bool active) {
 
 inline std::string status_line(const uint8_t* base) {
   State& s = S();
+  std::lock_guard<std::mutex> lock(s.mu);
   char b[320];
   std::snprintf(b, sizeof b,
                 "states %zu, target 0x%08X (hud 0x%08X, chosen 0x%08X, last active 0x%08X), gui thread %s, "
@@ -651,7 +658,7 @@ extern "C" void ProcessAndHandleType3_82BB68D8(PPCContext& ctx, uint8_t* base) {
   auto& s = fable2::guilua::S();
   if (s.armed.load(std::memory_order_relaxed) && !s.busy) {
     fable2::guilua::note_state(base, ctx.r3.u32, true);
-    if (!s.pending.empty()) fable2::guilua::drain(ctx, base);
+    if (fable2::guilua::has_pending()) fable2::guilua::drain(ctx, base);
   }
   __imp__ProcessAndHandleType3_82BB68D8(ctx, base);
 }
@@ -663,7 +670,7 @@ extern "C" void ProcessAndHandleType_82BB6CA0(PPCContext& ctx, uint8_t* base) {
   auto& s = fable2::guilua::S();
   if (s.armed.load(std::memory_order_relaxed) && !s.busy) {
     fable2::guilua::note_state(base, ctx.r3.u32, true);
-    if (!s.pending.empty()) fable2::guilua::drain(ctx, base);
+    if (fable2::guilua::has_pending()) fable2::guilua::drain(ctx, base);
   }
   __imp__ProcessAndHandleType_82BB6CA0(ctx, base);
 }
@@ -672,7 +679,7 @@ extern "C" void ProcessAndReadAndProcess_82BB7100(PPCContext& ctx, uint8_t* base
   auto& s = fable2::guilua::S();
   if (s.armed.load(std::memory_order_relaxed) && !s.busy) {
     fable2::guilua::note_state(base, ctx.r3.u32, true);
-    if (!s.pending.empty()) fable2::guilua::drain(ctx, base);
+    if (fable2::guilua::has_pending()) fable2::guilua::drain(ctx, base);
   }
   __imp__ProcessAndReadAndProcess_82BB7100(ctx, base);
 }
