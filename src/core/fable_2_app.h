@@ -403,8 +403,9 @@ class Fable2App : public rex::ReXApp {
               std::to_string(REXCVAR_GET(mouse_flick_buffer_polls)));
     // Keep mouse-only configurations working even when the keyboard map is empty.
     seed_cvar("mnk_mode", "true");
-    // SDL3 relative motion travels directly to the guest camera hook, without
-    // being clipped to a virtual Xbox right-stick axis first.
+    // In Direct mode SDL3 relative motion is retained as raw displacement
+    // until guest user 0's XamInputGetState wrapper merges it into the native
+    // right-stick state. The later camera hook only drains/classifies frames.
     rex::input::mnk::SetMouseMotionCallback([](float dx, float dy, bool reset) {
       if (reset) fable2::mouselook::request_reset();
       else fable2::mouselook::add_delta(dx, dy);
