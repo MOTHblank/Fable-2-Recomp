@@ -55,14 +55,12 @@ struct Values {
   int32_t mouse_deadzone_compensation = 0;
   // Delayed remainder is intentionally Native-only.
   int32_t mouse_flick_buffer_polls = 4;
-  // Log the active camera's orientation fields once, the first frame the mouse
-  // moves, to confirm the offset guesses above (and to spot which fields are
-  // position vs. angle vs. the transform). Off by default.
+  // Log route/classification counters plus [mouse-native] correlation records
+  // that pair each guest-user-0 RX/RY injection with the next hero-camera
+  // resolution. Off by default.
   bool mouse_look_camera_diag = false;
-  // Dump EVERY 4-byte field of the active camera object (offset 0..260) plus the
-  // orientation quaternions, once per frame (capped), to the [ml-dump] log. Used
-  // to empirically find which fields the game's own right-stick look changes so
-  // the mouse look can drive the same field(s). Off by default.
+  // Legacy deep camera/controller field dump retained for reverse engineering
+  // the native pipeline. It never modifies camera state. Off by default.
   bool mouse_look_camera_dump = false;
   // [patches] - toggles for the recomp-level (mid-asm hook) patches. The
   // hook bodies consult these at runtime (src/core/fable2_hooks.cpp), so a patch
