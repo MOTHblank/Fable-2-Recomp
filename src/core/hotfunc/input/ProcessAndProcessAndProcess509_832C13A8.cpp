@@ -82,4 +82,5 @@ extern "C" void ProcessAndProcessAndProcess509_832C13A8(
         before_f1, before_f2, before_f3, before_f4,
         ctx.f1.f64, ctx.f2.f64, ctx.f3.f64, ctx.f4.f64,
         observe_r3 ? 1 : 0);
-  }}
+  }
+}
