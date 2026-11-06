@@ -63,7 +63,9 @@ inline std::string DisplayKey(std::string_view bindings) {
     else if (u == "LMB" || u == "RMB" || u == "MMB" ||
              u == "XMB1" || u == "XMB2") {
       mouse_key = true;
-      shown = u;
+      if (u == "XMB1") shown = "M4";
+      else if (u == "XMB2") shown = "M5";
+      else shown = u;
     }
 
     shown = prefix + shown;
