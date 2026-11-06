@@ -830,25 +830,42 @@ local function safe_visual_parent(child)
   return p
 end
 
-local function hide_for_overlay(e)
+local function choose_visual_hide(e)
   local target = e
   for _ = 1, 4 do
     if not target then break end
-    if hidden_by_adapter(target) then return target end
+
     local opacity = tonumber(attr(target, "opacity"))
     if opacity and opacity > 0.01 then
-      if remember_set(target, "opacity", 0) then return target end
+      return target, "opacity", attr(target, "opacity"), 0
     end
+
     local active = attr(target, "active")
     if active == true or active == 1 then
-      if remember_set(target, "active", false) then return target end
+      return target, "active", active, false
     end
+
     local diffuse_a = tonumber(attr(target, "diffuse.a"))
     if diffuse_a and diffuse_a > 0.01 then
-      if remember_set(target, "diffuse.a", 0) then return target end
+      return target, "diffuse.a", attr(target, "diffuse.a"), 0
     end
+
     target = safe_visual_parent(target)
   end
+  return nil
+end
+
+local function hide_for_overlay(e)
+  local tracked = e
+  for _ = 1, 4 do
+    if not tracked then break end
+    if hidden_by_adapter(tracked) then return tracked end
+    tracked = safe_visual_parent(tracked)
+  end
+
+  local target, attribute, old_value, hidden_value = choose_visual_hide(e)
+  if not target then return nil end
+  if remember_set(target, attribute, hidden_value) then return target end
   return nil
 end
 
@@ -944,8 +961,9 @@ local function walk(e, depth)
   local label = action and __labels[action] or nil
   if label and label ~= "" then
     local prior = P.icons[e]
-    local prior_ok = prior and prior.text and
-                     attr(e, prior.attr) == prior.icon_value and
+    local prior_target = prior and (prior.target or e) or nil
+    local prior_ok = prior and prior.text and prior_target and
+                     attr(prior_target, prior.attr) == prior.icon_value and
                      text_of(prior.text) == prior.text_value
     if prior_ok then
       used_text[prior.text] = true
@@ -953,16 +971,9 @@ local function walk(e, depth)
       P.icons[e] = nil
       local text_el, original = nearby_text(e)
       if text_el and not used_text[text_el] and visible_for_prompt(e) then
-        local icon_attr, old_icon = "opacity", attr(e, "opacity")
-        local icon_value = 0
-        if old_icon == nil then
-          icon_attr, old_icon, icon_value = "active", attr(e, "active"), false
-        end
-        if old_icon == nil then
-          icon_attr, old_icon, icon_value =
-              "diffuse.a", attr(e, "diffuse.a"), 0
-        end
-        if old_icon ~= nil then
+        local hide_target, icon_attr, old_icon, icon_value =
+            choose_visual_hide(e)
+        if hide_target and old_icon ~= nil then
           local old_text = attr(text_el, "textstring")
           local prefix = "[" .. label .. "]"
           local new_text = nil
@@ -973,12 +984,14 @@ local function walk(e, depth)
           if new_text then
             local text_ok = pcall(setAttribute, text_el, "textstring", new_text)
             local icon_ok = text_ok and
-                            pcall(setAttribute, e, icon_attr, icon_value)
+                            pcall(setAttribute, hide_target,
+                                  icon_attr, icon_value)
             if text_ok and icon_ok then
               record_applied(text_el, "textstring", old_text, new_text)
-              record_applied(e, icon_attr, old_icon, icon_value)
+              record_applied(hide_target, icon_attr, old_icon, icon_value)
               P.icons[e] = {
                 text=text_el, text_value=new_text,
+                target=hide_target,
                 attr=icon_attr, icon_value=icon_value
               }
               used_text[text_el] = true
@@ -1016,7 +1029,10 @@ if full_scan then
       end
     end
     for icon, info in pairs(P.icons) do
-      if not present[icon] or not (info and info.text and present[info.text]) then
+      local target = info and (info.target or icon) or nil
+      if not present[icon] or
+         not (info and info.text and present[info.text]) or
+         not (target and present[target]) then
         P.icons[icon] = nil
       end
     end
