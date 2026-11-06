@@ -37,6 +37,9 @@ struct Values {
   int32_t config_version = 1;
   // Host-side startup snapshots of saves/, opt-in; up to three generations.
   bool native_save_snapshots = false;
+  // Optional safety ceilings for one snapshot. 0 = no artificial limit.
+  int64_t native_save_snapshot_max_mib = 0;
+  int64_t native_save_snapshot_max_files = 0;
   // [input]
   std::string keyboard_gamepad_map{std::string{kDefaultKeyboardGamepadMap}};
   // Adaptive Xbox -> keyboard/mouse UI. "auto" follows the last meaningful
