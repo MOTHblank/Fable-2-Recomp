@@ -43,11 +43,13 @@ extern "C" void ProcessAndProcessAndProcess509_832C13A8(
   uint32_t before0 = 0;
   uint32_t before4 = 0;
   uint32_t before8 = 0;
+  const bool observe_fields =
+      trace && fable2::mouselook::is_plausible_guest_ptr(object);
   if (trace) {
     last_sample = sample.sequence;
     ++logged;
-    // The original body itself reads these fields, so observing the same
-    // addresses before dispatch does not introduce a new validity assumption.
+  }
+  if (observe_fields) {
     before0 = REX_LOAD_U32(object + 0);
     before4 = REX_LOAD_U32(object + 4);
     before8 = REX_LOAD_U32(object + 8);
@@ -56,15 +58,15 @@ extern "C" void ProcessAndProcessAndProcess509_832C13A8(
   __imp__ProcessAndProcessAndProcess509_832C13A8(ctx, base);
 
   if (trace) {
-    const uint32_t after0 = REX_LOAD_U32(object + 0);
-    const uint32_t after4 = REX_LOAD_U32(object + 4);
-    const uint32_t after8 = REX_LOAD_U32(object + 8);
+    const uint32_t after0 = observe_fields ? REX_LOAD_U32(object + 0) : 0;
+    const uint32_t after4 = observe_fields ? REX_LOAD_U32(object + 4) : 0;
+    const uint32_t after8 = observe_fields ? REX_LOAD_U32(object + 8) : 0;
     REXSYS_INFO(
         "[mouse-normalize-candidate] seq={} mouse={:.3f},{:.3f} "
         "rx={}->{} ry={}->{} arg3=0x{:08X} obj=0x{:08X} "
         "u32=[{:08X},{:08X},{:08X}]->[{:08X},{:08X},{:08X}] "
         "f=[{:.5f},{:.5f},{:.5f}]->[{:.5f},{:.5f},{:.5f}] "
-        "ret_r3=0x{:08X}",
+        "fields={} ret_r3=0x{:08X}",
         sample.sequence, sample.mouse_dx, sample.mouse_dy,
         sample.native_rx, sample.injected_rx,
         sample.native_ry, sample.injected_ry,
@@ -72,6 +74,6 @@ extern "C" void ProcessAndProcessAndProcess509_832C13A8(
         before0, before4, before8, after0, after4, after8,
         BitsAsFloat(before0), BitsAsFloat(before4), BitsAsFloat(before8),
         BitsAsFloat(after0), BitsAsFloat(after4), BitsAsFloat(after8),
-        ctx.r3.u32);
+        observe_fields ? 1 : 0, ctx.r3.u32);
   }
 }
