@@ -250,6 +250,8 @@ static DirectMouseResult ClassifyDirectMouseCamera(rex::memory::Memory* mem,
 // pointer into host memory. Native/controller mode does not touch camera state.
 void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
   const auto& cfg = fable2::config::Get();
+  const bool special_input_fallback =
+      fable2::mouselook::take_native_fallback_request();
   rex::memory::Memory* mem =
       fable2::mouselook::memory_ref().load(std::memory_order_acquire);
   if (!mem) {
@@ -283,25 +285,36 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
   if (!direct) rex::input::mnk::SetDirectMouseEligible(false);
 
   static uint64_t calls = 0, eligible = 0, not_hero = 0, constrained = 0;
-  static uint64_t invalid_output = 0;
+  static uint64_t special_input = 0, invalid_output = 0;
   ++calls;
   // One native frame after camera/mode changes keeps stale raw displacement
   // from crossing into a newly selected camera. The SDK uses the result on
   // the next poll; ineligible cameras keep ordinary virtual-stick mouse input.
   if (direct && !(camera_changed || mode_changed)) {
-    const DirectMouseResult result =
-        ClassifyDirectMouseCamera(mem, cam, r1.u32, raw_route_active);
+    // The input stage sees LT/LB/R3 before camera update. Keep native emulation
+    // authoritative for target lock, first-person and View Hero for the whole
+    // frame instead of allowing the camera classifier to re-enable raw input.
+    if (special_input_fallback) {
+      ++special_input;
+      clear_frames = 0;
+      raw_route_active = false;
+      rex::input::mnk::SetDirectMouseEligible(false);
+    }
+
+    const DirectMouseResult result = special_input_fallback
+        ? DirectMouseResult::kNativeConstraint
+        : ClassifyDirectMouseCamera(mem, cam, r1.u32, raw_route_active);
 
     // Re-enter Direct only after three consecutive clear hero-follow frames.
     // Exiting is immediate. This prevents a wall edge / authored blend from
     // chattering between raw and SDK-stick routes around the threshold.
-    if (result == DirectMouseResult::kEligible) {
+    if (!special_input_fallback && result == DirectMouseResult::kEligible) {
       if (!raw_route_active && ++clear_frames >= 3) {
         raw_route_active = true;
         clear_frames = 0;
         rex::input::mnk::SetDirectMouseEligible(true);
       }
-    } else {
+    } else if (!special_input_fallback) {
       clear_frames = 0;
       if (raw_route_active) {
         raw_route_active = false;
@@ -313,13 +326,15 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
         rex::input::mnk::SetDirectMouseEligible(false);
       }
     }
-    switch (result) {
-      case DirectMouseResult::kEligible: ++eligible; break;
-      case DirectMouseResult::kNotHero: ++not_hero; break;
-      case DirectMouseResult::kNativeConstraint: ++constrained; break;
-      case DirectMouseResult::kInvalidOutput: ++invalid_output; break;
+    if (!special_input_fallback) {
+      switch (result) {
+        case DirectMouseResult::kEligible: ++eligible; break;
+        case DirectMouseResult::kNotHero: ++not_hero; break;
+        case DirectMouseResult::kNativeConstraint: ++constrained; break;
+        case DirectMouseResult::kInvalidOutput: ++invalid_output; break;
+      }
     }
-    if (cfg.mouse_look_camera_diag &&
+    if (!special_input_fallback && cfg.mouse_look_camera_diag &&
         result == DirectMouseResult::kInvalidOutput && invalid_output == 1) {
       if (r1.u32 >= 0x10000u && (r1.u32 & 0xFu) == 0 &&
           r1.u32 <= 0xFFFF0000u) {
@@ -340,9 +355,9 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
     if (cfg.mouse_look_camera_diag && calls % 300 == 0) {
       REXSYS_INFO(
           "[mouse-camera] enabled=1 hook={} eligible={} not-hero={} "
-          "native-constraint={} bad-stack={} raw-events={} native-injections={} "
-          "capture-resets={} cam=0x{:08X} sp=0x{:08X}",
-          calls, eligible, not_hero, constrained, invalid_output,
+          "native-constraint={} special-input={} bad-stack={} raw-events={} "
+          "native-injections={} capture-resets={} cam=0x{:08X} sp=0x{:08X}",
+          calls, eligible, not_hero, constrained, special_input, invalid_output,
           fable2::mouselook::raw_motion_events().load(std::memory_order_relaxed),
           fable2::mouselook::native_injections().load(std::memory_order_relaxed),
           fable2::mouselook::capture_resets().load(std::memory_order_relaxed),
