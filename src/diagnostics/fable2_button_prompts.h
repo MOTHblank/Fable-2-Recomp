@@ -75,11 +75,28 @@ inline std::atomic<uint32_t>& TitleExpectedKeyboardElements() {
   static std::atomic<uint32_t> value{0};
   return value;
 }
+// Baked UITextPrompt element ordinal and face-action index for the first
+// known image tag in the localized title source. UINT32_MAX means the scanner
+// has not observed enough source markup to identify the sprite safely.
+inline std::atomic<uint32_t>& TitleExpectedIconElement() {
+  static std::atomic<uint32_t> value{UINT32_MAX};
+  return value;
+}
+inline std::atomic<uint32_t>& TitleExpectedIconAction() {
+  static std::atomic<uint32_t> value{UINT32_MAX};
+  return value;
+}
 inline uint32_t TitleExpectedBakedElementCount() {
   return TitleExpectedBakedElements().load(std::memory_order_acquire);
 }
 inline uint32_t TitleExpectedKeyboardElementCount() {
   return TitleExpectedKeyboardElements().load(std::memory_order_acquire);
+}
+inline uint32_t TitleExpectedIconElementOrdinal() {
+  return TitleExpectedIconElement().load(std::memory_order_acquire);
+}
+inline uint32_t TitleExpectedIconActionIndex() {
+  return TitleExpectedIconAction().load(std::memory_order_acquire);
 }
 
 inline bool Writable(const void* pointer, size_t count) {
@@ -177,6 +194,33 @@ inline size_t KnownTagCount(std::u16string_view text) {
   return count;
 }
 
+inline bool FirstKnownTagLayout(std::u16string_view text,
+                                uint32_t& element_ordinal,
+                                uint32_t& action_index) {
+  static constexpr std::array<std::u16string_view, 6> tags{
+      u"<a_img>", u"<b_img>", u"<c_img>", u"<d_img>",
+      u"<x_img>", u"<y_img>"};
+  // Matches Rewrite(): a/b/c/d are A/B/X/Y, x/y are X/Y aliases.
+  static constexpr std::array<uint32_t, 6> actions{0, 1, 2, 3, 2, 3};
+
+  uint32_t element = 0;
+  for (size_t i = 0; i < text.size();) {
+    bool matched = false;
+    for (size_t k = 0; k < tags.size(); ++k) {
+      const auto tag = tags[k];
+      if (text.substr(i, tag.size()) != tag) continue;
+      element_ordinal = element;
+      action_index = actions[k];
+      return true;
+    }
+    // The scanner accepts only BMP text units here, so each ordinary UTF-16
+    // code unit maps to one laid-out glyph element.
+    ++element;
+    ++i;
+  }
+  return false;
+}
+
 // Walk the committed front-end heap, locating NUL-terminated UTF-16BE source
 // strings containing known inline tags. The title prompt and main menu strings
 // were observed in 0x40000000..0x44000000. No asset or code pages are touched.
@@ -264,6 +308,15 @@ inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
           TitleExpectedKeyboardElements().store(
               static_cast<uint32_t>(text.size()),
               std::memory_order_release);
+
+          uint32_t icon_element = UINT32_MAX;
+          uint32_t icon_action = UINT32_MAX;
+          if (FirstKnownTagLayout(text, icon_element, icon_action)) {
+            TitleExpectedIconElement().store(icon_element,
+                                             std::memory_order_release);
+            TitleExpectedIconAction().store(icon_action,
+                                            std::memory_order_release);
+          }
         }
       }
       // Guest allocations and cached lengths are never resized here. Every
