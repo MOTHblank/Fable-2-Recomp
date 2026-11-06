@@ -1,7 +1,7 @@
 # Fable 2 — ReXGlue Recompiled Project
 First and for most this project was made to test the capabilities of local and open source AI. This project was made using Qwen3.8 27b. After about an hour it got the game running. Then after a large amount of human trial and error I was able to get enough of the functions mapped to be able to complete the game. I currently do not consider this to be fully complete as I have yet to 100% the game. The sha256 of the iso that started this project is: "685a0d3bea9718812f17bcd155907a5359a548b6d3d8342dd2a6c944f45e35ff" and its the Fable 2 GOTY for USA and Europe.
 
-Recompilation of Fable 2 (Xbox 360, title ID 4D5307F1) using the [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk) v0.10.0. Guest PPC code is statically recompiled to C++ at build time by `rexglue codegen`, driven by `fable_2_manifest.toml`.
+Recompilation of Fable 2 (Xbox 360, title ID 4D5307F1) using the pinned [MOTHblank ReXGlue SDK fork](https://github.com/MOTHblank/rexglue-sdk), synchronized with current upstream ReXGlue plus Fable-specific runtime and renderer work. Guest PPC code is statically recompiled to C++ at build time by the matching source-built `rexglue codegen`, driven by `fable_2_manifest.toml`.
 
 # Important Note:
 **This project does not condone Piracy, any mentions or links will result in removal and an instant ban from this repo!**
@@ -572,11 +572,10 @@ hardcoded paths**. Prerequisites (all standard tools):
 - **CMake** ≥ 3.25 (on PATH)
 - **LLVM** (clang/clang++/lld) — on PATH or the default `C:\Program Files\LLVM` install
 - **Ninja** (on PATH, `%USERPROFILE%\bin`, or the WinGet package dir)
-- **Internet** on first build — `build.cmd` auto-downloads the prebuilt
-  ReXGlue SDK v0.10.0 (~100 MB) from the
-  [official release](https://github.com/rexglue/rexglue-sdk/releases/tag/v0.10.0)
-  into `out\tooling\rexglue-sdk-0.10.0`. A compatible official SDK on PATH
-  is used instead if present. Downloads never replace the source submodule.
+- **Internet** when Git submodules have not been fetched yet. The default build
+  does **not** download or mix in a prebuilt ReXGlue SDK; runtime, renderer,
+  headers, CMake package and `rexglue.exe` are built from the pinned
+  `thirdparty\rexglue-sdk` revision.
 - **Python and Git** for code generation and source-SDK preparation. Install
   **pefile** with `python -m pip install pefile` for the Release PE-cleaning step.
   **Visual Studio Build Tools / Windows SDK** (x64 developer shell) are
@@ -609,18 +608,18 @@ and player-edited settings. End users need to extract their own game files
 through the launcher. Ordinary Release builds apply the post-build PE
 cleaner; the profiling preset continues to skip that normalization.
 
-The first `build.cmd` run fetches the official SDK if needed under `out/tooling`.
-The Windows build uses the pinned, patched SDK from source; see
-[runtime build requirements](docs/RUNTIME_FIXES.md). Game content is required
-for code generation; the launcher extracts it from your disc into `out\game`.
+The Windows build installs a complete matched SDK under
+`out/tooling/runtime-sdk/win-amd64`: headers, CMake package, runtime DLL,
+D3D12 plugin and the `rexglue.exe` used for code generation all come from the
+same pinned source revision. See [runtime build requirements](docs/RUNTIME_FIXES.md).
+Game content is required for code generation; the launcher extracts it from
+your disc into `out\game`.
 
 Manual/advanced setup (normally not needed):
 
 ```bat
-tools\setup_sdk.cmd      rem Download the official codegen SDK package.
-tools\setup_sdk_src.cmd  rem Initialize the pinned thirdparty\rexglue-sdk
-                         rem submodule and prepare the same tracked patches
-                         rem used by build_runtime_sdk.cmd.
+tools\setup_sdk_src.cmd       rem Initialize and verify the pinned SDK source.
+tools\build_runtime_sdk.cmd   rem Build/install the matched Release SDK package.
 ```
 
 Both backend builders use the **one pinned source tree** at
@@ -633,10 +632,11 @@ historical SDK follow-up patches remain in `thirdparty/` for older source
 revisions, but are **verified rather than reapplied** on the integrated SDK
 revision. Existing checkouts synchronize their submodule URL before updating;
 locally modified SDK sources are not overwritten automatically.
-The official binary SDK is retained only for its compatible codegen tool;
-`build.cmd` selects matching source-built native headers, libraries and
-renderer DLLs. No independent `rexglue-sdk-src` checkout or obsolete
-`rexglue-sdk-local.patch` application is required.
+`build.cmd` no longer uses an official binary SDK as a codegen donor. The
+source-built `rexglue.exe`, native headers, libraries and renderer DLLs are
+installed together and fingerprinted before the game build. No independent
+`rexglue-sdk-src` checkout or obsolete `rexglue-sdk-local.patch` application
+is required.
 
 - **One build configuration:** `build.cmd` always builds the Windows x64 Release game using Ninja and Clang into `out\build\win-amd64-release`, then places executable files in `out\game`. No user-facing build-mode or target selection is needed.
 - Codegen uses the tracked `fable_2_manifest.toml` with `[entrypoint].file_path = "out/game/default.xex"`. ReXGlue may regenerate `generated/rexglue.cmake` during codegen, but it continues to use that same manifest. No duplicate XEX, generated override manifest, or hard link is needed.
