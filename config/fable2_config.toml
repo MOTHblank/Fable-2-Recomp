@@ -178,3 +178,10 @@ dog_fur_depth_bias = true
 # every call); 0 = never yield; larger = fewer context switches.
 # Default: 4
 hotfunc_yield_every = 4
+
+# Native mapped game reads: memory-map read-only game:/d: files and satisfy
+# guest reads directly from the host OS page cache. Saves and any writable
+# files continue through ordinary file I/O. Disable this if you intentionally
+# replace game-content files while the game is running.
+# Default: true
+native_mapped_game_reads = true
