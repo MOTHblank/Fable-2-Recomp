@@ -40,6 +40,12 @@ extern "C" void ProcessAndProcessAndProcess509_832C13A8(
 
   const uint32_t arg3 = ctx.r3.u32;
   const uint32_t object = ctx.r4.u32;
+  const uint32_t arg5 = ctx.r5.u32;
+  const uint32_t arg6 = ctx.r6.u32;
+  const double before_f1 = ctx.f1.f64;
+  const double before_f2 = ctx.f2.f64;
+  const double before_f3 = ctx.f3.f64;
+  const double before_f4 = ctx.f4.f64;
   uint32_t before0 = 0;
   uint32_t before4 = 0;
   uint32_t before8 = 0;
@@ -63,17 +69,23 @@ extern "C" void ProcessAndProcessAndProcess509_832C13A8(
     const uint32_t after8 = observe_fields ? REX_LOAD_U32(object + 8) : 0;
     REXSYS_INFO(
         "[mouse-normalize-candidate] seq={} mouse={:.3f},{:.3f} "
-        "rx={}->{} ry={}->{} arg3=0x{:08X} obj=0x{:08X} "
+        "rx={}->{} ry={}->{} "
+        "r=[{:08X},{:08X},{:08X},{:08X}]->"
+        "[{:08X},{:08X},{:08X},{:08X}] "
         "u32=[{:08X},{:08X},{:08X}]->[{:08X},{:08X},{:08X}] "
-        "f=[{:.5f},{:.5f},{:.5f}]->[{:.5f},{:.5f},{:.5f}] "
-        "fields={} ret_r3=0x{:08X}",
+        "as-f32=[{:.5f},{:.5f},{:.5f}]->[{:.5f},{:.5f},{:.5f}] "
+        "fpr=[{:.5f},{:.5f},{:.5f},{:.5f}]->"
+        "[{:.5f},{:.5f},{:.5f},{:.5f}] fields={}",
         sample.sequence, sample.mouse_dx, sample.mouse_dy,
         sample.native_rx, sample.injected_rx,
         sample.native_ry, sample.injected_ry,
-        arg3, object,
+        arg3, object, arg5, arg6,
+        ctx.r3.u32, ctx.r4.u32, ctx.r5.u32, ctx.r6.u32,
         before0, before4, before8, after0, after4, after8,
         BitsAsFloat(before0), BitsAsFloat(before4), BitsAsFloat(before8),
         BitsAsFloat(after0), BitsAsFloat(after4), BitsAsFloat(after8),
-        observe_fields ? 1 : 0, ctx.r3.u32);
+        before_f1, before_f2, before_f3, before_f4,
+        ctx.f1.f64, ctx.f2.f64, ctx.f3.f64, ctx.f4.f64,
+        observe_fields ? 1 : 0);
   }
 }
