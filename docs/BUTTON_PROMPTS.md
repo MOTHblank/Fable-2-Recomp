@@ -78,11 +78,15 @@ GameFace relayout, so these replacements may use the natural compact form
 The adapter does **not** blindly suppress controller textures. It changes an
 icon only when it can find a nearby writable text label (for example the
 documented `AButton` + `ButtonText` pairing). In keyboard mode it hides that
-specific icon and prefixes the label with the live binding, such as
-`[E] Travel`. Texture paths ending in `icon_button_*.tex`, named
-`AButton/BButton/XButton/YButton` widgets, and the documented
-`Material2270` A-button material are recognized. It stores the original icon
-visibility and text in the presentation's Lua state. Switching back to
+specific visual branch and prefixes the label with the live binding, such as
+`[E] Travel`. Paired widgets use the same conservative single-visual-wrapper
+search as the texture-only fallback, so a material/texture node can still be
+hidden through its dedicated wrapper without hiding the sibling label or a
+different component. This native GameFace-text path is preferred over a host
+keycap whenever it is safe. Texture paths ending in `icon_button_*.tex`,
+named `AButton/BButton/XButton/YButton` widgets, and the documented
+`Material2270` A-button material are recognized. It stores the original
+visual attribute and text in the presentation's Lua state. Switching back to
 controller mode restores both.
 
 This gives non-string UI a practical PC representation without globally
