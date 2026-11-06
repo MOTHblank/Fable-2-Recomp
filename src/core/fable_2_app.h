@@ -138,7 +138,9 @@ class Fable2App : public rex::ReXApp {
       // restore the old polling KeyboardGamepadDriver.
       system->AddDriver(std::make_unique<fable2::remote::GamepadDriver>(
           system->window(), 0, &fable2::console::PadStore(),
-          &fable2::console::PadEnabled()));
+          &fable2::console::PadEnabled(),
+          fable2::remote::GamepadDriver::kConsoleDeviceId,
+          "Developer console gamepad", "fable2-console-gamepad"));
 #ifdef FABLE2_REMOTE_CONTROL
       // Remote (AI) pad: driven over localhost TCP by an external harness
       // (src/input/remote_control_server.h). OR-merges with the pads above; not
