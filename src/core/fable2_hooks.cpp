@@ -29,6 +29,7 @@ REXCVAR_DECLARE(bool, mouse_invert_y);
 
 #include "fable2_config.h"
 #include "mouse_look.h"  // guest camera memory read helpers for diagnostics
+#include <rex/input/mnk/mnk_input_driver.h>
 
 // ---------------------------------------------------------------------------
 // Guild chest unlock (fable2.com website items + Collectors Edition content).
@@ -305,7 +306,10 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
   const auto& cfg = fable2::config::Get();
   rex::memory::Memory* mem =
       fable2::mouselook::memory_ref().load(std::memory_order_acquire);
-  if (!mem) return;
+  if (!mem) {
+    rex::input::mnk::SetDirectMouseEligible(false);
+    return;
+  }
   const uint32_t cam = r31.u32;
   const bool direct = REXCVAR_GET(mouse_look) &&
                       REXCVAR_GET(mouse_direct_look);
@@ -320,11 +324,15 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
   last_cam = cam;
   was_direct = direct;
   if (camera_changed || mode_changed) {
+    rex::input::mnk::SetDirectMouseEligible(false);
     fable2::mouselook::request_reset();
     fable2::mouselook::reset_cumulative();
   }
-  if (!fable2::mouselook::is_plausible_guest_ptr(cam))
+  if (!fable2::mouselook::is_plausible_guest_ptr(cam)) {
+    rex::input::mnk::SetDirectMouseEligible(false);
     return;
+  }
+  if (!direct) rex::input::mnk::SetDirectMouseEligible(false);
 
   static uint64_t calls = 0, applied = 0, not_hero = 0;
   static uint64_t invalid_pose = 0, invalid_output = 0, invalid_input = 0;
@@ -335,6 +343,10 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
     const DirectMouseResult result = ApplyDirectMouseOrbit(
         mem, cam, r1.u32, REXCVAR_GET(mouse_look_scale),
         REXCVAR_GET(mouse_look_scale_y), REXCVAR_GET(mouse_invert_y));
+    // SDK uses this eligibility on the next input poll: secondary/scripted
+    // cameras retain mouse-driven native right-stick input. Raw motion is
+    // only intercepted when the hero pose and output layout are verified.
+    rex::input::mnk::SetDirectMouseEligible(result == DirectMouseResult::kApplied);
     switch (result) {
       case DirectMouseResult::kApplied: ++applied; break;
       case DirectMouseResult::kNotHero: ++not_hero; break;
