@@ -53,15 +53,15 @@ REXCVAR_DEFINE_BOOL(fit_window_hud_to_edges, true, "Display",
                     "With fit_game_to_window: move the HUD's edge elements to "
                     "the edges of a wide window");
 REXCVAR_DEFINE_BOOL(fit_window_native_16x9, true, "Display",
-                    "With fit_game_to_window: keep the game's own 2D screens "
-                    "(loading screens, the saving banner) at 16:9 in the "
-                    "middle of a wide window instead of stretching them");
+                    "With fit_game_to_window: preserve the game's own 16:9 2D "
+                    "screens without distortion (pillarbox on wider outputs, "
+                    "center-crop on narrower supported outputs)");
 REXCVAR_DEFINE_DOUBLE(fit_window_quad_power, 1.0, "Display",
-                      "With fit_window_native_16x9: the game's own 2D quads are "
-                      "squeezed by ((16/9)/aspect)^this (clip space)");
+                      "With fit_window_native_16x9: scale native 2D quad X by "
+                      "((16/9)/aspect)^this in clip space");
 REXCVAR_DEFINE_DOUBLE(fit_window_text_power, 1.0, "Display",
-                      "With fit_window_native_16x9: the game's own 2D text x "
-                      "moves toward the centre by ((16/9)/aspect)^this");
+                      "With fit_window_native_16x9: apply the matching "
+                      "centre-relative X transform to native 2D text");
 REXCVAR_DEFINE_BOOL(fit_window_ui_log, true, "Display",
                     "Log [ui-layout] lines: the element tree of each menu "
                     "and HUD screen as it loads, plus Gameface script messages");
