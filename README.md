@@ -19,8 +19,9 @@ Original GOTY USA/Europe and German GOTY dumps are supported by the default
   - [x] Enabling custom lua to run in game
 
 [x] Keyboard / Mouse Support\
-[ ] In game Text changed to respect keyboard and mouse
-  - [ ] Automatic swapping between text
+[x] Adaptive in-game button prompts for keyboard and mouse
+  - [x] Automatic last-used keyboard/mouse vs controller switching
+  - [x] Writable markup, live GameFace text, and safely paired icon widgets
 
 [ ] Increased performance / framerate\
 [x] Hero / Dog Texture bug fix (upstream renderer, verified on German GOTY)\
