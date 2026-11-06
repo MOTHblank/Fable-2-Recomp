@@ -45,7 +45,17 @@ struct Patched {
   uint8_t* address;
   std::vector<uint8_t> original;
   std::vector<uint8_t> changed;
+  bool title = false;
 };
+
+inline std::atomic<bool>& TitleSourceActive() {
+  static std::atomic<bool> active{false};
+  return active;
+}
+
+inline bool TitleSourceRewriteActive() {
+  return TitleSourceActive().load(std::memory_order_acquire);
+}
 
 inline bool Writable(const void* pointer, size_t count) {
   MEMORY_BASIC_INFORMATION m{};
@@ -62,12 +72,24 @@ inline bool Same(const Patched& patch) {
          std::memcmp(patch.address, patch.changed.data(), patch.changed.size()) == 0;
 }
 
+inline void RefreshTitleSourceState(const std::vector<Patched>& patches) {
+  bool active = false;
+  for (const auto& patch : patches) {
+    if (patch.title && Same(patch)) {
+      active = true;
+      break;
+    }
+  }
+  TitleSourceActive().store(active, std::memory_order_release);
+}
+
 // Only restore bytes if they're still exactly the ones we wrote. The guest can
 // free or reuse a heap allocation at any time; never write to stale contents.
 inline void Restore(std::vector<Patched>& patches) {
   for (auto& p : patches)
     if (Same(p)) std::memcpy(p.address, p.original.data(), p.original.size());
   patches.clear();
+  TitleSourceActive().store(false, std::memory_order_release);
 }
 
 inline bool TextUnit(uint16_t codepoint) {
@@ -165,7 +187,9 @@ inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
       // Only mutate when the text still matches the sampled original.
       if (std::memcmp(target, original.data(), bytes) != 0) continue;
       std::memcpy(target, changed.data(), bytes);
-      patches.push_back({target, std::move(original), std::move(changed)});
+      patches.push_back(
+          {target, std::move(original), std::move(changed), title});
+      if (title) TitleSourceActive().store(true, std::memory_order_release);
       ++replacements;
       i = end;
     }
@@ -239,6 +263,7 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
       // restore changed guest contents unless they still match our exact bytes.
       for (auto it = patches.begin(); it != patches.end();)
         it = Same(*it) ? std::next(it) : patches.erase(it);
+      RefreshTitleSourceState(patches);
       auto now = std::chrono::steady_clock::now();
       // Fast path for the documented title-prompt allocation neighborhood.
       // At 1 MiB per 40 ms this is bounded and runs only off the render thread.
