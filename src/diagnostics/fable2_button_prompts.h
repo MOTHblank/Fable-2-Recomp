@@ -334,12 +334,13 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
   std::vector<Patched> patches;
   ActionLabels previous_actions{};
   bool previous_keyboard = false;
-  auto next_fast = std::chrono::steady_clock::now();
-  auto next_full = next_fast;
-  auto next_report = next_fast;
-  auto next_gui_sync = next_fast;
+  auto next_title = std::chrono::steady_clock::now();
+  auto next_fast = next_title;
+  auto next_full = next_title;
+  auto next_report = next_title;
+  auto next_gui_sync = next_title;
   uint64_t matches = 0, replacements = 0;
-  Log("started; scan is native UI source-string replacement, not a texture hook");
+  Log("started; native prompt source rewrite: 64KiB title fast path + bounded front-end scans");
   while (!stop.stop_requested()) {
     const auto mode = rex::cvar::GetFlagByName("ui_prompt_mode");
     const auto active = rex::cvar::GetFlagByName("input_prompt_keyboard");
@@ -353,7 +354,8 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
       Restore(patches);
       previous_actions = actions;
       previous_keyboard = keyboard;
-      next_fast = next_full = std::chrono::steady_clock::now();
+      next_title = next_fast = next_full =
+          std::chrono::steady_clock::now();
       Log(keyboard ? "keyboard mode" : "controller mode",
           "input=" + active + " A=" + keys[0] +
           " B=" + keys[1] + " X=" + keys[2] + " Y=" + keys[3]);
@@ -368,12 +370,22 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
         it = Same(*it) ? std::next(it) : patches.erase(it);
       RefreshTitleSourceState(patches);
       auto now = std::chrono::steady_clock::now();
-      // Fast path for the documented title-prompt allocation neighborhood.
-      // At 1 MiB per 40 ms this is bounded and runs only off the render thread.
+      // The title source has moved between runs but every measured allocation
+      // stayed inside 0x4266xxxx. Scan just that 64 KiB page range frequently
+      // so the native game-font rewrite can beat the first/rebuilt layout
+      // without repeatedly walking a full MiB.
+      if (now >= next_title) {
+        Scan(arena, 0x42660000u, 0x42670000u, actions, patches,
+             matches, replacements);
+        next_title = now + std::chrono::milliseconds(8);
+      }
+      // Broader safety net for a future allocator shift within the documented
+      // 0x426xxxxx neighborhood. This is intentionally much slower now that
+      // the precise title range has its own cheap fast path.
       if (now >= next_fast) {
         Scan(arena, 0x42600000u, 0x42700000u, actions, patches,
              matches, replacements);
-        next_fast = now + std::chrono::milliseconds(40);
+        next_fast = now + std::chrono::milliseconds(120);
       }
       // Other front-end / localized strings are discovered more slowly; this
       // includes menu text and varied translations.
