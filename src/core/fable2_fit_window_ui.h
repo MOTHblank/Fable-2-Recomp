@@ -846,14 +846,18 @@ inline void SqueezeQuad(uint8_t* base, uint32_t rect, uint32_t verts,
   for (int i = 0; i < 4; ++i) x[i] = LoadBEFloat(v + i * 64);
   const float lo = std::min(std::min(x[0], x[1]), std::min(x[2], x[3]));
   const float hi = std::max(std::max(x[0], x[1]), std::max(x[2], x[3]));
-  // The quads come out in clip space; ((16/9)/A)^1 keeps the loading
-  // screens and the saving/verifying banner at their 16:9 size with their
-  // text inside (build 36, 32:9 screenshots). Build 15's square made the
-  // banners too small and the text spilled out. fit_window_quad_power
-  // changes the exponent live.
-  const bool squeeze = REXCVAR_GET(fit_window_native_16x9) && aspect > kWide + 0.01f;
-  if (squeeze) {
-    const float s = float(std::pow(double(kWide / aspect), REXCVAR_GET(fit_window_quad_power)));
+  // The quads come out in clip space. Scale X by (16/9)/A so their physical
+  // shape stays 16:9 at every supported window aspect. On ultrawide outputs
+  // this produces the existing pillarbox behavior; on 4:3 / 16:10 outputs it
+  // expands the native 16:9 plane and center-crops the sides instead of
+  // horizontally squashing artwork and banners. fit_window_quad_power keeps
+  // the live tuning path used during the original ultrawide investigation.
+  const bool preserve_aspect =
+      REXCVAR_GET(fit_window_native_16x9) && aspect > 0.0f &&
+      std::fabs(aspect - kWide) > 0.01f;
+  if (preserve_aspect) {
+    const float s =
+        float(std::pow(double(kWide / aspect), REXCVAR_GET(fit_window_quad_power)));
     for (int i = 0; i < 4; ++i) StoreBEFloat(v + i * 64, x[i] * s);
   }
   float r[4] = {0, 0, 0, 0};
@@ -874,7 +878,8 @@ inline void SqueezeQuad(uint8_t* base, uint32_t rect, uint32_t verts,
   }
   if (fresh) {
     Log("[native-2d] quad from 0x%08X rect {%.0f, %.0f, %.0f, %.0f}: x %.2f..%.2f%s",
-        caller, r[0], r[1], r[2], r[3], lo, hi, squeeze ? " (squeezed)" : "");
+        caller, r[0], r[1], r[2], r[3], lo, hi,
+        preserve_aspect ? " (aspect-preserved)" : "");
   }
 }
 }  // namespace fable2::fitwindow::ui::detail
@@ -887,12 +892,14 @@ DECLARE_REX_FUNC(sub_8235CF68);
 
 // The game's 2D text (sub_8235CF68, x in f1 on the 1280 canvas) already
 // draws its letters at the right shape, but build 19-20 showed the text
-// staying where it was while the banner behind it shrank to 16:9. So the x
-// it is given moves toward the centre by (16/9)/A, matching the banner.
+// staying where it was while the banner behind it changed width. Apply the
+// same centre-relative X transform as the native quad for both wider and
+// narrower supported outputs, keeping labels aligned with their artwork.
 extern "C" void sub_8235CF68(PPCContext& ctx, uint8_t* base) {
   const float a = fable2::fitwindow::CurrentAspect();
   const float wide = 16.0f / 9.0f;
-  if (REXCVAR_GET(fit_window_native_16x9) && a > wide + 0.01f) {
+  if (REXCVAR_GET(fit_window_native_16x9) && a > 0.0f &&
+      std::fabs(a - wide) > 0.01f) {
     ctx.f1.f64 = 640.0 + (ctx.f1.f64 - 640.0) *
                              std::pow(double(wide / a), REXCVAR_GET(fit_window_text_power));
   }
