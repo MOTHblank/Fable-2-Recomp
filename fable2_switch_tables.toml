@@ -10,6 +10,15 @@
 
 # Included from fable_2_manifest.toml via [entrypoint] includes.
 
+# Legacy UITextPrompt drawable leaf. The surrounding analyzed functions start
+# at 0x82C12ED8 and 0x82C12F78, so this indirect vtable target has the exact
+# non-overlapping extent 0x82C12F18..0x82C12F78. Naming it lets the PC prompt
+# adapter observe the already-prepared draw scratch without guessing offsets in
+# UITextPrompt_RenderElement or globally replacing controller textures.
+[functions."0x82C12F18"]
+name = "UITextPrompt_DrawableRender"
+size = 0x0060
+
 [[switch_tables]]
 address = 0x821775DC
 register = 11
