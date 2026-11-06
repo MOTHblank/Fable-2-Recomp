@@ -105,6 +105,9 @@
                     <ComboBoxItem Tag="2">2× — Native 1440p</ComboBoxItem>
                     <ComboBoxItem Tag="3">3× — Native 4K</ComboBoxItem>
                     <ComboBoxItem Tag="4">4× — 5120 × 2880</ComboBoxItem>
+                    <ComboBoxItem Tag="5">5× — 6400 × 3600</ComboBoxItem>
+                    <ComboBoxItem Tag="6">6× — 7680 × 4320</ComboBoxItem>
+                    <ComboBoxItem Tag="7">7× — 8960 × 5040</ComboBoxItem>
                   </ComboBox>
                 </StackPanel>
               </Grid>
