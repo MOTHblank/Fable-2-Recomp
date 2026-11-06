@@ -90,6 +90,8 @@ inline std::string DisplayKey(std::string_view bindings) {
 }
 
 using KeyLabels = std::array<std::string, 4>;  // A, B, X, Y
+using ActionLabels = std::array<std::string, 16>;
+// A, B, X, Y, LB, RB, LT, RT, Start, Back, LS, RS, Up, Down, Left, Right.
 
 inline std::u16string Rewrite(std::u16string_view original, const KeyLabels& keys) {
   // The title UI's image-tag table uses a/b/c/d; accept x/y aliases as
@@ -124,5 +126,69 @@ inline std::u16string Rewrite(std::u16string_view original, const KeyLabels& key
     if (!substituted) result += original[i++];
   }
   return result;
+}
+
+// Fixed-width rewrite for legacy/localized text that spells controller inputs
+// literally rather than using <x_img> markup. Only conservative English
+// instruction forms are touched, and only when the current key label fits in
+// the controller token's existing code-unit width. This keeps every guest
+// string length and allocation unchanged.
+//
+// Examples with the default mapping:
+//   "Press A to confirm" -> "Press E to confirm"
+//   "Hold LT"            -> "Hold Q "
+// Mouse-only X/Y bindings ("LMB"/"RMB") do not fit a one-character X/Y token
+// and therefore remain untouched here; live GameFace text can relayout those.
+inline std::u16string RewriteFixedInstructions(
+    std::u16string_view original, const ActionLabels& labels) {
+  constexpr std::array<std::u16string_view, 3> verbs{
+      u"Press ", u"Hold ", u"Tap "};
+  constexpr std::array<std::u16string_view, 12> tokens{
+      u"A", u"B", u"X", u"Y", u"LB", u"RB",
+      u"LT", u"RT", u"Start", u"Back", u"LS", u"RS"};
+  constexpr std::array<size_t, 12> actions{
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+
+  auto word = [](char16_t ch) {
+    return (ch >= u'0' && ch <= u'9') ||
+           (ch >= u'A' && ch <= u'Z') ||
+           (ch >= u'a' && ch <= u'z') || ch == u'_';
+  };
+
+  std::u16string out{original};
+  for (size_t i = 0; i < out.size(); ++i) {
+    for (auto verb : verbs) {
+      if (i + verb.size() > out.size() ||
+          std::u16string_view(out).substr(i, verb.size()) != verb) {
+        continue;
+      }
+      const size_t token_pos = i + verb.size();
+      for (size_t t = 0; t < tokens.size(); ++t) {
+        const auto token = tokens[t];
+        if (token_pos + token.size() > out.size() ||
+            std::u16string_view(out).substr(token_pos, token.size()) != token) {
+          continue;
+        }
+        const size_t after = token_pos + token.size();
+        if (after < out.size() && word(out[after])) continue;
+
+        const std::string& label = labels[actions[t]];
+        if (label.empty() || label.size() > token.size()) continue;
+        bool ascii = true;
+        for (unsigned char ch : label)
+          if (ch < 0x20 || ch > 0x7E) ascii = false;
+        if (!ascii) continue;
+
+        for (size_t j = 0; j < token.size(); ++j) {
+          out[token_pos + j] =
+              j < label.size() ? static_cast<char16_t>(label[j]) : u' ';
+        }
+        i = token_pos + token.size() - 1;
+        break;
+      }
+      break;
+    }
+  }
+  return out;
 }
 }  // namespace fable2::buttonprompts
