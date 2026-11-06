@@ -4,6 +4,7 @@
 #include "keyboard_gamepad.h"
 #include "mouse_look.h"
 #include <rex/cvar.h>
+#include <rex/input/mnk/mnk_input_driver.h>
 REXCVAR_DECLARE(std::string, keyboard_gamepad_map);
 REXCVAR_DECLARE(std::string, mouse_unlock_key);
 REXCVAR_DECLARE(bool, mouse_look);
@@ -132,6 +133,9 @@ inline void SyncLiveSettings() {
   if (direct != prev_direct) {
     prev_direct = direct;
     fable2::mouselook::request_reset();
+    // Eligibility belongs to the successful guest-user-0 XamInputGetState
+    // poll. Never carry an old eligible bit across a live mode toggle.
+    rex::input::mnk::SetDirectMouseEligible(false);
     rex::cvar::SetFlagByName("mnk_direct_mouse", direct ? "true" : "false");
   }
   auto x = REXCVAR_GET(mouse_look_scale);
