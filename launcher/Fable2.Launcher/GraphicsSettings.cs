@@ -6,6 +6,11 @@ namespace Fable2Launcher;
 public static class GraphicsSettings
 {
     public const int MaxInternalRenderScale = 7;
+    public const int MinOutputWidth = 640;
+    public const int MinOutputHeight = 360;
+    public const int MaxOutputDimension = 16384;
+    public const double MinSupportedAspect = 4.0 / 3.0;
+    public const double MaxSupportedAspect = 4.0;
     public static readonly string[] ManagedKeys =
     [
         "resolution", "window_width", "window_height", "resolution_scale",
@@ -17,16 +22,49 @@ public static class GraphicsSettings
     public static readonly string[] SdkManagedKeys =
         ManagedKeys.Where(key => key != "launcher_renderer").ToArray();
 
+    public static bool TryResolveOutputResolution(string resolution, string customWidth,
+        string customHeight, out int width, out int height)
+    {
+        (width, height) = resolution switch
+        {
+            "720p" => (1280, 720),
+            "1080p" => (1920, 1080),
+            "1440p" => (2560, 1440),
+            "4k" => (3840, 2160),
+            _ => (0, 0)
+        };
+        if (resolution == "custom")
+        {
+            if (!int.TryParse(customWidth, NumberStyles.Integer, CultureInfo.InvariantCulture,
+                    out width) ||
+                !int.TryParse(customHeight, NumberStyles.Integer, CultureInfo.InvariantCulture,
+                    out height))
+                return false;
+        }
+        else if (width == 0 || height == 0)
+        {
+            return false;
+        }
+
+        if (width < MinOutputWidth || height < MinOutputHeight ||
+            width > MaxOutputDimension || height > MaxOutputDimension)
+            return false;
+
+        double aspect = (double)width / height;
+        return aspect >= MinSupportedAspect && aspect <= MaxSupportedAspect;
+    }
+
     public static Dictionary<string, string> Create(string resolution, string scale,
         string anisotropic, string antiAliasing, string displayMode, bool vsync,
-        string frameLimit = "0", string backend = "d3d12")
+        string frameLimit = "0", string backend = "d3d12",
+        string customWidth = "1920", string customHeight = "1080")
     {
-        (int width, int height) = resolution switch
-        {
-            "720p" => (1280, 720), "1080p" => (1920, 1080),
-            "1440p" => (2560, 1440), "4k" => (3840, 2160),
-            _ => throw new ArgumentException("Unknown output resolution")
-        };
+        if (!TryResolveOutputResolution(resolution, customWidth, customHeight,
+                out int width, out int height))
+            throw new ArgumentException(
+                $"Unsupported output size. Use {MinOutputWidth}×{MinOutputHeight} through " +
+                $"{MaxOutputDimension}×{MaxOutputDimension} with an aspect ratio between " +
+                "4:3 and 4:1.");
         bool validScale = int.TryParse(scale, NumberStyles.Integer, CultureInfo.InvariantCulture,
             out int scaleValue) && scaleValue >= 1 && scaleValue <= MaxInternalRenderScale;
         if (!validScale ||
