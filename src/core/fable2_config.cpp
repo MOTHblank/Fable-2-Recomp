@@ -103,7 +103,8 @@ mouse_look_scale_y = 256
 mouse_invert_y = false
 
 # Additional mouse-to-stick deadzone compensation, 0..12000.
-# Leave at 0 unless slow movement gets swallowed by the game's stick deadzone.
+# Applies to the mouse component in both Native and Direct modes; physical
+# controller axes are never remapped. Leave at 0 unless slow motion is swallowed.
 mouse_deadzone_compensation = 0
 
 # Retain fast mouse movement clipped at full right-stick deflection for a
