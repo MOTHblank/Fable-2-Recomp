@@ -352,11 +352,16 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
   bool have_previous = false;
   auto next_title = std::chrono::steady_clock::now();
   auto next_fast = next_title;
-  auto next_full = next_title;
+  auto next_broad = next_title;
   auto next_report = next_title;
   auto next_gui_sync = next_title;
+  constexpr uintptr_t kBroadStart = 0x40000000u;
+  constexpr uintptr_t kBroadEnd = 0x44000000u;
+  constexpr uintptr_t kBroadSlice = 0x00200000u;  // 2 MiB
+  constexpr uintptr_t kBroadOverlap = 320u;       // kMaxChars UTF-16 bytes
+  uintptr_t broad_cursor = kBroadStart;
   uint64_t matches = 0, replacements = 0;
-  Log("started; native prompt source rewrite: 64KiB title fast path + bounded front-end scans");
+  Log("started; native prompt source rewrite: 64KiB title fast path + rolling front-end scan");
   while (!stop.stop_requested()) {
     const auto active = rex::cvar::GetFlagByName("input_prompt_keyboard");
     // A mismatched older SDK lacks the device flag. KeyboardPromptModeActive()
@@ -377,8 +382,9 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
       Restore(patches);
       previous_actions = actions;
       previous_keyboard = keyboard;
-      next_title = next_fast = next_full =
+      next_title = next_fast = next_broad =
           std::chrono::steady_clock::now();
+      broad_cursor = kBroadStart;
       Log(keyboard ? "keyboard mode" : "controller mode",
           "input=" + active + " A=" + keys[0] +
           " B=" + keys[1] + " X=" + keys[2] + " Y=" + keys[3]);
@@ -404,7 +410,7 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
       if (now >= next_title) {
         Scan(arena, 0x42660000u, 0x42670000u, actions, patches,
              matches, replacements);
-        next_title = now + std::chrono::milliseconds(8);
+        next_title = now + std::chrono::milliseconds(15);
       }
       // Broader safety net for a future allocator shift within the documented
       // 0x426xxxxx neighborhood. This is intentionally much slower now that
@@ -414,12 +420,22 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
              matches, replacements);
         next_fast = now + std::chrono::milliseconds(120);
       }
-      // Other front-end / localized strings are discovered more slowly; this
-      // includes menu text and varied translations.
-      if (now >= next_full) {
-        Scan(arena, 0x40000000u, 0x44000000u, actions, patches,
+      // Roll the 64 MiB front-end/localization fallback across small slices
+      // instead of walking the whole range in one burst. At 2 MiB every 60 ms
+      // a complete pass still takes about two seconds, but render/input threads
+      // no longer see a periodic large CPU spike. Adjacent slices overlap by
+      // one maximum prompt-string width so a string crossing a slice boundary
+      // is never skipped.
+      if (now >= next_broad) {
+        const uintptr_t logical_end =
+            std::min(broad_cursor + kBroadSlice, kBroadEnd);
+        const uintptr_t scan_end =
+            std::min(logical_end + kBroadOverlap, kBroadEnd);
+        Scan(arena, broad_cursor, scan_end, actions, patches,
              matches, replacements);
-        next_full = now + std::chrono::seconds(2);
+        broad_cursor =
+            logical_end >= kBroadEnd ? kBroadStart : logical_end;
+        next_broad = now + std::chrono::milliseconds(60);
       }
     }
     const auto now = std::chrono::steady_clock::now();
