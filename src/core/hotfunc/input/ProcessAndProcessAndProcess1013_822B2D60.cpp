@@ -9,7 +9,7 @@
 #include "mouse_look.h"
 
 #ifdef FABLE2_REMOTE_CONTROL
-#include "fable2_state_probe.h"
+extern "C" void Fable2StateProbeObservePad(uint32_t state_ptr);
 #endif
 
 #include <rex/cvar.h>
@@ -54,9 +54,10 @@ extern "C" void ProcessAndProcessAndProcess1013_822B2D60(
   __imp__ProcessAndProcessAndProcess1013_822B2D60(ctx, base);
 
 #ifdef FABLE2_REMOTE_CONTROL
-  // Preserve the existing debug classifier's final-merged-state observation.
+  // Preserve the existing debug classifier's final-merged-state observation
+  // without including its strong-override header in this translation unit.
   if (state_ptr != 0) {
-    fable2::stateprobe::observe_a_button(state_ptr);
+    Fable2StateProbeObservePad(state_ptr);
   }
 #endif
 
