@@ -141,6 +141,10 @@ inline std::atomic<uint32_t>& LegacyTitleIconElementPointer() {
   static std::atomic<uint32_t> value{0};
   return value;
 }
+inline std::atomic<uint32_t>& LegacyTitleItemPointer() {
+  static std::atomic<uint32_t> value{0};
+  return value;
+}
 inline std::atomic<bool>& LegacyTitleCanvasPositionValid() {
   static std::atomic<bool> value{false};
   return value;
@@ -154,6 +158,7 @@ inline std::atomic<float>& LegacyTitleCanvasY() {
   return value;
 }
 
+inline thread_local uint32_t g_legacy_title_frame_item = 0;
 inline thread_local uint32_t g_legacy_title_frame_elements = 0;
 inline thread_local uint32_t g_legacy_title_frame_icon_candidate = 0;
 inline thread_local bool g_legacy_title_frame_position_valid = false;
@@ -162,8 +167,9 @@ inline thread_local float g_legacy_title_frame_canvas_y = 560.0f;
 inline thread_local bool g_legacy_title_frame_visible = false;
 inline thread_local uint32_t g_legacy_title_scope_depth = 0;
 
-inline void BeginLegacyTitleFrame() {
+inline void BeginLegacyTitleFrame(uint32_t item) {
   if (g_legacy_title_scope_depth++ == 0) {
+    g_legacy_title_frame_item = item;
     g_legacy_title_frame_elements = 0;
     g_legacy_title_frame_icon_candidate = 0;
     g_legacy_title_frame_position_valid = false;
@@ -218,6 +224,7 @@ inline void EndLegacyTitleFrame() {
       LegacyTitleBakedLayoutConfirmed().store(false,
                                               std::memory_order_release);
       LegacyTitleIconElementPointer().store(0, std::memory_order_release);
+      LegacyTitleItemPointer().store(0, std::memory_order_release);
       LegacyTitleCanvasPositionValid().store(false,
                                              std::memory_order_release);
     }
@@ -270,20 +277,32 @@ inline void EndLegacyTitleFrame() {
       // intentionally not enough to skip a guest renderer element.
       const uint32_t prior_icon =
           LegacyTitleIconElementPointer().load(std::memory_order_acquire);
-      const bool same_confirmed_icon =
-          prior_icon != 0 && prior_icon == g_legacy_title_frame_icon_candidate;
-      // Learning a *new* guest element identity requires the title source to
-      // be actively tracked by the scanner. Once learned, the same pointer can
-      // remain valid after that heap allocation disappears. This stops a later
-      // same-sized generic UITextPrompt from replacing the title identity.
+      const uint32_t prior_item =
+          LegacyTitleItemPointer().load(std::memory_order_acquire);
+      const bool same_confirmed_identity =
+          prior_icon != 0 && prior_item != 0 &&
+          prior_icon == g_legacy_title_frame_icon_candidate &&
+          prior_item == g_legacy_title_frame_item;
+      // Learning a new identity is allowed only once, while the verified title
+      // source allocation is actively tracked. After that, both the prompt
+      // item and its image element must remain identical. A generic
+      // UITextPrompt with the same count/ordinal cannot replace the title
+      // identity while its old heap source happens to remain allocated.
+      const bool first_identity =
+          prior_icon == 0 && prior_item == 0 && source_rewritten;
       const bool exact_icon =
           fable2::buttonprompts::TitleExpectedIconElementOrdinal() !=
               UINT32_MAX &&
+          g_legacy_title_frame_item >= 0x10000u &&
+          g_legacy_title_frame_item < 0xE0000000u &&
+          (g_legacy_title_frame_item & 3u) == 0 &&
           g_legacy_title_frame_icon_candidate != 0 &&
-          (same_confirmed_icon || source_rewritten);
+          (same_confirmed_identity || first_identity);
       LegacyTitleBakedLayoutConfirmed().store(exact_icon,
                                               std::memory_order_release);
       if (exact_icon) {
+        LegacyTitleItemPointer().store(g_legacy_title_frame_item,
+                                       std::memory_order_release);
         LegacyTitleIconElementPointer().store(
             g_legacy_title_frame_icon_candidate,
             std::memory_order_release);
@@ -362,9 +381,12 @@ inline bool ShouldSuppressLegacyTitleElement(uint32_t ordinal,
   }
   const uint32_t expected =
       fable2::buttonprompts::TitleExpectedIconElementOrdinal();
+  const uint32_t confirmed_item =
+      LegacyTitleItemPointer().load(std::memory_order_acquire);
   const uint32_t confirmed_element =
       LegacyTitleIconElementPointer().load(std::memory_order_acquire);
   return expected != UINT32_MAX && ordinal == expected &&
+         confirmed_item != 0 && g_legacy_title_frame_item == confirmed_item &&
          confirmed_element != 0 && element == confirmed_element;
 }
 
@@ -476,6 +498,7 @@ inline void Clear() {
   LegacyTitleBakedLayoutConfirmed().store(false, std::memory_order_release);
   LegacyTitleSpriteSuppressedNs().store(0, std::memory_order_release);
   LegacyTitleIconElementPointer().store(0, std::memory_order_release);
+  LegacyTitleItemPointer().store(0, std::memory_order_release);
   LegacyTitleCanvasPositionValid().store(false, std::memory_order_release);
   LegacyTitleCanvasX().store(640.0f, std::memory_order_release);
   LegacyTitleCanvasY().store(560.0f, std::memory_order_release);
