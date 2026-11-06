@@ -161,6 +161,26 @@ inline std::atomic<float>& LegacyTitleCanvasY() {
   static std::atomic<float> value{560.0f};
   return value;
 }
+inline std::atomic<uint32_t>& LegacyTitleCanvasCandidateItem() {
+  static std::atomic<uint32_t> value{0};
+  return value;
+}
+inline std::atomic<uint32_t>& LegacyTitleCanvasCandidateElement() {
+  static std::atomic<uint32_t> value{0};
+  return value;
+}
+inline std::atomic<float>& LegacyTitleCanvasCandidateX() {
+  static std::atomic<float> value{640.0f};
+  return value;
+}
+inline std::atomic<float>& LegacyTitleCanvasCandidateY() {
+  static std::atomic<float> value{560.0f};
+  return value;
+}
+inline std::atomic<uint32_t>& LegacyTitleCanvasCandidateStreak() {
+  static std::atomic<uint32_t> value{0};
+  return value;
+}
 
 inline thread_local uint32_t g_legacy_title_frame_item = 0;
 inline thread_local uint32_t g_legacy_title_frame_elements = 0;
@@ -209,6 +229,47 @@ inline void NoteLegacyTitleDrawPosition(float x, float y) {
   g_legacy_title_frame_position_valid = true;
 }
 
+inline void ConsiderLegacyTitleCanvasPosition(uint32_t item, uint32_t element,
+                                              float x, float y) {
+  const uint32_t previous_item =
+      LegacyTitleCanvasCandidateItem().load(std::memory_order_acquire);
+  const uint32_t previous_element =
+      LegacyTitleCanvasCandidateElement().load(std::memory_order_acquire);
+  const float previous_x =
+      LegacyTitleCanvasCandidateX().load(std::memory_order_acquire);
+  const float previous_y =
+      LegacyTitleCanvasCandidateY().load(std::memory_order_acquire);
+  uint32_t streak =
+      LegacyTitleCanvasCandidateStreak().load(std::memory_order_acquire);
+
+  constexpr float kAgreement = 2.0f;
+  const bool agrees =
+      streak != 0 && previous_item == item && previous_element == element &&
+      std::abs(previous_x - x) <= kAgreement &&
+      std::abs(previous_y - y) <= kAgreement;
+  if (!agrees) {
+    LegacyTitleCanvasCandidateItem().store(item, std::memory_order_release);
+    LegacyTitleCanvasCandidateElement().store(element,
+                                              std::memory_order_release);
+    LegacyTitleCanvasCandidateX().store(x, std::memory_order_release);
+    LegacyTitleCanvasCandidateY().store(y, std::memory_order_release);
+    LegacyTitleCanvasCandidateStreak().store(1, std::memory_order_release);
+    return;
+  }
+
+  streak = std::min<uint32_t>(streak + 1, 3);
+  LegacyTitleCanvasCandidateX().store(x, std::memory_order_release);
+  LegacyTitleCanvasCandidateY().store(y, std::memory_order_release);
+  LegacyTitleCanvasCandidateStreak().store(streak,
+                                           std::memory_order_release);
+  if (streak >= 2) {
+    LegacyTitleCanvasX().store(x, std::memory_order_release);
+    LegacyTitleCanvasY().store(y, std::memory_order_release);
+    LegacyTitleCanvasPositionValid().store(true,
+                                           std::memory_order_release);
+  }
+}
+
 inline void EndLegacyTitleFrame() {
   if (g_legacy_title_scope_depth == 0) return;
   if (--g_legacy_title_scope_depth != 0) return;
@@ -232,6 +293,11 @@ inline void EndLegacyTitleFrame() {
       LegacyTitleCoverItemPointer().store(0, std::memory_order_release);
       LegacyTitleCanvasPositionValid().store(false,
                                              std::memory_order_release);
+      LegacyTitleCanvasCandidateItem().store(0, std::memory_order_release);
+      LegacyTitleCanvasCandidateElement().store(0,
+                                                std::memory_order_release);
+      LegacyTitleCanvasCandidateStreak().store(0,
+                                               std::memory_order_release);
     }
     return;
   }
@@ -336,12 +402,11 @@ inline void EndLegacyTitleFrame() {
             std::memory_order_release);
       }
       if (exact_icon && g_legacy_title_frame_position_valid) {
-        LegacyTitleCanvasX().store(g_legacy_title_frame_canvas_x,
-                                   std::memory_order_release);
-        LegacyTitleCanvasY().store(g_legacy_title_frame_canvas_y,
-                                   std::memory_order_release);
-        LegacyTitleCanvasPositionValid().store(true,
-                                               std::memory_order_release);
+        ConsiderLegacyTitleCanvasPosition(
+            g_legacy_title_frame_item,
+            g_legacy_title_frame_icon_candidate,
+            g_legacy_title_frame_canvas_x,
+            g_legacy_title_frame_canvas_y);
       }
     } else {
       LegacyTitleBakedLayoutConfirmed().store(false,
@@ -536,6 +601,11 @@ inline void Clear() {
   LegacyTitleCanvasPositionValid().store(false, std::memory_order_release);
   LegacyTitleCanvasX().store(640.0f, std::memory_order_release);
   LegacyTitleCanvasY().store(560.0f, std::memory_order_release);
+  LegacyTitleCanvasCandidateItem().store(0, std::memory_order_release);
+  LegacyTitleCanvasCandidateElement().store(0, std::memory_order_release);
+  LegacyTitleCanvasCandidateX().store(640.0f, std::memory_order_release);
+  LegacyTitleCanvasCandidateY().store(560.0f, std::memory_order_release);
+  LegacyTitleCanvasCandidateStreak().store(0, std::memory_order_release);
   DesiredGameFaceState().store(0, std::memory_order_release);
   GameFaceTransitionStartedNs().store(0, std::memory_order_release);
 }
