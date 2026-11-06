@@ -11,6 +11,7 @@
 // still runs), so a hand edit can never wedge the launch.
 
 #include "fable2_config.h"
+#include "native_save_snapshots.h"
 
 #include <array>
 #include <format>
@@ -54,6 +55,11 @@ R"TOML_EOF(# ===================================================================
 # tolerates any version it does not know about.
 # Default: 1
 config_version = 1
+
+# Keep up to three host-side startup copies of saves/ in save_backups/.
+# Opt-in: each snapshot is limited to 256 MiB and 4096 regular files.
+# Symlinks and unsupported entries are never followed. Default: false.
+native_save_snapshots = false
 
 [input]
 # Host keyboard/mouse -> guest gamepad map: "Key:Button,Key:Button,..." (one
@@ -271,6 +277,9 @@ bool Load(const std::filesystem::path& path) {
     values.config_version = static_cast<int32_t>(
         Read<int64_t>(*general.as_table(), "general", "config_version",
                       "integer", 1));
+    values.native_save_snapshots = Read<bool>(
+        *general.as_table(), "general", "native_save_snapshots", "boolean",
+        values.native_save_snapshots);
   }
   const toml::path input_path{"input"};
   const auto input = root[input_path];
@@ -349,6 +358,15 @@ bool Load(const std::filesystem::path& path) {
   }
 
   g_values = values;
+  if (values.native_save_snapshots) {
+    const auto result = native_saves::SnapshotAtStartup(path.parent_path());
+    if (result == native_saves::SnapshotResult::kCreated)
+      REXSYS_INFO("[native-saves] startup snapshot created in save_backups/snapshot_1");
+    else if (result == native_saves::SnapshotResult::kSkipped)
+      REXSYS_WARN("[native-saves] snapshot skipped: saves exceed size/file limits");
+    else if (result == native_saves::SnapshotResult::kFailed)
+      REXSYS_WARN("[native-saves] snapshot failed; original saves remain untouched");
+  }
   REXSYS_INFO("[fable2-config] loaded {} (config_version={})", path.string(),
               values.config_version);
   return true;
