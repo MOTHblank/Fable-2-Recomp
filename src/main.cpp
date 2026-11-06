@@ -38,6 +38,11 @@ REXCVAR_DEFINE_STRING(ui_prompt_mode, "auto", "Input",
                      "Prompt display mode: auto, keyboard, controller")
     .allowed({"auto", "keyboard", "controller"});
 
+REXCVAR_DEFINE_BOOL(
+    ui_prompt_overlay_fallback, true, "Input",
+    "Draw compact keyboard keycaps over GameFace controller icons that have "
+    "no writable text-label replacement; false keeps unresolved Xbox artwork.");
+
 // Host keyboard -> guest gamepad map (see src/input/keyboard_gamepad.h).
 // Format: "Key:Button,Key:Button,...".
 // The default layout is NOT baked in here: it lives in the config layer
