@@ -65,10 +65,48 @@ inline std::unordered_map<uint32_t, Presentation>& States() {
   return *states;
 }
 
+inline std::atomic<uint8_t>& DesiredGameFaceState() {
+  // bit 0 = keyboard, bit 1 = overlay enabled, bit 7 = initialized
+  static std::atomic<uint8_t> value{0};
+  return value;
+}
+inline std::atomic<int64_t>& GameFaceTransitionStartedNs() {
+  static std::atomic<int64_t> value{0};
+  return value;
+}
+
 inline int64_t ClockNanoseconds() {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(
              Clock::now().time_since_epoch())
       .count();
+}
+
+inline void BeginGameFaceTransition(bool keyboard, bool overlay) {
+  const uint8_t next = static_cast<uint8_t>(
+      0x80u | (keyboard ? 0x01u : 0u) | (overlay ? 0x02u : 0u));
+  const uint8_t previous =
+      DesiredGameFaceState().exchange(next, std::memory_order_acq_rel);
+  if (previous != next) {
+    GameFaceTransitionStartedNs().store(ClockNanoseconds(),
+                                        std::memory_order_release);
+  }
+}
+
+inline bool DesiredGameFaceOverlayActive() {
+  const uint8_t state =
+      DesiredGameFaceState().load(std::memory_order_acquire);
+  return (state & 0x83u) == 0x83u;
+}
+
+inline bool GameFaceOverlayTransitionGrace() {
+  if (DesiredGameFaceOverlayActive()) return true;
+  constexpr int64_t kGraceNs =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::milliseconds(300))
+          .count();
+  const int64_t started =
+      GameFaceTransitionStartedNs().load(std::memory_order_acquire);
+  return started != 0 && ClockNanoseconds() - started <= kGraceNs;
 }
 
 inline std::atomic<int64_t>& LegacyTitleLastDrawNs() {
@@ -276,6 +314,8 @@ inline void Clear() {
   LegacyTitleBaselineElements().store(0, std::memory_order_release);
   LegacyTitleLatestElements().store(0, std::memory_order_release);
   LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
+  DesiredGameFaceState().store(0, std::memory_order_release);
+  GameFaceTransitionStartedNs().store(0, std::memory_order_release);
 }
 
 inline std::vector<Entry> Snapshot() {
@@ -361,7 +401,8 @@ class PromptOverlayDialog final : public rex::ui::ImGuiDialog {
         LegacyTitleRecentlyDrawn() &&
         !LegacyTitleUsesKeyboardLayout();
 
-    const std::vector<Entry> entries = Snapshot();
+    const std::vector<Entry> entries =
+        GameFaceOverlayTransitionGrace() ? Snapshot() : std::vector<Entry>{};
     if (entries.empty() && !legacy_fallback) return;
 
     ImDrawList* draw = ImGui::GetForegroundDrawList();
