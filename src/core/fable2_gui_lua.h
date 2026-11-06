@@ -487,16 +487,17 @@ P.sig = __sig
 if not __kbd then return end
 
 local aliases = {
-  icon_button_a="A", icon_a="A",
-  icon_button_b="B", icon_b="B",
-  icon_button_x="X", icon_x="X",
-  icon_button_y="Y", icon_y="Y",
+  icon_button_a="A", icon_a="A", abutton="A",
+  icon_button_b="B", icon_b="B", bbutton="B",
+  icon_button_x="X", icon_x="X", xbutton="X",
+  icon_button_y="Y", icon_y="Y", ybutton="Y",
   icon_button_lb="LB", icon_button_left_shoulder="LB",
   icon_button_rb="RB", icon_button_right_shoulder="RB",
   icon_button_lt="LT", icon_button_left_trigger="LT",
   icon_button_rt="RT", icon_button_right_trigger="RT",
-  icon_button_start="START", icon_start="START",
+  icon_button_start="START", icon_start="START", startbutton="START",
   icon_button_back="BACK", icon_button_select="BACK", icon_back="BACK",
+  backbutton="BACK", selectbutton="BACK",
   icon_button_ls="LS", icon_button_lstick="LS", icon_button_left_stick="LS",
   icon_button_rs="RS", icon_button_rstick="RS", icon_button_right_stick="RS",
   icon_dpad_up="UP", icon_button_dpad_up="UP",
