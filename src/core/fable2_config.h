@@ -51,7 +51,9 @@ struct Values {
   int32_t mouse_look_scale = 256;
   int32_t mouse_look_scale_y = 256;
   bool mouse_invert_y = false;
+  // Mouse-only threshold remap used by both Native and Direct modes.
   int32_t mouse_deadzone_compensation = 0;
+  // Delayed remainder is intentionally Native-only.
   int32_t mouse_flick_buffer_polls = 4;
   // Log the active camera's orientation fields once, the first frame the mouse
   // moves, to confirm the offset guesses above (and to spot which fields are
