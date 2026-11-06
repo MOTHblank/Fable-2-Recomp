@@ -15,7 +15,10 @@ physical device.
   selects Xbox prompts. Synthetic debug pads do not steal prompt ownership.
 - `--ui_prompt_mode keyboard`: force keyboard labels.
 - `--ui_prompt_mode controller`: preserve the native Xbox presentation.
-- These options can also be set in the SDK's `fable_2.toml`.
+- The recomp's own `fable2_config.toml [input]` now exposes `prompt_mode`,
+  `prompt_overlay_fallback`, `prompt_legacy_fallback`, and the overlay
+  alignment offsets. SDK `fable_2.toml`, environment variables, CLI values
+  and live console changes keep their normal higher priority.
 - Labels come from the live ReXGlue `keybind_*` cvars, which are populated
   from `keyboard_gamepad_map`. The display helper prefers a usable keyboard
   alternative over a mouse button and supports compact modifier chords such as
@@ -41,6 +44,15 @@ inconsistent.
 Every write is tracked with its original bytes. Restoration occurs only when
 the guest allocation still contains exactly the bytes written by the recomp,
 which avoids writing through stale/reused heap addresses.
+
+The same bounded worker now also handles conservative fixed-width literal
+instructions such as `Press A`, `Hold LT`, `Tap Start`, etc. These use the
+game's own font and are rewritten only when the current keyboard label fits in
+the original controller token width. For example, `Press A to confirm` can
+become `Press E to confirm` without changing the allocation. A mouse-only
+`X -> LMB` mapping cannot fit in a one-character `X` token, so that source
+string is intentionally left untouched here and may be adapted later by a
+relayout-capable GameFace path.
 
 ## Layer 2: live GameFace icon widgets
 
@@ -85,16 +97,24 @@ ownership directly from host events:
 
 - key down;
 - mouse button down;
-- non-zero mouse movement.
+- mouse movement reaching one accumulated physical pixel while a controller
+  owns prompt focus.
 
 The direct mouse-camera path therefore switches prompts even though its raw
-motion bypasses the emulated right stick. This is important for the hybrid
-native-camera mode: simply moving the mouse is enough to make the UI read as a
-PC UI again.
+motion bypasses the emulated right stick. Mouse motion is accumulated only
+while a controller owns the prompts and must reach one physical pixel before
+switching, so fractional high-resolution/raw-input noise cannot make the UI
+oscillate. Keyboard presses and mouse buttons still switch immediately.
+
+Physical controller ownership has its own noise floor: stick activity must
+clear the normal thumb deadzone and change by at least 3500 units, while
+buttons and trigger-threshold crossings switch immediately. Synthetic debug
+pads do not participate.
 
 The current pinned SDK revision is checked by
-`tools/prepare_runtime_sdk.py` for `MarkKeyboardPromptDevice`, so a partially
-updated SDK cannot silently lose this behavior.
+`tools/prepare_runtime_sdk.py` for both `MarkKeyboardPromptDevice` and the
+mouse-motion accumulator, so a partially updated SDK cannot silently lose the
+stable switching behavior.
 
 ## Texture-only fallback
 
@@ -145,25 +165,35 @@ always forwards to the original renderer first, then uses the documented
 post-render element state only as a visibility/blink signal. No legacy draw
 object, material, texture or element list is rewritten.
 
-The source scanner separately tracks whether a live rewritten title allocation
-still exists. The legacy host keycap is allowed only when all of the following
-are true:
+The scanner publishes the exact expected element counts from the localized
+source string: a stock seven-character `<a_img>` tag occupies one laid-out
+sprite, while the same seven code units become seven ordinary glyphs after the
+native keycap rewrite. `UITextPrompt_Render` is bracketed per invocation and
+its element calls are counted. This proves whether the rendered layout actually
+consumed the source rewrite instead of assuming that a scanner hit happened
+early enough.
+
+The legacy host keycap is allowed only when all of the following are true:
 
 - keyboard/mouse is the active prompt device;
 - `ui_prompt_legacy_fallback = true`;
-- the title prompt's normal writable-source rewrite is not currently active;
-- `UITextPrompt_RenderElement` has just rendered a visible drawable.
+- one `UITextPrompt_Render` invocation matches the localized title prompt's
+  expected baked/rewritten structure;
+- that invocation has just rendered a visible drawable;
+- the observed element count still matches the baked controller-sprite layout.
 
-The visibility pulse expires after roughly 110 ms, so the host keycap follows
-the title prompt's original blink instead of remaining continuously visible.
-It covers the already-baked A sprite at the authored bottom-center title
-position. `ui_prompt_legacy_offset_x` and `ui_prompt_legacy_offset_y`
-(default 0, range -128..128) allow live alignment correction without a code
-change.
+As soon as a later title layout matches the expanded keyboard-glyph count, the
+fallback disables itself. The visibility pulse expires after roughly 110 ms,
+so it follows the title prompt's original blink instead of remaining
+continuously visible. It covers the already-baked A sprite at the authored
+bottom-center title position. `ui_prompt_legacy_offset_x` and
+`ui_prompt_legacy_offset_y` (default 0, range -128..128) allow live alignment
+correction without a code change.
 
 This is deliberately a cover/fallback, not a global controller-texture
 replacement. Switching back to a controller makes it disappear immediately,
-and a recovered/live `<a_img>` source rewrite suppresses it automatically.
+and other legacy prompt invocations cannot trigger the fixed title position
+because their element counts do not match the localized title structure.
 
 ## Remaining hard boundary
 
@@ -193,10 +223,10 @@ is likely already represented as a cached/baked GameFace element. If the
 element has a safe sibling text label, the GameFace adapter can handle it; if
 not, the texture-only overlay fallback is the next layer.
 
-For the title screen, a visible legacy keycap with `replaced=0` is expected:
-it means layout happened before a writable `<a_img>` allocation could be
-retained, so the verified `UITextPrompt` fallback is covering the baked A
-sprite instead.
+For the title screen, the legacy fallback is now layout-driven rather than
+scanner-timing-driven. A source rewrite that occurred too late remains covered
+until `UITextPrompt_Render` actually reports the expanded keyboard-glyph
+element structure.
 
 Actual visual coverage still depends on the presentation currently loaded.
 This source work has not been verified here against a captured Windows game
