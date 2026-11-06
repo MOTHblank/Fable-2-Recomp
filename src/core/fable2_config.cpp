@@ -57,9 +57,15 @@ R"TOML_EOF(# ===================================================================
 config_version = 1
 
 # Keep up to three host-side startup copies of saves/ in save_backups/.
-# Opt-in: each snapshot is limited to 256 MiB and 4096 regular files.
 # Symlinks and unsupported entries are never followed. Default: false.
 native_save_snapshots = false
+
+# Optional per-snapshot safety ceilings. 0 means no artificial cap; filesystem
+# errors such as running out of disk space still fail the pending copy before
+# any completed snapshot is promoted.
+# Defaults: unlimited
+native_save_snapshot_max_mib = 0
+native_save_snapshot_max_files = 0
 
 [input]
 # Host keyboard/mouse -> guest gamepad map: "Key:Button,Key:Button,..." (one
@@ -312,6 +318,14 @@ bool Load(const std::filesystem::path& path) {
     values.native_save_snapshots = Read<bool>(
         *general.as_table(), "general", "native_save_snapshots", "boolean",
         values.native_save_snapshots);
+    values.native_save_snapshot_max_mib = std::max<int64_t>(
+        0, Read<int64_t>(*general.as_table(), "general",
+                         "native_save_snapshot_max_mib", "integer",
+                         values.native_save_snapshot_max_mib));
+    values.native_save_snapshot_max_files = std::max<int64_t>(
+        0, Read<int64_t>(*general.as_table(), "general",
+                         "native_save_snapshot_max_files", "integer",
+                         values.native_save_snapshot_max_files));
   }
   const toml::path input_path{"input"};
   const auto input = root[input_path];
@@ -414,11 +428,22 @@ bool Load(const std::filesystem::path& path) {
 
   g_values = values;
   if (values.native_save_snapshots) {
-    const auto result = native_saves::SnapshotAtStartup(path.parent_path());
+    constexpr std::uintmax_t kMiB = 1024ull * 1024ull;
+    const std::uintmax_t max_bytes =
+        values.native_save_snapshot_max_mib > 0
+            ? static_cast<std::uintmax_t>(values.native_save_snapshot_max_mib) *
+                  kMiB
+            : 0;
+    const std::size_t max_files =
+        values.native_save_snapshot_max_files > 0
+            ? static_cast<std::size_t>(values.native_save_snapshot_max_files)
+            : 0;
+    const auto result =
+        native_saves::SnapshotAtStartup(path.parent_path(), max_bytes, max_files);
     if (result == native_saves::SnapshotResult::kCreated)
       REXSYS_INFO("[native-saves] startup snapshot created in save_backups/snapshot_1");
     else if (result == native_saves::SnapshotResult::kSkipped)
-      REXSYS_WARN("[native-saves] snapshot skipped: saves exceed size/file limits");
+      REXSYS_WARN("[native-saves] snapshot skipped: configured size/file limit exceeded");
     else if (result == native_saves::SnapshotResult::kFailed)
       REXSYS_WARN("[native-saves] snapshot failed; original saves remain untouched");
   }
