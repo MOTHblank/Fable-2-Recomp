@@ -1,9 +1,9 @@
-// fable_2 - Raw mouse transport, direct camera orbit and guest-memory helpers.
+// fable_2 - Raw mouse transport and guest-memory camera helpers.
 //
 // Native mode synthesizes a right stick through the ReXGlue input driver.
-// Direct mode accumulates fractional SDL3 relative mouse deltas on the UI
-// thread and consumes them from the camera post-dispatch hook. The hook
-// reads and writes big-endian guest state and the frame's view scratch.
+// Hybrid Direct mode accumulates SDL3 relative deltas on the UI thread and
+// drains them from the generated 0x832BB018 input consumer, where they are
+// added to that frame's local XINPUT_STATE before the native camera pipeline.
 #pragma once
 
 #include <cmath>
@@ -36,6 +36,13 @@ inline std::atomic<uint64_t>& raw_motion_events() {
 inline std::atomic<uint64_t>& capture_resets() {
   static std::atomic<uint64_t> resets{0};
   return resets;
+}
+inline std::atomic<uint64_t>& native_injections() {
+  static std::atomic<uint64_t> injections{0};
+  return injections;
+}
+inline void note_native_injection() {
+  native_injections().fetch_add(1, std::memory_order_relaxed);
 }
 
 // Host input driver: add this poll's cursor displacement.
