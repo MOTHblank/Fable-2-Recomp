@@ -217,13 +217,13 @@ public partial class MainWindow : Window
         }
 
         string path = Path.Combine(_executableDirectory, "fable_2.toml");
-        Dictionary<string, string> settings = CollectSettings();
-        // The launcher renderer is not an SDK cvar. Keep it out of fable_2.toml.
-        Dictionary<string, string> sdkSettings = settings
-            .Where(entry => entry.Key != "launcher_renderer")
-            .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
         try
         {
+            Dictionary<string, string> settings = CollectSettings();
+            // The launcher renderer is not an SDK cvar. Keep it out of fable_2.toml.
+            Dictionary<string, string> sdkSettings = settings
+                .Where(entry => entry.Key != "launcher_renderer")
+                .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
             LauncherConfigFile.WriteValues(path, sdkSettings, GraphicsSettings.SdkManagedKeys);
             LauncherConfigFile.WriteValues(Path.Combine(_executableDirectory,
                 "launcher-settings.toml"), settings, GraphicsSettings.ManagedKeys);
