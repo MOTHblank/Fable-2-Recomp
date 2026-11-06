@@ -201,7 +201,8 @@ enum class DirectMouseResult {
 
 static DirectMouseResult ClassifyDirectMouseCamera(rex::memory::Memory* mem,
                                                    uint32_t cam,
-                                                   uint32_t sp) {
+                                                   uint32_t sp,
+                                                   bool raw_route_active) {
   using namespace fable2::mouselook;
 
   // The ordinary hero-follow camera has a 1.0f marker at +0x6c. Secondary,
@@ -233,9 +234,13 @@ static DirectMouseResult ClassifyDirectMouseCamera(rex::memory::Memory* mem,
     return DirectMouseResult::kInvalidOutput;
 
   // A sizeable correction means a constraint/authored camera is actively
-  // resolving the requested pose. Use the ordinary SDK stick route there.
-  constexpr float kNativeCorrectionLimit = 0.50f;
-  if (native_correction > kNativeCorrectionLimit)
+  // resolving the requested pose. Use hysteresis so small obstruction jitter
+  // cannot flip raw/native routing every frame: leave Direct promptly at 0.50,
+  // but require the native correction to settle below 0.20 before re-entry.
+  constexpr float kConstraintEnter = 0.50f;
+  constexpr float kConstraintExit = 0.20f;
+  const float limit = raw_route_active ? kConstraintEnter : kConstraintExit;
+  if (native_correction > limit)
     return DirectMouseResult::kNativeConstraint;
 
   return DirectMouseResult::kEligible;
@@ -259,11 +264,15 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
   // scripted sequence. request_reset clears the cross-thread raw accumulator.
   static uint32_t last_cam = 0;
   static bool was_direct = false;
+  static bool raw_route_active = false;
+  static uint32_t clear_frames = 0;
   const bool camera_changed = cam != last_cam;
   const bool mode_changed = direct != was_direct;
   last_cam = cam;
   was_direct = direct;
   if (camera_changed || mode_changed) {
+    raw_route_active = false;
+    clear_frames = 0;
     rex::input::mnk::SetDirectMouseEligible(false);
     fable2::mouselook::request_reset();
   }
@@ -281,19 +290,34 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
   // the next poll; ineligible cameras keep ordinary virtual-stick mouse input.
   if (direct && !(camera_changed || mode_changed)) {
     const DirectMouseResult result =
-        ClassifyDirectMouseCamera(mem, cam, r1.u32);
-    const bool raw_eligible = result == DirectMouseResult::kEligible;
-    rex::input::mnk::SetDirectMouseEligible(raw_eligible);
+        ClassifyDirectMouseCamera(mem, cam, r1.u32, raw_route_active);
+
+    // Re-enter Direct only after three consecutive clear hero-follow frames.
+    // Exiting is immediate. This prevents a wall edge / authored blend from
+    // chattering between raw and SDK-stick routes around the threshold.
+    if (result == DirectMouseResult::kEligible) {
+      if (!raw_route_active && ++clear_frames >= 3) {
+        raw_route_active = true;
+        clear_frames = 0;
+        rex::input::mnk::SetDirectMouseEligible(true);
+      }
+    } else {
+      clear_frames = 0;
+      if (raw_route_active) {
+        raw_route_active = false;
+        rex::input::mnk::SetDirectMouseEligible(false);
+        // Clear the raw side-channel exactly on the route transition; while
+        // fallback remains active the SDK no longer sends raw mouse events.
+        fable2::mouselook::request_reset();
+      } else {
+        rex::input::mnk::SetDirectMouseEligible(false);
+      }
+    }
     switch (result) {
       case DirectMouseResult::kEligible: ++eligible; break;
       case DirectMouseResult::kNotHero: ++not_hero; break;
       case DirectMouseResult::kNativeConstraint: ++constrained; break;
       case DirectMouseResult::kInvalidOutput: ++invalid_output; break;
-    }
-    if (!raw_eligible) {
-      // request_reset clears the cross-thread raw accumulator immediately;
-      // no mouse displacement can be replayed when hero-follow resumes.
-      fable2::mouselook::request_reset();
     }
     if (cfg.mouse_look_camera_diag &&
         result == DirectMouseResult::kInvalidOutput && invalid_output == 1) {
