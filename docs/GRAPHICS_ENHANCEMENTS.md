@@ -54,6 +54,7 @@ game's HDR scene before its own bloom, exposure and tonemapping.
 | Color grading | Exposure, contrast, saturation, vibrance, temperature, tint, gamma, shadow lift, vignette, film grain. | Off |
 | Texture filtering | Anisotropic filtering override (2x-16x). | Game's |
 | Internal resolution | 1x-7x render scale (restart, device-dependent). 3x is 3840×2160 from the 1280×720 guest image; 4x-7x are supersampling modes. | 1x |
+| Physical output resolution | Independent from the guest's logical 1280×720 coordinate system. The launcher offers 720p/1080p/1440p/4K plus custom 640×360–16384×16384 output sizes within the supported 4:3–4:1 fit-window aspect envelope. | Launcher choice |
 | Anti-aliasing | FXAA on the output (restart). | Off |
 
 The **Debug** section shows each effect's buffer on its own (split view,
