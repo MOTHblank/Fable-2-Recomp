@@ -94,13 +94,10 @@ FUNCTIONS = {
     # RY before the native pipeline (normalize -> controller -> orbit) runs, giving
     # 1:1 native behavior.
     "LookStickProcess_83045778": dict(dir="camera", nv=True),
-    # Confirmed right-stick Y (sThumbRY) consumer on the per-frame camera-orbit path.
-    # Reads raw u16 stick axes from a local XINPUT_STATE buffer (r10 = r1+708), packs
-    # them, and feeds the camera look/orbit pipeline. Called 4x/frame from
-    # ProcessAndProcessAndProcess1676_832BD3E8. The mouse delta is added to sThumbRY
-    # (r23) at the r10+14 read site so the entire native downstream pipeline runs with
-    # combined stick+mouse input, giving 1:1 native bounds and behavior.
-    "RightStickLookProcess_832BB018": dict(dir="camera", nv=True),
+    # 0x832BB018 is intentionally NOT copied as a HotFunc override. It is the
+    # 4,700+ line ProcessAndProcessAndProcess1253_832BB018 in the manifest; the
+    # direct-mouse XINPUT edit is injected into generated code by
+    # tools/apply_recomp_patches.py instead of checking in a giant override.
     "Yield_82CBD098": dict(dir="yield", nv=True, batchyield=True),
     "FrameLimiterWait_82242628": dict(dir="vblank", hand_tuned=True),
 }
