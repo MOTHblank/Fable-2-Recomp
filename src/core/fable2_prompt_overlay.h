@@ -270,6 +270,7 @@ inline void EndLegacyTitleFrame() {
       LegacyTitleBakedLayoutConfirmed().store(false,
                                               std::memory_order_release);
       LegacyTitleIconElementPointer().store(0, std::memory_order_release);
+      LegacyTitleItemPointer().store(0, std::memory_order_release);
     } else if (count <= expected_baked + 1) {
       LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
       // Element suppression is allowed only when the localized source scanner
@@ -319,6 +320,7 @@ inline void EndLegacyTitleFrame() {
       LegacyTitleBakedLayoutConfirmed().store(false,
                                               std::memory_order_release);
       LegacyTitleIconElementPointer().store(0, std::memory_order_release);
+      LegacyTitleItemPointer().store(0, std::memory_order_release);
     }
     LegacyTitleBaselineElements().store(expected_baked,
                                         std::memory_order_release);
@@ -330,6 +332,7 @@ inline void EndLegacyTitleFrame() {
     LegacyTitleBakedLayoutConfirmed().store(false,
                                             std::memory_order_release);
     LegacyTitleIconElementPointer().store(0, std::memory_order_release);
+    LegacyTitleItemPointer().store(0, std::memory_order_release);
   } else if (!source_rewritten) {
     if (count < baseline) {
       LegacyTitleBaselineElements().store(count, std::memory_order_release);
@@ -338,6 +341,7 @@ inline void EndLegacyTitleFrame() {
     LegacyTitleBakedLayoutConfirmed().store(false,
                                             std::memory_order_release);
     LegacyTitleIconElementPointer().store(0, std::memory_order_release);
+    LegacyTitleItemPointer().store(0, std::memory_order_release);
   } else if (count >= baseline + 4) {
     // Unknown localization/source: a seven-unit image tag becoming ordinary
     // glyphs still creates a clear multi-element increase.
@@ -345,6 +349,7 @@ inline void EndLegacyTitleFrame() {
     LegacyTitleBakedLayoutConfirmed().store(false,
                                             std::memory_order_release);
     LegacyTitleIconElementPointer().store(0, std::memory_order_release);
+    LegacyTitleItemPointer().store(0, std::memory_order_release);
   }
 
   if (g_legacy_title_frame_visible && title_layout) {
