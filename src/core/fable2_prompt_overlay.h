@@ -129,6 +129,14 @@ inline std::atomic<bool>& LegacyTitleKeyboardLayout() {
   static std::atomic<bool> value{false};
   return value;
 }
+inline std::atomic<bool>& LegacyTitleBakedLayoutConfirmed() {
+  static std::atomic<bool> value{false};
+  return value;
+}
+inline std::atomic<int64_t>& LegacyTitleSpriteSuppressedNs() {
+  static std::atomic<int64_t> value{0};
+  return value;
+}
 
 inline thread_local uint32_t g_legacy_title_frame_elements = 0;
 inline thread_local bool g_legacy_title_frame_visible = false;
@@ -163,6 +171,8 @@ inline void EndLegacyTitleFrame() {
       LegacyTitleBaselineElements().store(0, std::memory_order_release);
       LegacyTitleLatestElements().store(0, std::memory_order_release);
       LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
+      LegacyTitleBakedLayoutConfirmed().store(false,
+                                              std::memory_order_release);
     }
     return;
   }
@@ -203,8 +213,20 @@ inline void EndLegacyTitleFrame() {
   if (have_expectations) {
     if (count + 1 >= expected_keyboard) {
       LegacyTitleKeyboardLayout().store(true, std::memory_order_release);
+      LegacyTitleBakedLayoutConfirmed().store(false,
+                                              std::memory_order_release);
     } else if (count <= expected_baked + 1) {
       LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
+      // Element suppression is allowed only when the localized source scanner
+      // also identified the exact image-tag ordinal. Count-only fallback is
+      // intentionally not enough to skip a guest renderer element.
+      LegacyTitleBakedLayoutConfirmed().store(
+          fable2::buttonprompts::TitleExpectedIconElementOrdinal() !=
+              UINT32_MAX,
+          std::memory_order_release);
+    } else {
+      LegacyTitleBakedLayoutConfirmed().store(false,
+                                              std::memory_order_release);
     }
     LegacyTitleBaselineElements().store(expected_baked,
                                         std::memory_order_release);
@@ -213,15 +235,21 @@ inline void EndLegacyTitleFrame() {
     // first observed structure as a fallback baseline.
     LegacyTitleBaselineElements().store(count, std::memory_order_release);
     LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
+    LegacyTitleBakedLayoutConfirmed().store(false,
+                                            std::memory_order_release);
   } else if (!source_rewritten) {
     if (count < baseline) {
       LegacyTitleBaselineElements().store(count, std::memory_order_release);
     }
     LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
+    LegacyTitleBakedLayoutConfirmed().store(false,
+                                            std::memory_order_release);
   } else if (count >= baseline + 4) {
     // Unknown localization/source: a seven-unit image tag becoming ordinary
     // glyphs still creates a clear multi-element increase.
     LegacyTitleKeyboardLayout().store(true, std::memory_order_release);
+    LegacyTitleBakedLayoutConfirmed().store(false,
+                                            std::memory_order_release);
   }
 
   if (g_legacy_title_frame_visible && title_layout) {
@@ -241,6 +269,47 @@ inline bool LegacyTitleRecentlyDrawn() {
 
 inline bool LegacyTitleUsesKeyboardLayout() {
   return LegacyTitleKeyboardLayout().load(std::memory_order_acquire);
+}
+
+inline uint32_t CurrentLegacyTitleElementOrdinal() {
+  return g_legacy_title_frame_elements;
+}
+
+inline bool ShouldSuppressLegacyTitleElement(uint32_t ordinal) {
+  if (g_legacy_title_scope_depth == 0 ||
+      !LegacyTitleBakedLayoutConfirmed().load(std::memory_order_acquire) ||
+      !fable2::buttonprompts::KeyboardPromptModeActive() ||
+      !REXCVAR_GET(ui_prompt_legacy_fallback)) {
+    return false;
+  }
+  const uint32_t expected =
+      fable2::buttonprompts::TitleExpectedIconElementOrdinal();
+  return expected != UINT32_MAX && ordinal == expected;
+}
+
+inline void NoteLegacyTitleSpriteSuppressed() {
+  LegacyTitleSpriteSuppressedNs().store(ClockNanoseconds(),
+                                        std::memory_order_release);
+}
+
+inline bool LegacyTitleSpriteRecentlySuppressed() {
+  constexpr int64_t kAliveNs =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::milliseconds(110))
+          .count();
+  const int64_t last =
+      LegacyTitleSpriteSuppressedNs().load(std::memory_order_acquire);
+  return last != 0 && ClockNanoseconds() - last <= kAliveNs;
+}
+
+inline std::string_view LegacyTitleActionName() {
+  switch (fable2::buttonprompts::TitleExpectedIconActionIndex()) {
+    case 0: return "A";
+    case 1: return "B";
+    case 2: return "X";
+    case 3: return "Y";
+    default: return "A";
+  }
 }
 
 inline bool ParseFloat(std::string_view text, float& out) {
@@ -314,6 +383,8 @@ inline void Clear() {
   LegacyTitleBaselineElements().store(0, std::memory_order_release);
   LegacyTitleLatestElements().store(0, std::memory_order_release);
   LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
+  LegacyTitleBakedLayoutConfirmed().store(false, std::memory_order_release);
+  LegacyTitleSpriteSuppressedNs().store(0, std::memory_order_release);
   DesiredGameFaceState().store(0, std::memory_order_release);
   GameFaceTransitionStartedNs().store(0, std::memory_order_release);
 }
@@ -496,7 +567,7 @@ class PromptOverlayDialog final : public rex::ui::ImGuiDialog {
     }
 
     if (legacy_fallback) {
-      const std::string label = ActionLabel("A");
+      const std::string label = ActionLabel(LegacyTitleActionName());
       if (!label.empty()) {
         const float cx = (640.0f - canvas_left) * canvas_to_screen +
                          static_cast<float>(
