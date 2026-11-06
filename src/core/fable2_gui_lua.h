@@ -610,6 +610,19 @@ local function nearby_text(icon)
   return nil
 end
 
+local function visible_for_prompt(e)
+  local cur = e
+  for _ = 1, 2 do
+    if not cur then break end
+    local opacity = tonumber(attr(cur, "opacity"))
+    if opacity and opacity <= 0.01 then return false end
+    local active = attr(cur, "active")
+    if active == false or active == 0 then return false end
+    cur = parent(cur)
+  end
+  return true
+end
+
 local function replace_plain(s, needle, replacement)
   local out, from = {}, 1
   while true do
@@ -789,7 +802,7 @@ local function walk(e, depth)
     else
       P.icons[e] = nil
       local text_el, original = nearby_text(e)
-      if text_el and not used_text[text_el] then
+      if text_el and not used_text[text_el] and visible_for_prompt(e) then
         local icon_attr, old_icon = "opacity", attr(e, "opacity")
         local icon_value = 0
         if old_icon == nil then
@@ -797,8 +810,12 @@ local function walk(e, depth)
         end
         if old_icon ~= nil then
           local old_text = attr(text_el, "textstring")
-          local new_text = type(old_text) == "string" and
-                           ("[" .. label .. "] " .. original) or nil
+          local prefix = "[" .. label .. "]"
+          local new_text = nil
+          if type(old_text) == "string" then
+            new_text = old_text:sub(1, #prefix) == prefix
+                       and old_text or (prefix .. " " .. original)
+          end
           if new_text then
             local text_ok = pcall(setAttribute, text_el, "textstring", new_text)
             local icon_ok = text_ok and
