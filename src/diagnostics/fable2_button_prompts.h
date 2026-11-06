@@ -40,6 +40,16 @@ inline void SyncGraphicalPrompts(bool keyboard) {
   if (auto callback = GuiSync().load(std::memory_order_acquire)) callback(keyboard);
 }
 
+// Single source of truth for the requested presentation mode. The source
+// scanner, GameFace synchronization and host fallback all use this decision;
+// "auto" follows the SDK's last meaningful physical input.
+inline bool KeyboardPromptModeActive() {
+  const std::string mode = rex::cvar::GetFlagByName("ui_prompt_mode");
+  if (mode == "controller") return false;
+  if (mode == "keyboard") return true;
+  return rex::cvar::GetFlagByName("input_prompt_keyboard") != "false";
+}
+
 #ifdef _WIN32
 struct Patched {
   uint8_t* address;
@@ -344,12 +354,11 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
   uint64_t matches = 0, replacements = 0;
   Log("started; native prompt source rewrite: 64KiB title fast path + bounded front-end scans");
   while (!stop.stop_requested()) {
-    const auto mode = rex::cvar::GetFlagByName("ui_prompt_mode");
     const auto active = rex::cvar::GetFlagByName("input_prompt_keyboard");
-    // A mismatched older SDK lacks the device flag. Prefer keyboard as the
-    // conservative auto fallback instead of silently hiding the feature.
-    const bool keyboard = mode == "keyboard" ||
-        (mode != "controller" && active != "false");
+    // A mismatched older SDK lacks the device flag. KeyboardPromptModeActive()
+    // treats any value other than explicit "false" as keyboard in auto mode,
+    // preserving the conservative fallback used by the original worker.
+    const bool keyboard = KeyboardPromptModeActive();
     const bool overlay =
         rex::cvar::GetFlagByName("ui_prompt_overlay_fallback") != "false";
     const auto actions = keyboard ? CurrentActions() : ActionLabels{};
