@@ -261,11 +261,13 @@ The legacy host keycap is allowed only when all of the following are true:
   expected baked/rewritten structure;
 - that invocation has just rendered a visible drawable;
 - the observed element count still matches the baked controller-sprite layout;
-- for renderer-level sprite suppression, the source scanner identified the
-  image-tag ordinal, the source came from the verified `0x4266xxxx` title
-  allocation page, and both the current `UITextPrompt` item pointer and image
-  element pointer exactly match the identity learned from a confirmed baked
-  title frame.
+- the conservative cover itself is refreshed only by the exact
+  `UITextPrompt` item learned while the verified `0x4266xxxx` title source
+  is actively tracked with a baked-layout count;
+- for renderer-level sprite suppression, the source scanner also identified
+  the image-tag ordinal, and both the current prompt item pointer and image
+  element pointer exactly match the stricter identity learned from a confirmed
+  baked title frame.
 
 As soon as a later title layout matches the expanded keyboard-glyph count, the
 fallback disables itself. The visibility pulse expires after roughly 110 ms,
@@ -295,8 +297,11 @@ now covered. The title path also removes its own baked face-button draw when
 source-derived element identity is available. The remaining unknown cases are
 narrower:
 
-- other legacy `UITextPrompt` / inline-sprite users for which no stable
-  action/element-to-screen-position contract has yet been identified;
+- other legacy inline-sprite/text item types for which no stable
+  action/element-to-screen-position contract has yet been identified. Current
+  captures prove `UITextPrompt_Render` for the title item; other observed
+  screens used `UIText_RenderCurrent`, so the title hook is not assumed to be
+  a generic prompt renderer;
 - presentation artwork that never appears in the traversable GameFace scene;
 - GameFace icon nodes for which neither the element nor any conservative
   single-visual-wrapper chain exposes `opacity`, `active`, or `diffuse.a`.
