@@ -198,7 +198,9 @@ handoff to avoid prompt flicker during device changes.
 
 The adapter remains deliberately conservative for unknown presentation
 artwork: it will leave an Xbox graphic intact rather than hide an unrelated UI
-branch or globally replace a shared controller texture. See [Button prompt
+branch or globally replace a shared controller texture. Fixed guest strings
+keep their original allocation size, while GameFace/host replacements can show
+longer valid bindings and modifier chords without that storage limit. See [Button prompt
 implementation and remaining limits](docs/BUTTON_PROMPTS.md).
 
 ## Keyboard controls
