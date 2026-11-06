@@ -28,7 +28,7 @@ GDFX/ISO 9660 readers come from the shared `X360Extract` library
 byte-for-byte identical to the standalone `x360extract` tool; STFS containers
 are copied raw.
 
-Settings: 720p/1080p/1440p/4K output, 1x–4x internal render scale, anisotropic
+Settings: 720p/1080p/1440p/4K output, 1x–7x internal render scale (3x = 4K; 4x–7x are supersampling modes and may be clamped by GPU capabilities), anisotropic
 filtering (game default through 16x), none/FXAA/FXAA Extreme, VSync,
 windowed/borderless/exclusive fullscreen and 30/60/120/144/165/240/unlimited FPS. Output size
 is separate from the original 720p guest mode. The FPS options need the
