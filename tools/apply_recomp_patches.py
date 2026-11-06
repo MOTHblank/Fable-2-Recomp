@@ -123,14 +123,15 @@ def _patch_direct_mouse_native_camera(files) -> int:
 	    REX_LOAD_U32(ctx.r10.u32 + 0) != 0) {
 		// Camera-affecting native controls must own the mouse route. Standard
 		// XINPUT layout here: buttons +4, LT +6, RX +12, RY +14.
-		constexpr uint16_t kRightThumb = 0x0080;
-		constexpr uint16_t kLeftShoulder = 0x0100;
-		constexpr uint8_t kTriggerThreshold = 30;
+		constexpr uint8_t kTriggerThreshold = 30;  // XInput trigger threshold.
 		const uint16_t buttons = REX_LOAD_U16(ctx.r10.u32 + 4);
 		const uint8_t left_trigger = REX_LOAD_U8(ctx.r10.u32 + 6);
+		const uint16_t special_camera_buttons =
+		    rex::input::X_INPUT_GAMEPAD_RIGHT_THUMB |
+		    rex::input::X_INPUT_GAMEPAD_LEFT_SHOULDER;
 		const bool special_camera_input =
 		    left_trigger >= kTriggerThreshold ||
-		    (buttons & (kRightThumb | kLeftShoulder)) != 0;
+		    (buttons & special_camera_buttons) != 0;
 		if (special_camera_input) {
 			// LT = Look-At / Target Lock, LB = first-person, R3 = View Hero.
 			// Switch the SDK immediately so subsequent host motion uses its normal
