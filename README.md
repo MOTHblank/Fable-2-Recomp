@@ -176,19 +176,30 @@ game recreates it with defaults on launch if it is ever missing. Loaded in
 
 
 
-## Adaptive button prompts (experimental)
+## Adaptive button prompts
 
-The recomp can replace supported inline Xbox button markup in **writable game
-UI strings** with labels taken from the current keyboard/mouse bindings.
+The PC input layer adapts Xbox-oriented prompts from several UI paths rather
+than relying on one text substitution:
+
+- writable inline markup and conservative fixed-width instruction strings;
+- live GameFace text and paired icon/label widgets;
+- texture/material-only GameFace icons, replaced by binding-aware host keycaps
+  when the visual can be hidden safely;
+- the verified cached title-screen `UITextPrompt` path, where the exact baked
+  face-button drawable is selectively suppressed without bypassing the game's
+  visibility/animation bookkeeping.
+
 `--ui_prompt_mode auto` (the default) follows the most recently active
-keyboard/mouse or physical controller; `keyboard` forces key labels, and
-`controller` always preserves the original Xbox prompts. The matching
-runtime SDK is required for automatic switching.
+keyboard/mouse or physical controller. `keyboard` forces PC labels and
+`controller` preserves the stock Xbox presentation. Switching is driven by
+physical host input, including raw/direct mouse activity, with controller
+noise thresholds, focus/capture baselining and a GameFace acknowledgement
+handoff to avoid prompt flicker during device changes.
 
-This is an early, reversible text-markup substitution, **not yet universal**:
-prompts rendered from prebuilt graphics, cached layouts, or different markup
-may remain Xbox-styled. See [Button prompt implementation and
-limitations](docs/BUTTON_PROMPTS.md).
+The adapter remains deliberately conservative for unknown presentation
+artwork: it will leave an Xbox graphic intact rather than hide an unrelated UI
+branch or globally replace a shared controller texture. See [Button prompt
+implementation and remaining limits](docs/BUTTON_PROMPTS.md).
 
 ## Keyboard controls
 
@@ -205,7 +216,8 @@ The mapping is the `keyboard_gamepad_map` cvar, format `Key:Button,Key:Button,..
   (`E`, `Space`, `LeftShift`, `F1`, ...), or a mouse button: `LMB` (left),
   `RMB` (right), `MMB` (middle), and `XMB1`/`XMB2` (side buttons). Mouse
   button names are case-insensitive; a held mouse button behaves exactly like
-  a held key.
+  a held key. `XMB1`/`XMB2` remain the configuration tokens, while adaptive
+  prompts display them as the conventional PC-facing `M4`/`M5`.
 - **Button** — a guest gamepad input: `A`, `B`, `X`, `Y`, `LB`/`RB` (shoulders),
   `LT`/`RT` (triggers), `Up`/`Down`/`Left`/`Right` (dpad), `Pause` (Start),
   `Select` (Back), `L3`/`R3` (thumb clicks), and `StickUp`/`StickDown`/
