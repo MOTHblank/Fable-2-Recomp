@@ -69,7 +69,15 @@ inline void add_delta(float dx, float dy) {
   }
 }
 
-// Guest camera hook: consume and reset the accumulated displacement.
+// Input processing may run the verified XINPUT consumer more than once per
+// guest frame. Every invocation must see the same pending displacement; the
+// camera-update boundary drains it after input processing has finished.
+inline void peek_delta(float& out_dx, float& out_dy) {
+  out_dx = dx_acc().load(std::memory_order_relaxed);
+  out_dy = dy_acc().load(std::memory_order_relaxed);
+}
+
+// Guest camera/frame boundary: consume and reset the accumulated displacement.
 inline void take_delta(float& out_dx, float& out_dy) {
   out_dx = dx_acc().exchange(0.0f, std::memory_order_relaxed);
   out_dy = dy_acc().exchange(0.0f, std::memory_order_relaxed);
