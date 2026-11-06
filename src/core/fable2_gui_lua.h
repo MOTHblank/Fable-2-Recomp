@@ -516,7 +516,9 @@ if mode_changed then
   P.mode = wanted_mode
   P.sig = __sig
 end
-if not __kbd then return "__f2_prompt_overlay|" end
+if not __kbd then
+  return "__f2_prompt_overlay|c" .. (__overlay and "1" or "0") .. "|"
+end
 if type(P.changed) ~= "table" then P.changed = {} end
 if type(P.icons) ~= "table" then P.icons = {} end
 
@@ -702,7 +704,9 @@ for icon, info in pairs(P.icons) do
 end
 local ok_scene, scene = pcall(getElement, "Scene")
 if not ok_scene or not scene then scene = rawget(_G, "SCENE") end
-if not scene then return "__f2_prompt_overlay|" end
+if not scene then
+  return "__f2_prompt_overlay|k" .. (__overlay and "1" or "0") .. "|"
+end
 
 local overlay_out, overlay_seen = {}, {}
 
@@ -841,7 +845,8 @@ local function walk(e, depth)
   for i = 1, #ch do walk(ch[i], depth + 1) end
 end
 walk(scene, 0)
-return "__f2_prompt_overlay|" .. table.concat(overlay_out, ";")
+return "__f2_prompt_overlay|k" .. (__overlay and "1" or "0") ..
+       "|" .. table.concat(overlay_out, ";")
 )LUA";
 
   enqueue_all("button-prompts", code);
