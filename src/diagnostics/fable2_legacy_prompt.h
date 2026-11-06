@@ -116,7 +116,7 @@ inline bool ExtractPreparedCanvasPosition(uint32_t scratch, uint8_t* base,
   float best_x = 0.0f;
   float best_y = 0.0f;
 
-  const auto consider = [&](float x, float y) mutable {
+  const auto consider = [&](float x, float y) {
     if (!std::isfinite(x) || !std::isfinite(y) ||
         x < kReferenceX - kMaxDx || x > kReferenceX + kMaxDx ||
         y < kReferenceY - kMaxDy || y > kReferenceY + kMaxDy) {
