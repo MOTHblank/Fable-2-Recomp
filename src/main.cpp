@@ -8,6 +8,7 @@
 
 #include "fable_2_app.h"
 #include "fable2_button_prompts.h"
+#include "fable2_legacy_prompt.h"
 #include "fps_meter.h"
 #include "fable2_text_probe.h"
 #include "fable2_glyph_probe.h"
@@ -57,6 +58,17 @@ REXCVAR_DEFINE_INT32(ui_prompt_overlay_offset_x, 0, "Input",
     .range(-128, 128);
 REXCVAR_DEFINE_INT32(ui_prompt_overlay_offset_y, 0, "Input",
                      "Vertical pixel nudge for fallback keyboard keycaps")
+    .range(-128, 128);
+
+REXCVAR_DEFINE_BOOL(
+    ui_prompt_legacy_fallback, true, "Input",
+    "Cover the legacy title-screen Xbox A sprite with the active keyboard "
+    "binding when its writable <a_img> source no longer exists.");
+REXCVAR_DEFINE_INT32(ui_prompt_legacy_offset_x, 0, "Input",
+                     "Horizontal pixel nudge for the legacy title keycap")
+    .range(-128, 128);
+REXCVAR_DEFINE_INT32(ui_prompt_legacy_offset_y, 0, "Input",
+                     "Vertical pixel nudge for the legacy title keycap")
     .range(-128, 128);
 
 // Host keyboard -> guest gamepad map (see src/input/keyboard_gamepad.h).
