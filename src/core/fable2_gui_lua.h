@@ -874,7 +874,15 @@ local function walk(e, depth)
   end
   seen = seen + 1
   present[e] = true
-  local raw_text = text_of(e)
+  local ok_type, element_type = pcall(getElementType, e)
+  element_type = ok_type and tostring(element_type):lower() or ""
+
+  -- Behavior nodes implement UIContract/event logic (PressA, OnPressB,
+  -- FillWorldIconButton, etc.). They are traversal containers only: never
+  -- rewrite, hide or overlay them even if a future visual alias happens to
+  -- share the same name.
+  local adaptable = element_type ~= "behavior"
+  local raw_text = adaptable and text_of(e) or nil
   if raw_text then
     local rewritten = rewrite_prompt_text(raw_text)
     if rewritten ~= raw_text then remember_set(e, "textstring", rewritten) end
@@ -885,7 +893,7 @@ local function walk(e, depth)
   -- The BGF asset table contains pressed/alternate variants such as
   -- icon_button_a2. They represent the same logical control.
   if n:find("^icon_button_") then n = n:gsub("2$", "") end
-  local action = aliases[n]
+  local action = adaptable and aliases[n] or nil
   local label = action and __labels[action] or nil
   if label and label ~= "" then
     local prior = P.icons[e]
