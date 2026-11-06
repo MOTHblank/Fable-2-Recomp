@@ -27,7 +27,8 @@ BAKED_SDK_PINS = {
     "8f89aeee12738818ccf8d10b4273f6aa3016d77f",  # Fable input/renderer integration
     "8a60ee22668e499e674abdbd4c4a6926912d9c9b",  # PR #51 graphics effects and save fixes integrated
     "633c0bae58127c0080a356d40bc76dc2169538bd",
-    "15f5a3d55941e2955d030073dd7569f90753e292",  # SDK tool exports and ImGui modifier fixes  # Refined config export serialization
+    "15f5a3d55941e2955d030073dd7569f90753e292",  # SDK tool exports and ImGui modifier fixes
+    "bfca57d54eb041baeaba95f79a9d2dc68feb7dfb",  # Same source tree with upstream SDK history reconciled  # Refined config export serialization
 }
 
 # When these exact SDK source improvements are committed to our SDK fork,
@@ -38,6 +39,7 @@ BAKED_FOLLOWUP_PINS = {
     "8a60ee22668e499e674abdbd4c4a6926912d9c9b",
     "633c0bae58127c0080a356d40bc76dc2169538bd",
     "15f5a3d55941e2955d030073dd7569f90753e292",  # SDK tool exports and ImGui modifier fixes
+    "bfca57d54eb041baeaba95f79a9d2dc68feb7dfb",  # Same source tree with upstream SDK history reconciled
 }
 BAKED_FOLLOWUP_MARKERS = {
     "src/graphics/d3d12/pipeline_cache.cpp": (
@@ -67,6 +69,7 @@ BAKED_FOLLOWUP_MARKERS = {
 GRAPHICS_SDK_PINS = {
     "633c0bae58127c0080a356d40bc76dc2169538bd",
     "15f5a3d55941e2955d030073dd7569f90753e292",
+    "bfca57d54eb041baeaba95f79a9d2dc68feb7dfb",
 }
 GRAPHICS_SDK_MARKERS = {
     "src/ui/overlay/effects_overlay.cpp": ("EffectsDialog", "scene_fx_ao"),
@@ -247,7 +250,7 @@ def main():
         # Refuse incomplete/locally modified builds instead of bypassing the
         # patch check for every arbitrary revision.
         missing = missing_baked_runtime_features(source)
-        if head in ("cc5f03dd0488720a0f277412d7c36b63964d5b18", "8f89aeee12738818ccf8d10b4273f6aa3016d77f", "8a60ee22668e499e674abdbd4c4a6926912d9c9b", "633c0bae58127c0080a356d40bc76dc2169538bd", "15f5a3d55941e2955d030073dd7569f90753e292"):
+        if head in ("cc5f03dd0488720a0f277412d7c36b63964d5b18", "8f89aeee12738818ccf8d10b4273f6aa3016d77f", "8a60ee22668e499e674abdbd4c4a6926912d9c9b", "633c0bae58127c0080a356d40bc76dc2169538bd", "15f5a3d55941e2955d030073dd7569f90753e292", "bfca57d54eb041baeaba95f79a9d2dc68feb7dfb"):
             input_path = source / "src/kernel/xam/xam_input.cpp"
             try:
                 input_code = input_path.read_text(encoding="utf-8")
