@@ -23,12 +23,6 @@ extern "C" void __imp__UITextPrompt_RenderElement(PPCContext& ctx,
 
 namespace fable2::legacyprompt {
 
-inline bool Enabled() {
-  if (!fable2::promptoverlay::KeyboardModeActive()) return false;
-  if (!REXCVAR_GET(ui_prompt_legacy_fallback)) return false;
-  return !fable2::buttonprompts::TitleSourceRewriteActive();
-}
-
 inline bool PlausibleElement(uint32_t element) {
   return element >= 0x10000u && element < 0xE0000000u &&
          (element & 3u) == 0;
@@ -57,8 +51,9 @@ extern "C" void UITextPrompt_RenderElement(PPCContext& ctx, uint8_t* base) {
   const uint32_t element = ctx.r3.u32;
   __imp__UITextPrompt_RenderElement(ctx, base);
 
-  if (fable2::legacyprompt::Enabled() &&
-      fable2::legacyprompt::WasVisibleAfterRender(element, base)) {
-    fable2::promptoverlay::TouchLegacyTitleDraw();
-  }
+  // Count every prompt element, even in controller mode. The enclosing
+  // UIText_FrameRender hook uses the resulting per-frame count to tell a baked
+  // one-sprite <a_img> layout from the expanded keyboard-glyph layout.
+  fable2::promptoverlay::NoteLegacyTitleElement(
+      fable2::legacyprompt::WasVisibleAfterRender(element, base));
 }
