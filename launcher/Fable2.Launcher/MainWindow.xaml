@@ -112,6 +112,9 @@
                              IsEnabled="False" TextChanged="CustomResolutionChanged"
                              ToolTip="Custom output height in physical pixels" />
                   </Grid>
+                  <TextBlock Text="Custom range: 640 × 360 to 16384 × 16384; aspect 4:3–4:1"
+                             Margin="0,4,0,0" FontSize="10" Foreground="#FF8A9992"
+                             TextWrapping="Wrap" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="2">
