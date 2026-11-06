@@ -121,6 +121,9 @@ struct Values {
   // original (yield every call), 0 = never yield. Larger = fewer context
   // switches, less frequent CPU rotation to other guest threads.
   int32_t hotfunc_yield_every = 4;
+  // Map immutable game:/d: host files and serve guest reads from the OS page
+  // cache via memcpy instead of one host file syscall per read.
+  bool native_mapped_game_reads = true;
 };
 
 // Load the config from `path`.
