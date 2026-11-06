@@ -95,7 +95,8 @@ controller mode restores both.
 
 This gives non-string UI a practical PC representation without globally
 replacing `icon_button_a.tex` or repainting every use of `Material2270`.
-Ambiguous/baked elements with no safe text partner deliberately stay native.
+If no safe text association exists, known controller artwork proceeds to the
+texture-only keycap fallback below; truly ambiguous visuals remain native.
 
 GameFace `behavior` elements are explicitly traversal-only. Contract/event
 nodes such as the reverse-engineered `PressA`, `OnPressB`,
