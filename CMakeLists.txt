@@ -48,15 +48,15 @@ if(FABLE2_CODEGEN_TOOL)
     if(NOT EXISTS "${FABLE2_CODEGEN_TOOL}")
         message(FATAL_ERROR "FABLE2_CODEGEN_TOOL does not exist")
     endif()
-    # The official tool must keep its own runtime. Host headers, integration
-    # sources and libraries come from the matched source-built SDK instead.
+    # build.cmd passes the rexglue.exe installed by the same source-built SDK
+    # package used for host headers, libraries and renderer binaries.
     set_target_properties(rex::rexglue PROPERTIES
         IMPORTED_LOCATION "${FABLE2_CODEGEN_TOOL}"
         IMPORTED_LOCATION_DEBUG "${FABLE2_CODEGEN_TOOL}"
         IMPORTED_LOCATION_RELWITHDEBINFO "${FABLE2_CODEGEN_TOOL}"
         IMPORTED_LOCATION_RELEASE "${FABLE2_CODEGEN_TOOL}")
-    # A staged package still contains the official SDK's other configurations.
-    # Reject selecting those by accident via an old/manual CMake cache.
+    # Reject a stale configuration or a replaced codegen executable before any
+    # generated source is trusted.
     get_filename_component(FABLE2_PACKAGE_ROOT "${rexglue_DIR}/../../.." ABSOLUTE)
     set(FABLE2_SDK_PROVENANCE "${FABLE2_PACKAGE_ROOT}/renderer-sdk-provenance.json")
     if(WIN32 AND EXISTS "${FABLE2_SDK_PROVENANCE}")
@@ -71,6 +71,18 @@ if(FABLE2_CODEGEN_TOOL)
             endif()
             if(NOT FABLE2_STAGED_CONFIGURATION STREQUAL FABLE2_REQUIRED_CONFIGURATION)
                 message(FATAL_ERROR "Staged SDK is ${FABLE2_STAGED_CONFIGURATION}, but this host needs ${FABLE2_REQUIRED_CONFIGURATION}. Rerun build.cmd to select the matched SDK.")
+            endif()
+            string(JSON FABLE2_STAGED_CODEGEN_SHA ERROR_VARIABLE FABLE2_CODEGEN_HASH_ERROR
+                   GET "${FABLE2_SDK_METADATA}" codegen_sha256)
+            if(NOT FABLE2_CODEGEN_HASH_ERROR AND FABLE2_STAGED_CODEGEN_SHA)
+                file(SHA256 "${FABLE2_CODEGEN_TOOL}" FABLE2_ACTUAL_CODEGEN_SHA)
+                string(TOLOWER "${FABLE2_STAGED_CODEGEN_SHA}" FABLE2_STAGED_CODEGEN_SHA)
+                string(TOLOWER "${FABLE2_ACTUAL_CODEGEN_SHA}" FABLE2_ACTUAL_CODEGEN_SHA)
+                if(NOT FABLE2_ACTUAL_CODEGEN_SHA STREQUAL FABLE2_STAGED_CODEGEN_SHA)
+                    message(FATAL_ERROR
+                        "FABLE2_CODEGEN_TOOL does not match renderer-sdk-provenance.json. "
+                        "Rebuild the pinned SDK instead of mixing ReXGlue binaries.")
+                endif()
             endif()
         endif()
     endif()
