@@ -145,6 +145,10 @@ inline std::atomic<uint32_t>& LegacyTitleItemPointer() {
   static std::atomic<uint32_t> value{0};
   return value;
 }
+inline std::atomic<uint32_t>& LegacyTitleCoverItemPointer() {
+  static std::atomic<uint32_t> value{0};
+  return value;
+}
 inline std::atomic<bool>& LegacyTitleCanvasPositionValid() {
   static std::atomic<bool> value{false};
   return value;
@@ -225,6 +229,7 @@ inline void EndLegacyTitleFrame() {
                                               std::memory_order_release);
       LegacyTitleIconElementPointer().store(0, std::memory_order_release);
       LegacyTitleItemPointer().store(0, std::memory_order_release);
+      LegacyTitleCoverItemPointer().store(0, std::memory_order_release);
       LegacyTitleCanvasPositionValid().store(false,
                                              std::memory_order_release);
     }
@@ -260,6 +265,29 @@ inline void EndLegacyTitleFrame() {
     return;
   }
 
+  const bool plausible_item =
+      g_legacy_title_frame_item >= 0x10000u &&
+      g_legacy_title_frame_item < 0xE0000000u &&
+      (g_legacy_title_frame_item & 3u) == 0;
+  const bool baked_count_match =
+      have_expectations && count <= expected_baked + 1;
+
+  // The large count-only cover is deliberately stricter than the layout
+  // classifier. Learn its item only while the verified title source allocation
+  // is actively tracked and the rendered structure still has the baked image
+  // shape. Once learned, only that exact UITextPrompt item can refresh the
+  // fixed-position cover. A same-sized prompt elsewhere cannot pulse it.
+  uint32_t cover_item =
+      LegacyTitleCoverItemPointer().load(std::memory_order_acquire);
+  if (cover_item == 0 && source_rewritten && baked_count_match &&
+      plausible_item) {
+    cover_item = g_legacy_title_frame_item;
+    LegacyTitleCoverItemPointer().store(cover_item,
+                                        std::memory_order_release);
+  }
+  const bool cover_identity =
+      cover_item != 0 && g_legacy_title_frame_item == cover_item;
+
   // Prefer exact expectations derived from the localized source string. This
   // handles English and every supported translation without hardcoded 16/22
   // counts, and distinguishes a late scanner hit from a layout that actually
@@ -294,9 +322,7 @@ inline void EndLegacyTitleFrame() {
       const bool exact_icon =
           fable2::buttonprompts::TitleExpectedIconElementOrdinal() !=
               UINT32_MAX &&
-          g_legacy_title_frame_item >= 0x10000u &&
-          g_legacy_title_frame_item < 0xE0000000u &&
-          (g_legacy_title_frame_item & 3u) == 0 &&
+          plausible_item &&
           g_legacy_title_frame_icon_candidate != 0 &&
           (same_confirmed_identity || first_identity);
       LegacyTitleBakedLayoutConfirmed().store(exact_icon,
@@ -352,7 +378,8 @@ inline void EndLegacyTitleFrame() {
     LegacyTitleItemPointer().store(0, std::memory_order_release);
   }
 
-  if (g_legacy_title_frame_visible && title_layout) {
+  if (g_legacy_title_frame_visible && baked_count_match &&
+      cover_identity) {
     LegacyTitleLastDrawNs().store(now, std::memory_order_release);
   }
 }
@@ -504,6 +531,7 @@ inline void Clear() {
   LegacyTitleSpriteSuppressedNs().store(0, std::memory_order_release);
   LegacyTitleIconElementPointer().store(0, std::memory_order_release);
   LegacyTitleItemPointer().store(0, std::memory_order_release);
+  LegacyTitleCoverItemPointer().store(0, std::memory_order_release);
   LegacyTitleCanvasPositionValid().store(false, std::memory_order_release);
   LegacyTitleCanvasX().store(640.0f, std::memory_order_release);
   LegacyTitleCanvasY().store(560.0f, std::memory_order_release);
