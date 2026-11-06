@@ -137,12 +137,13 @@ inline std::u16string Rewrite(std::u16string_view original, const KeyLabels& key
 // Examples with the default mapping:
 //   "Press A to confirm" -> "Press E to confirm"
 //   "Hold LT"            -> "Hold Q "
+//   "Select A"           -> "Select E"
 // Mouse-only X/Y bindings ("LMB"/"RMB") do not fit a one-character X/Y token
 // and therefore remain untouched here; live GameFace text can relayout those.
 inline std::u16string RewriteFixedInstructions(
     std::u16string_view original, const ActionLabels& labels) {
-  constexpr std::array<std::u16string_view, 3> verbs{
-      u"Press ", u"Hold ", u"Tap "};
+  constexpr std::array<std::u16string_view, 4> verbs{
+      u"Press ", u"Hold ", u"Tap ", u"Select "};
   constexpr std::array<std::u16string_view, 12> tokens{
       u"A", u"B", u"X", u"Y", u"LB", u"RB",
       u"LT", u"RT", u"Start", u"Back", u"LS", u"RS"};
