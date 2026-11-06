@@ -17,8 +17,10 @@ The active Direct pipeline is now:
    `src/core/hotfunc/input/ProcessAndProcessAndProcess1013_822B2D60.cpp` calls the original
    11-line guest `XamInputGetState` wrapper, then modifies **only guest user 0's** successful
    final merged `X_INPUT_STATE`.
-3. Mouse X/Y are added to that state's native `sThumbRX` / `sThumbRY`. Physical controller,
-   keyboard, and other merged input remain additive; guest users 1-3 are returned byte-for-byte
+3. Mouse X/Y are added to that state's native `sThumbRX` / `sThumbRY` **after**
+   ReXGlue has merged devices. This is intentional: the SDK's ordinary `MergeInto()` chooses
+   the larger-magnitude stick axis between devices, but Direct needs simultaneous mouse + physical
+   stick to add/subtract before the game's native clamp. Guest users 1-3 are returned byte-for-byte
    unchanged.
 4. The user-0 wrapper owns route eligibility. Ordinary polls enable Direct. LT (Look-At / Target
    Lock), LB (first-person), and R3 (View Hero / vanity camera) disable Direct and use the SDK's
@@ -65,8 +67,9 @@ requires a verified **post-deadzone / pre-camera angular or normalized input sta
 
 The next RE target is therefore no longer "find a safe place to inject a pad": that is solved.
 It is specifically to trace user-0 right-stick RX/RY from the wrapper into the first normalized
-camera-control value after deadzone/clamping, then add raw mouse displacement there while leaving
-physical stick input additive.
+camera-control value after deadzone/clamping. Any later injection point must preserve the current
+post-merge **additive** mouse+physical-stick semantics; a candidate that only exposes one already-
+arbitrated magnitude is not an acceptable replacement.
 
 ### Current RE instrumentation
 
