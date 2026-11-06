@@ -10,7 +10,8 @@
 // disk, with receiver plane depth bias against shadow acne. With
 // material_soft_shadows off, a small fixed filter.
 //
-// The cascades' blend and the distance fade are the game's.
+// The cascade blend is the game's. The far fade can be extended, but only
+// while the far cascade still geometrically covers the surface.
 //
 // xe_modifications: 0000400100000000
 
@@ -127,6 +128,16 @@ float4 GatherDepths(Cascade cascade, float2 uv) {
       xe_samplers[XeDescriptorIndex(cascade.sampler_slot)], float3(uv, 0.0));
 }
 
+// Whether the projected point has enough room around it for the shadow filter.
+// This is intentionally only used when extending beyond the game's own
+// distance range - the original range keeps the guest shader's edge behavior.
+bool CascadeContains(Cascade cascade, float inset_texels) {
+  float width, height, elements;
+  xe_textures_2d[XeDescriptorIndex(cascade.srv_slot)].GetDimensions(width, height, elements);
+  float2 inset = inset_texels / max(float2(width, height), 1.0);
+  return all(cascade.uv >= inset) && all(cascade.uv <= 1.0 - inset);
+}
+
 // The visible fraction of the sun from the cascade's point (1 - lit).
 float SunVisibility(Cascade cascade, float4 clip, float2 rotation, bool soft) {
   float2 uv = cascade.uv;
@@ -225,12 +236,33 @@ void main(Input input, out float4 color_out : SV_Target0) {
   if (camera_distance < kCascades.x + kCascades.z) {
     near_visibility = SunVisibility(near_cascade, clip, rotation, soft);
   }
-  if (camera_distance > kCascades.x && camera_distance < kCascades.y + kFarCascadeExtension.x) {
+
+  // Preserve the game's normal cascade range exactly at scale 1. Above that,
+  // extend the far range from the near split, but only if this world point is
+  // still inside the actual far shadow map with room for filtering. This adds
+  // useful distant shadows without smearing clamped border texels across the
+  // scene when the orthographic cascade no longer covers the receiver.
+  float shadow_distance_scale = max(XeShadowDistanceScale(), 1.0);
+  float original_far_end = kCascades.y + kFarCascadeExtension.x;
+  float far_span = max(original_far_end - kCascades.x, 0.0);
+  float extended_far_end = kCascades.x + far_span * shadow_distance_scale;
+  bool in_original_far_range =
+      camera_distance > kCascades.x && camera_distance < original_far_end;
+  bool in_extended_far_range =
+      camera_distance >= original_far_end && camera_distance < extended_far_end &&
+      CascadeContains(far_cascade, 2.0);
+  if (in_original_far_range || in_extended_far_range) {
     far_visibility = SunVisibility(far_cascade, clip, rotation, soft);
   }
+
   float blend = saturate(XeMul(camera_distance - kCascades.x, rcp(kCascades.z)));
   float visibility = lerp(near_visibility, far_visibility, blend);
-  float fade = saturate(XeMul(kFade.w, camera_distance - kCascades.y));
+  // Stretch the game's fade by the same factor while the far cascade is usable.
+  // Outside the real cascade projection, immediately fall back to the original
+  // fade so extension can never manufacture shadows from clamped edge samples.
+  float fade_scale =
+      (camera_distance < original_far_end || in_extended_far_range) ? shadow_distance_scale : 1.0;
+  float fade = saturate(XeMul(kFade.w / fade_scale, camera_distance - kCascades.y));
   visibility = lerp(visibility, kCascades.w, fade);
   color_out = XeColorOutput(float4(visibility.xxx, 1.0), 0u);
 }
