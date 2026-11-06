@@ -135,6 +135,13 @@ inheriting stale buttons or stick positions from its previous lifetime.
 Mouse-wheel input does not invent a guest-gamepad binding; it only counts as
 unambiguous physical mouse activity for last-used-device ownership.
 
+Focus changes and pointer-lock/capture transitions may produce one synthetic
+SDL mouse-motion sample. The MnK driver treats the first motion sample after
+such a transition as an ownership **baseline**: gameplay mouse routing still
+receives it, but it cannot flip `input_prompt_keyboard`. A subsequent
+physical motion sample uses the normal one-pixel accumulator. Explicit key,
+mouse-button and wheel activity still switches immediately.
+
 GameFace changes are asynchronous because the adapter runs inside each live
 presentation's Lua state. The host overlay therefore follows the **last
 acknowledged GameFace state**, not merely the desired cvar state. On
@@ -197,8 +204,14 @@ turning it off restores unresolved Xbox artwork on the next synchronization
 rather than merely hiding the host keycap.
 
 Known alternate/pressed assets such as `icon_button_a2` are normalized to the
-same logical action. The fallback still refuses to hide an element when neither
-it nor its immediate wrapper exposes a safe visibility attribute.
+same logical action. Safe visual hiding now tries the GameFace attributes
+`opacity`, `active`, then `diffuse.a` on the icon/immediate wrapper. All
+three are exposed by the verified GameFace element API and are restored only
+while their current value still exactly matches the adapter-applied value.
+Visibility ownership is attribute-specific: if the adapter owns `opacity=0`
+but the game independently sets `active=false` or `diffuse.a=0`, that
+game-owned hide still suppresses the host keycap. Elements exposing none of
+these safe visual attributes remain native.
 
 If the presentation's pivot semantics need a small correction, the host overlay
 can be tuned live with `ui_prompt_overlay_offset_x` and
@@ -243,8 +256,10 @@ The legacy host keycap is allowed only when all of the following are true:
 - that invocation has just rendered a visible drawable;
 - the observed element count still matches the baked controller-sprite layout;
 - for renderer-level sprite suppression, the source scanner identified the
-  image-tag ordinal and the current guest element pointer is the exact pointer
-  learned from a previously confirmed baked title frame.
+  image-tag ordinal, the source came from the verified `0x4266xxxx` title
+  allocation page, and both the current `UITextPrompt` item pointer and image
+  element pointer exactly match the identity learned from a confirmed baked
+  title frame.
 
 As soon as a later title layout matches the expanded keyboard-glyph count, the
 fallback disables itself. The visibility pulse expires after roughly 110 ms,
