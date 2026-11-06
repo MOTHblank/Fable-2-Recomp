@@ -62,8 +62,8 @@ REXCVAR_DEFINE_INT32(ui_prompt_overlay_offset_y, 0, "Input",
 
 REXCVAR_DEFINE_BOOL(
     ui_prompt_legacy_fallback, true, "Input",
-    "Cover the legacy title-screen Xbox A sprite with the active keyboard "
-    "binding when its writable <a_img> source no longer exists.");
+    "Replace the legacy title-screen face-button sprite with the active "
+    "keyboard binding when its baked layout cannot consume the source rewrite.");
 REXCVAR_DEFINE_INT32(ui_prompt_legacy_offset_x, 0, "Input",
                      "Horizontal pixel nudge for the legacy title keycap")
     .range(-128, 128);
