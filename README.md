@@ -121,6 +121,7 @@ applications are named Fable 2 Recompiled and use project-owned icons.
 - **You must supply your own game disc ISO** (not in this repository). `build.cmd` starts the launcher to extract it into `out\game` when missing.   
 - **Saves live in `out\game\\saves\`** — they are preserved across rebuilds.
 - Optional native save snapshots: set `native_save_snapshots = true` under `[general]` in `fable2_config.toml`. On startup, up to three generations are kept at `out/game/save_backups/snapshot_1` through `snapshot_3` (newest first). Each snapshot is capped at 256 MiB and 4096 regular files; symlinks are rejected. This never changes or restores the original game saves automatically.
+- Native game-content reads are memory-mapped by default (`[perf] native_mapped_game_reads = true`). This applies only to read-only `game:` / `d:` files; saves and writable paths keep normal file I/O. Disable it if you intentionally replace content files while the game is running.
 - The `--game_data_root <path>` override still points the content root at a different tree (e.g. to run from a shared content copy without staging); saves/cache still land next to the exe.
 - Although this was made for the US / Europe GOTY version I have been able to run the following regions: Germany, France, Italy, Russia, and Spain. Your milage may very if you use those regions.
 
