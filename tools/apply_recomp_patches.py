@@ -124,6 +124,8 @@ def _patch_direct_mouse_native_camera(files) -> int:
 		float mouse_dy = 0.0f;
 		fable2::mouselook::take_delta(mouse_dx, mouse_dy);
 		if (std::isfinite(mouse_dx) && std::isfinite(mouse_dy)) {
+			if (mouse_dx != 0.0f || mouse_dy != 0.0f)
+				fable2::mouselook::note_native_injection();
 			const int32_t scale_x = REXCVAR_GET(mouse_look_scale);
 			const int32_t scale_y = REXCVAR_GET(mouse_look_scale_y);
 			if (scale_x >= 1 && scale_x <= 4096 &&
