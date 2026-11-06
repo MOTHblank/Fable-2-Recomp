@@ -108,20 +108,6 @@ inline NativeInputSample latest_native_input_sample() {
   return s;
 }
 
-// Input processing may discover a camera-affecting native control (target lock,
-// first person, vanity camera) before CECCameraUpdateFrame runs. Latch it until
-// the camera hook consumes the request later in the same guest frame.
-inline std::atomic<bool>& native_fallback_requested() {
-  static std::atomic<bool> requested{false};
-  return requested;
-}
-inline void request_native_fallback() {
-  native_fallback_requested().store(true, std::memory_order_release);
-}
-inline bool take_native_fallback_request() {
-  return native_fallback_requested().exchange(false, std::memory_order_acq_rel);
-}
-
 // Host input driver: add this poll's cursor displacement.
 inline void add_delta(float dx, float dy) {
   if (std::isfinite(dx) && std::isfinite(dy)) {
