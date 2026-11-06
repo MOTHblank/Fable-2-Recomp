@@ -39,6 +39,7 @@
 #include "fable_2_pch.h"
 
 #include <cstring>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
 
@@ -145,24 +146,53 @@ struct HostStream {
 };
 
 std::mutex g_map_mutex;
-std::unordered_map<uint32_t, HostStream*> g_streams;
+std::unordered_map<uint32_t, std::shared_ptr<HostStream>> g_streams;
 
-HostStream* Find(uint32_t strm) {
+// Scaleform's inflate wrapper commonly calls us with one input byte at a time.
+// A global unordered_map mutex on every byte is pure host overhead, so retain a
+// non-owning per-thread cache of the last guest stream. The map remains the
+// authority: Drop() expires the weak cache once no in-flight call owns the
+// stream, and shared ownership also prevents an inflate/end race becoming a
+// host use-after-free.
+thread_local uint32_t g_cached_strm = 0;
+thread_local std::weak_ptr<HostStream> g_cached_stream;
+
+std::shared_ptr<HostStream> Find(uint32_t strm) {
+  if (strm == g_cached_strm) {
+    if (auto cached = g_cached_stream.lock()) return cached;
+  }
+
   std::lock_guard lock(g_map_mutex);
   auto it = g_streams.find(strm);
-  return it == g_streams.end() ? nullptr : it->second;
+  if (it == g_streams.end()) {
+    if (strm == g_cached_strm) g_cached_stream.reset();
+    return {};
+  }
+  g_cached_strm = strm;
+  g_cached_stream = it->second;
+  return it->second;
 }
-void Drop(uint32_t strm) {
-  HostStream* s = nullptr;
+
+void Attach(uint32_t strm, const std::shared_ptr<HostStream>& stream) {
   {
     std::lock_guard lock(g_map_mutex);
-    auto it = g_streams.find(strm);
-    if (it != g_streams.end()) {
-      s = it->second;
-      g_streams.erase(it);
-    }
+    g_streams[strm] = stream;
   }
-  delete s;
+  // Init and the following inflate calls normally execute on the same guest
+  // thread, so make the first hot lookup a cache hit too.
+  g_cached_strm = strm;
+  g_cached_stream = stream;
+}
+
+void Drop(uint32_t strm) {
+  {
+    std::lock_guard lock(g_map_mutex);
+    g_streams.erase(strm);
+  }
+  if (g_cached_strm == strm) {
+    g_cached_strm = 0;
+    g_cached_stream.reset();
+  }
 }
 
 // ---- host inflate ----------------------------------------------------------
@@ -280,26 +310,23 @@ void Init2(const Zlib& z, PPCContext& ctx, uint8_t* base) {
   if (static_cast<int32_t>(ctx.r3.u32) != Z_OK_) return;
   Drop(strm);  // re-init without inflateEnd
 
-  auto* s = new HostStream();
+  auto s = std::make_shared<HostStream>();
   if (z.v114) {
     // 1.1.4: negative = raw, else zlib wrapper (adler32 IS checked), 8..15.
     const int w = wb < 0 ? -wb : wb;
-    if (w < 8 || w > 15) { delete s; return; }
+    if (w < 8 || w > 15) return;
     s->v114 = true;
     s->zwin = wb;
   } else {
     // Same windowBits decoding as the guest: wrap = (wb >> 4) + 1; wb < 48 -> wb & 15.
     const int wrap = (wb >> 4) + 1;
     if (wb < 48) wb &= 15;
-    if (wb < 8 || wb > 15 || wrap < 0 || wrap > 3) { delete s; return; }  // leave it to the guest
+    if (wb < 8 || wb > 15 || wrap < 0 || wrap > 3) return;  // leave it to the guest
     s->wrap = wrap;
     s->wbits = wb;
   }
   s->Reset();
-  {
-    std::lock_guard lock(g_map_mutex);
-    g_streams[strm] = s;
-  }
+  Attach(strm, s);
 }
 
 // inflateInit_(strm, version, stream_size): both copies tail-branch into
@@ -315,7 +342,7 @@ void Reset(const Zlib& z, PPCContext& ctx, uint8_t* base) {
   const uint32_t strm = ctx.r3.u32;
   z.reset(ctx, base);
   if (static_cast<int32_t>(ctx.r3.u32) != Z_OK_) return;
-  if (HostStream* s = Find(strm)) s->Reset();
+  if (auto s = Find(strm)) s->Reset();
 }
 
 void End(const Zlib& z, PPCContext& ctx, uint8_t* base) {
@@ -325,7 +352,7 @@ void End(const Zlib& z, PPCContext& ctx, uint8_t* base) {
 
 void Inflate(const Zlib& z, PPCContext& ctx, uint8_t* base) {
   const uint32_t strm = ctx.r3.u32;
-  HostStream* s = strm ? Find(strm) : nullptr;
+  std::shared_ptr<HostStream> s = strm ? Find(strm) : nullptr;
 
   if (!s) {
     z.inflate(ctx, base);
