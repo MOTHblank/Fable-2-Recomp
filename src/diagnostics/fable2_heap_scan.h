@@ -36,7 +36,6 @@
 #endif
 
 #include "fable2_state_probe.h"  // per-frame UI state sampler (render thread)
-#include "fable2_prompt_overlay.h"
 
 namespace fable2::heapscan {
 
@@ -374,11 +373,6 @@ inline void maybe_request() {
 
 extern "C" void UIText_FrameRender(PPCContext& ctx, uint8_t* base) {
   fable2::heapscan::maybe_request();
-  fable2::promptoverlay::BeginLegacyTitleFrame();
-  if (fable2::uir::hook("UIText_FrameRender", ctx, base)) {
-    fable2::promptoverlay::EndLegacyTitleFrame();
-    return;
-  }
+  if (fable2::uir::hook("UIText_FrameRender", ctx, base)) return;
   __imp__UIText_FrameRender(ctx, base);
-  fable2::promptoverlay::EndLegacyTitleFrame();
 }
