@@ -620,7 +620,8 @@ local function rewrite_prompt_text(t)
   end
   local tokens = {
     {"A", "A"}, {"B", "B"}, {"X", "X"}, {"Y", "Y"},
-    {"Start", "START"}, {"Back", "BACK"},
+    {"LB", "LB"}, {"RB", "RB"}, {"LT", "LT"}, {"RT", "RT"},
+    {"Start", "START"}, {"Back", "BACK"}, {"LS", "LS"}, {"RS", "RS"},
   }
   for _, verb in ipairs({"Press", "Hold", "Tap"}) do
     for i = 1, #tokens do
