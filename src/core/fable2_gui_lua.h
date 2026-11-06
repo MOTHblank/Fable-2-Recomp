@@ -623,7 +623,7 @@ end
 
 local function visible_for_prompt(e)
   local cur = e
-  for _ = 1, 2 do
+  for _ = 1, 4 do
     if not cur then break end
     local opacity = tonumber(attr(cur, "opacity"))
     if opacity and opacity <= 0.01 then return false end
