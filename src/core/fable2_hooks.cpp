@@ -267,6 +267,13 @@ static DirectMouseResult ApplyDirectMouseOrbit(rex::memory::Memory* mem,
   cum_yaw() = std::remainder(cum_yaw() + yaw_delta, 6.283185307f);
   cum_pitch() = std::clamp(cum_pitch() + pitch_delta, -1.15f, 1.15f);
 
+  // With no authored mouse offset, the native camera must remain byte-for-byte
+  // untouched: even reconstructing an equivalent quaternion can change the
+  // game's easing, framing, or output from a camera obstruction resolver.
+  if (std::abs(cum_yaw()) < 1.0e-7f &&
+      std::abs(cum_pitch()) < 1.0e-7f)
+    return DirectMouseResult::kApplied;
+
   // Apply the orbit to the *native* per-frame eye from the output buffer,
   // not an independently smoothed camera, retaining natural hero follow.
   const Vec3 pitched = quat_rotate_vec(
