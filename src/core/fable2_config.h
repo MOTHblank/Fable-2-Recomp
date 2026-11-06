@@ -35,6 +35,8 @@ inline constexpr std::string_view kDefaultKeyboardGamepadMap =
 struct Values {
   // [general]
   int32_t config_version = 1;
+  // Host-side startup snapshots of saves/, opt-in; up to three generations.
+  bool native_save_snapshots = false;
   // [input]
   std::string keyboard_gamepad_map{std::string{kDefaultKeyboardGamepadMap}};
   // Keep in sync with the cvar defaults in main.cpp (mouse_look,
