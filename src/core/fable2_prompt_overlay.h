@@ -248,9 +248,10 @@ inline void EndLegacyTitleFrame() {
   const uint32_t expected_keyboard =
       fable2::buttonprompts::TitleExpectedKeyboardElementCount();
 
-  // UITextPrompt_Render is generic enough that other screens may invoke it.
-  // Only a layout matching the title string discovered by the source scanner
-  // is allowed to drive the fixed-position title fallback.
+  // Runtime captures prove UITextPrompt_Render as the title item's slot-4
+  // method; other observed screens used the separate UIText_RenderCurrent item
+  // type. Keep this adaptation title-scoped anyway: only a layout matching the
+  // title source discovered by the scanner may drive the host fallback.
   const auto near_count = [count](uint32_t expected) {
     if (expected == 0) return false;
     const uint32_t delta = count > expected ? count - expected : expected - count;
