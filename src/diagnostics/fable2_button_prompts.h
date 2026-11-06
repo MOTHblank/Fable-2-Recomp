@@ -57,6 +57,21 @@ inline bool TitleSourceRewriteActive() {
   return TitleSourceActive().load(std::memory_order_acquire);
 }
 
+inline std::atomic<uint32_t>& TitleExpectedBakedElements() {
+  static std::atomic<uint32_t> value{0};
+  return value;
+}
+inline std::atomic<uint32_t>& TitleExpectedKeyboardElements() {
+  static std::atomic<uint32_t> value{0};
+  return value;
+}
+inline uint32_t TitleExpectedBakedElementCount() {
+  return TitleExpectedBakedElements().load(std::memory_order_acquire);
+}
+inline uint32_t TitleExpectedKeyboardElementCount() {
+  return TitleExpectedKeyboardElements().load(std::memory_order_acquire);
+}
+
 inline bool Writable(const void* pointer, size_t count) {
   MEMORY_BASIC_INFORMATION m{};
   if (!VirtualQuery(pointer, &m, sizeof m) || m.State != MEM_COMMIT ||
@@ -121,6 +136,26 @@ inline bool HasKnownTag(const uint8_t* p, size_t length) {
   return false;
 }
 
+inline size_t KnownTagCount(std::u16string_view text) {
+  static constexpr std::array<std::u16string_view, 6> tags{
+      u"<a_img>", u"<b_img>", u"<c_img>", u"<d_img>",
+      u"<x_img>", u"<y_img>"};
+  size_t count = 0;
+  for (size_t i = 0; i < text.size();) {
+    bool matched = false;
+    for (auto tag : tags) {
+      if (text.substr(i, tag.size()) == tag) {
+        ++count;
+        i += tag.size();
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) ++i;
+  }
+  return count;
+}
+
 // Walk the committed front-end heap, locating NUL-terminated UTF-16BE source
 // strings containing known inline tags. The title prompt and main menu strings
 // were observed in 0x40000000..0x44000000. No asset or code pages are touched.
@@ -173,6 +208,19 @@ inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
       if (end + 1 >= length || Be16(data + end) != 0 ||
           end <= i || !HasKnownTag(data + start, end - start)) continue;
       ++matches;
+      if (title) {
+        const size_t tag_count = KnownTagCount(text);
+        if (tag_count != 0 && text.size() >= tag_count * 6) {
+          // Each seven-character <x_img> tag is one laid-out sprite in the
+          // stock prompt, but seven ordinary glyphs after Rewrite().
+          TitleExpectedBakedElements().store(
+              static_cast<uint32_t>(text.size() - tag_count * 6),
+              std::memory_order_release);
+          TitleExpectedKeyboardElements().store(
+              static_cast<uint32_t>(text.size()),
+              std::memory_order_release);
+        }
+      }
       const auto rewritten = Rewrite(text, labels);
       if (rewritten == text || rewritten.size() > text.size()) continue;
       uint8_t* target = data + start;
@@ -321,6 +369,8 @@ inline void Stop() {
 }
 #else
 inline bool TitleSourceRewriteActive() { return false; }
+inline uint32_t TitleExpectedBakedElementCount() { return 0; }
+inline uint32_t TitleExpectedKeyboardElementCount() { return 0; }
 inline void OnFrame(uint8_t*) {}
 inline void Stop() {}
 #endif
