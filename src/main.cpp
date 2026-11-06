@@ -84,8 +84,8 @@ REXCVAR_DEFINE_STRING(
 // higher-priority source set them). Keep the values in sync with the
 // defaults in fable2::config::Values (src/core/fable2_config.h).
 REXCVAR_DEFINE_BOOL(mouse_direct_look, false, "Input",
-                    "Inject raw mouse deltas into the native hero-camera input path "
-                    "with automatic native-stick fallback");
+                    "Add raw mouse deltas to guest user 0's native right-stick "
+                    "state; LT/LB/R3 temporarily use SDK stick mapping");
 REXCVAR_DEFINE_BOOL(mouse_look, true, "Input",
                     "Map mouse movement to the guest right stick (camera "
                     "look): sweep to look, stop to stop. Default comes from "
