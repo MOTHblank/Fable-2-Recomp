@@ -97,6 +97,7 @@ ownership directly from host events:
 
 - key down;
 - mouse button down;
+- mouse wheel activity;
 - mouse movement reaching one accumulated physical pixel while a controller
   owns prompt focus.
 
@@ -111,10 +112,31 @@ clear the normal thumb deadzone and change by at least 3500 units, while
 buttons and trigger-threshold crossings switch immediately. Synthetic debug
 pads do not participate.
 
+Mouse-wheel input does not invent a guest-gamepad binding; it only counts as
+unambiguous physical mouse activity for last-used-device ownership.
+
+GameFace changes are asynchronous because the adapter runs inside each live
+presentation's Lua state. The host overlay therefore follows the **last
+acknowledged GameFace state**, not merely the desired cvar state. On
+keyboard -> controller, an existing keycap remains for the short handoff until
+GameFace has restored the Xbox icon. On controller -> keyboard, the host waits
+until GameFace has actually hidden the Xbox artwork before drawing the keycap.
+The same handshake applies when `ui_prompt_overlay_fallback` is toggled.
+
+Acknowledgement results encode keyboard/controller mode plus whether the
+texture-only fallback was applied. Old/inactive Lua states may remain captured,
+so a mismatched acknowledgement gets only a 300 ms transition grace rather
+than the normal presentation lifetime. This avoids both one-frame blank/duplicate
+prompts and multi-second stale keycaps from abandoned screens.
+
+The source scanner, GameFace adapter and host overlay share
+`KeyboardPromptModeActive()` as the single `auto / keyboard / controller`
+decision.
+
 The current pinned SDK revision is checked by
-`tools/prepare_runtime_sdk.py` for both `MarkKeyboardPromptDevice` and the
-mouse-motion accumulator, so a partially updated SDK cannot silently lose the
-stable switching behavior.
+`tools/prepare_runtime_sdk.py` for `MarkKeyboardPromptDevice`, the
+mouse-motion accumulator, and the `OnMouseWheel` ownership hook, so a
+partially updated SDK cannot silently lose the stable switching behavior.
 
 ## Texture-only fallback
 
