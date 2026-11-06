@@ -67,7 +67,7 @@ inline std::string DisplayKey(std::string_view bindings,
     else if (u == "SCROLLLOCK") shown = "ScrL";
     else if (u == "BACKTICK") shown = "`";
     else if (u == "MINUS") shown = "-";
-    else if (u == "PLUS") shown = "+";
+    else if (u == "PLUS") shown = "Plus";
     else if (u == "COMMA") shown = ",";
     else if (u == "PERIOD") shown = ".";
     else if (u == "SEMICOLON") shown = ";";
