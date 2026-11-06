@@ -282,13 +282,13 @@
                   <ComboBoxItem Content="Native stick (original)" Tag="native" />
                   <ComboBoxItem Content="Direct mouse via native camera (hybrid)" Tag="direct" />
                 </ComboBox>
-                <TextBlock Text="Direct mode applies raw motion to the hero camera output without the virtual-stick speed limit. Experimental: collisions and scripted framing may differ."
+                <TextBlock Text="Direct mode feeds raw mouse deltas into the game&apos;s native camera input path. Collision/framing stay game-owned; target lock (LT), first-person (LB), View Hero (R3), scripted cameras and constrained poses fall back to Native stick automatically."
                            FontSize="12" Foreground="{StaticResource MutedTextBrush}"
                            Margin="0,5,0,0" TextWrapping="Wrap" />
                 <CheckBox x:Name="MouseCameraDiagnosticsCheck"
                           Content="Log mouse input and camera hook diagnostics"
                           Margin="0,10,0,0" Foreground="{StaticResource TextBrush}" />
-                <TextBlock Text="Periodic [mouse-camera] records in the game logs show raw input events, applied camera updates and invalid outputs. Disabled by default."
+                <TextBlock Text="Periodic [mouse-camera] records show raw events, native injections, special-input/native fallback and camera eligibility. Disabled by default."
                            FontSize="12" Foreground="{StaticResource MutedTextBrush}"
                            Margin="0,3,0,0" TextWrapping="Wrap" />
                 <Grid Margin="0,16,0,0">
