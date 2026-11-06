@@ -75,7 +75,7 @@ extern "C" void UITextPrompt_RenderElement(PPCContext& ctx, uint8_t* base) {
   const uint32_t ordinal =
       fable2::promptoverlay::CurrentLegacyTitleElementOrdinal();
   const bool suppress =
-      fable2::promptoverlay::ShouldSuppressLegacyTitleElement(ordinal);
+      fable2::promptoverlay::ShouldSuppressLegacyTitleElement(ordinal, element);
 
   bool visible = false;
   if (suppress) {
@@ -94,5 +94,5 @@ extern "C" void UITextPrompt_RenderElement(PPCContext& ctx, uint8_t* base) {
   // Count every prompt element even when its baked image draw is suppressed.
   // The enclosing frame classifier must keep seeing the original layout shape
   // so a relayout/device switch immediately disables suppression.
-  fable2::promptoverlay::NoteLegacyTitleElement(visible);
+  fable2::promptoverlay::NoteLegacyTitleElement(element, visible);
 }
