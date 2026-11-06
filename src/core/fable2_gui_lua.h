@@ -427,7 +427,8 @@ inline void SyncButtonPrompts(bool keyboard) {
   S().armed.store(true, std::memory_order_relaxed);
 
   const auto key = [](const char* cvar) {
-    return fable2::buttonprompts::DisplayKey(rex::cvar::GetFlagByName(cvar));
+    return fable2::buttonprompts::DisplayKey(
+        rex::cvar::GetFlagByName(cvar), 20);
   };
   const std::array<std::pair<const char*, std::string>, 16> labels{{
       {"A", key("keybind_a")},
