@@ -30,6 +30,7 @@ BAKED_SDK_PINS = {
     "15f5a3d55941e2955d030073dd7569f90753e292",  # SDK tool exports and ImGui modifier fixes
     "bfca57d54eb041baeaba95f79a9d2dc68feb7dfb",  # Same source tree with upstream SDK history reconciled  # Refined config export serialization
     "58ac0fff6aed5813a867f27febbcfbb97da7e05e",  # Hybrid direct/native mouse routing and input handoff
+    "803467dbaab2f7c0a2885d1ffd249511fffc1c14",  # High-resolution scale limits and guest-space alpha coverage
 }
 
 # When these exact SDK source improvements are committed to our SDK fork,
@@ -42,6 +43,7 @@ BAKED_FOLLOWUP_PINS = {
     "15f5a3d55941e2955d030073dd7569f90753e292",  # SDK tool exports and ImGui modifier fixes
     "bfca57d54eb041baeaba95f79a9d2dc68feb7dfb",  # Same source tree with upstream SDK history reconciled
     "58ac0fff6aed5813a867f27febbcfbb97da7e05e",  # Hybrid direct/native mouse routing and input handoff
+    "803467dbaab2f7c0a2885d1ffd249511fffc1c14",  # High-resolution scale limits and guest-space alpha coverage
 }
 BAKED_FOLLOWUP_MARKERS = {
     "src/graphics/d3d12/pipeline_cache.cpp": (
@@ -73,6 +75,7 @@ GRAPHICS_SDK_PINS = {
     "15f5a3d55941e2955d030073dd7569f90753e292",
     "bfca57d54eb041baeaba95f79a9d2dc68feb7dfb",
     "58ac0fff6aed5813a867f27febbcfbb97da7e05e",  # Hybrid direct/native mouse routing and input handoff
+    "803467dbaab2f7c0a2885d1ffd249511fffc1c14",  # High-resolution scale limits and guest-space alpha coverage
 }
 GRAPHICS_SDK_MARKERS = {
     "src/ui/overlay/effects_overlay.cpp": ("EffectsDialog", "scene_fx_ao"),
