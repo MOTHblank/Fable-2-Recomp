@@ -68,6 +68,26 @@ It is specifically to trace user-0 right-stick RX/RY from the wrapper into the f
 camera-control value after deadzone/clamping, then add raw mouse displacement there while leaving
 physical stick input additive.
 
+### Current RE instrumentation
+
+- `[mouse-native]` correlates each successful user-0 Direct injection with the next hero-camera
+  resolution: raw mouse displacement, physical/native RX/RY, injected RX/RY, native pose
+  correction, camera classification and Direct/native route.
+- `ProcessAndProcessAndProcess509_832C13A8` now has a behavior-identical strong wrapper around
+  its original `__imp__` body. It is the only known `0x832BB018` callee described as performing
+  complex vector work on a three-field structure; the other nearby callable helpers are 16-bit
+  pack/combine routines.
+- With diagnostics enabled, `[mouse-normalize-candidate]` logs that function's r3/r4 inputs and
+  the three r4 fields before/after once per new Direct input sample. It **does not modify** the
+  structure or registers. If the pointer is outside the known heap/image ranges, fields are not
+  dereferenced and the log marks `fields=0`.
+- This is a candidate only. Do not move Direct injection there unless its values demonstrably
+  track right-stick magnitude/direction after the raw `X_INPUT_STATE` stage.
+
+Direct mode also now applies the same optional mouse-only deadzone compensation curve as the
+SDK Native-stick path. The compensation is applied before adding the mouse component to physical
+RX/RY; physical controller axes are never remapped. Flick buffering remains Native-only.
+
 Everything below this section is retained as reverse-engineering history unless explicitly
 marked current.
 marked current.
