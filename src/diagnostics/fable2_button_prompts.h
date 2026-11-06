@@ -265,7 +265,10 @@ inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
               std::memory_order_release);
         }
       }
-      if (rewritten.size() > text.size()) {
+      // Guest allocations and cached lengths are never resized here. Every
+      // source-layer rewrite must preserve the exact UTF-16 code-unit count;
+      // reject future rewrite rules that would shorten as well as grow it.
+      if (rewritten.size() != text.size()) {
         i = end;
         continue;
       }
