@@ -34,6 +34,7 @@ BAKED_SDK_PINS = {
     "eb0fb0a61eace14b85a7180b0c5ef90d4345959b",  # Extended shadow distance material controls
     "9540f310ad4f87813cf3f2cf21ef4de44d0bbdab",  # Stable host frame pacing and corrected presenter pacing telemetry
     "10a5865d0fde9119794b5f6860f0d5edc8dee4ab",  # Mapped read-only host content and corrected Win32 offset I/O
+    "3a670a16f583b816f4dafcd765eb9d9f1dbab714",  # Debounced physical mouse ownership for adaptive prompts
 }
 
 # When these exact SDK source improvements are committed to our SDK fork,
@@ -50,6 +51,7 @@ BAKED_FOLLOWUP_PINS = {
     "eb0fb0a61eace14b85a7180b0c5ef90d4345959b",  # Extended shadow distance material controls
     "9540f310ad4f87813cf3f2cf21ef4de44d0bbdab",  # Stable host frame pacing and corrected presenter pacing telemetry
     "10a5865d0fde9119794b5f6860f0d5edc8dee4ab",  # Mapped read-only host content and corrected Win32 offset I/O
+    "3a670a16f583b816f4dafcd765eb9d9f1dbab714",  # Debounced physical mouse ownership for adaptive prompts
 }
 BAKED_FOLLOWUP_MARKERS = {
     "src/graphics/d3d12/pipeline_cache.cpp": (
@@ -66,6 +68,7 @@ BAKED_FOLLOWUP_MARKERS = {
         "mnk_direct_mouse",
         "mouse_motion_callback.store(callback",
         "MarkKeyboardPromptDevice",
+        "prompt_mouse_accum_x",
     ),
     "src/ui/keybinds.cpp": ("kXButton1",),
     "include/rex/input/mnk/mnk_input_driver.h": ("using MouseMotionCallback",),
@@ -86,10 +89,12 @@ GRAPHICS_SDK_PINS = {
     "eb0fb0a61eace14b85a7180b0c5ef90d4345959b",  # Extended shadow distance material controls
     "9540f310ad4f87813cf3f2cf21ef4de44d0bbdab",  # Stable host frame pacing and corrected presenter pacing telemetry
     "10a5865d0fde9119794b5f6860f0d5edc8dee4ab",  # Mapped read-only host content and corrected Win32 offset I/O
+    "3a670a16f583b816f4dafcd765eb9d9f1dbab714",  # Debounced physical mouse ownership for adaptive prompts
 }
 NATIVE_PACING_PINS = {
     "9540f310ad4f87813cf3f2cf21ef4de44d0bbdab",
     "10a5865d0fde9119794b5f6860f0d5edc8dee4ab",
+    "3a670a16f583b816f4dafcd765eb9d9f1dbab714",
 }
 NATIVE_PACING_MARKERS = {
     "include/rex/graphics/frame_limiter.h": (
@@ -104,6 +109,7 @@ NATIVE_PACING_MARKERS = {
 
 NATIVE_IO_PINS = {
     "10a5865d0fde9119794b5f6860f0d5edc8dee4ab",
+    "3a670a16f583b816f4dafcd765eb9d9f1dbab714",
 }
 NATIVE_IO_MARKERS = {
     "src/filesystem/devices/host_path_file.cpp": (
