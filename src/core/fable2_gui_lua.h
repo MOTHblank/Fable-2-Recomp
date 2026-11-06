@@ -493,7 +493,7 @@ P.sig = __sig
 if not __kbd then return end
 
 local aliases = {
-  icon_button_a="A", icon_a="A", abutton="A",
+  icon_button_a="A", icon_a="A", abutton="A", material2270="A",
   icon_button_b="B", icon_b="B", bbutton="B",
   icon_button_x="X", icon_x="X", xbutton="X",
   icon_button_y="Y", icon_y="Y", ybutton="Y",
@@ -648,6 +648,7 @@ local function walk(e, depth)
   end
   local n = element_name(e):gsub("\\", "/")
   n = n:match("([^/]+)$") or n
+  n = n:gsub("%.tex$", "")
   local action = aliases[n]
   local label = action and __labels[action] or nil
   if label and label ~= "" then
