@@ -356,10 +356,11 @@ public partial class MainWindow : Window
     private void MouseCameraModeChanged(object sender, SelectionChangedEventArgs e)
     {
         bool nativeMode = SelectedTag(MouseCameraModeCombo) != "direct";
-        // These are features of the virtual gamepad stick, not the raw-delta
-        // gameplay camera. Preserve their values for a future Native switch.
-        if (MouseDeadzoneSlider is not null) MouseDeadzoneSlider.IsEnabled = nativeMode;
-        if (MouseDeadzoneBox is not null) MouseDeadzoneBox.IsEnabled = nativeMode;
+        // Deadzone compensation is mouse-component remapping in both modes.
+        // Flick buffering deliberately remains Native-only because Direct mode
+        // must not continue moving after the physical mouse has stopped.
+        if (MouseDeadzoneSlider is not null) MouseDeadzoneSlider.IsEnabled = true;
+        if (MouseDeadzoneBox is not null) MouseDeadzoneBox.IsEnabled = true;
         if (MouseFlickBufferSlider is not null) MouseFlickBufferSlider.IsEnabled = nativeMode;
         if (!_loading) RefreshSummary(markDirty: true);
     }
