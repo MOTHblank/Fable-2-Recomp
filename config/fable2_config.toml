@@ -24,6 +24,11 @@
 # Default: 1
 config_version = 1
 
+# Keep up to three host-side startup copies of saves/ in save_backups/.
+# Opt-in: each snapshot is limited to 256 MiB and 4096 regular files.
+# Symlinks and unsupported entries are never followed. Default: false.
+native_save_snapshots = false
+
 [input]
 # Host keyboard/mouse -> guest gamepad map: "Key:Button,Key:Button,..." (one
 # line; do not add spaces or newlines inside the string). Key = Windows
