@@ -205,7 +205,6 @@ inline bool FirstKnownTagLayout(std::u16string_view text,
 
   uint32_t element = 0;
   for (size_t i = 0; i < text.size();) {
-    bool matched = false;
     for (size_t k = 0; k < tags.size(); ++k) {
       const auto tag = tags[k];
       if (text.substr(i, tag.size()) != tag) continue;
