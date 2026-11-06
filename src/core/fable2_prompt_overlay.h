@@ -87,18 +87,24 @@ inline std::atomic<bool>& LegacyTitleKeyboardLayout() {
 
 inline thread_local uint32_t g_legacy_title_frame_elements = 0;
 inline thread_local bool g_legacy_title_frame_visible = false;
+inline thread_local uint32_t g_legacy_title_scope_depth = 0;
 
 inline void BeginLegacyTitleFrame() {
-  g_legacy_title_frame_elements = 0;
-  g_legacy_title_frame_visible = false;
+  if (g_legacy_title_scope_depth++ == 0) {
+    g_legacy_title_frame_elements = 0;
+    g_legacy_title_frame_visible = false;
+  }
 }
 
 inline void NoteLegacyTitleElement(bool visible) {
+  if (g_legacy_title_scope_depth == 0) return;
   ++g_legacy_title_frame_elements;
   g_legacy_title_frame_visible = g_legacy_title_frame_visible || visible;
 }
 
 inline void EndLegacyTitleFrame() {
+  if (g_legacy_title_scope_depth == 0) return;
+  if (--g_legacy_title_scope_depth != 0) return;
   const int64_t now = ClockNanoseconds();
   const uint32_t count = g_legacy_title_frame_elements;
   if (count == 0) {
@@ -128,6 +134,20 @@ inline void EndLegacyTitleFrame() {
   const uint32_t expected_keyboard =
       fable2::buttonprompts::TitleExpectedKeyboardElementCount();
 
+  // UITextPrompt_Render is generic enough that other screens may invoke it.
+  // Only a layout matching the title string discovered by the source scanner
+  // is allowed to drive the fixed-position title fallback.
+  const auto near_count = [count](uint32_t expected) {
+    if (expected == 0) return false;
+    const uint32_t delta = count > expected ? count - expected : expected - count;
+    return delta <= 1;
+  };
+  const bool title_layout =
+      near_count(expected_baked) || near_count(expected_keyboard);
+  if (expected_baked != 0 && expected_keyboard != 0 && !title_layout) {
+    return;
+  }
+
   // Prefer exact expectations derived from the localized source string. This
   // handles English and every supported translation without hardcoded 16/22
   // counts, and distinguishes a late scanner hit from a layout that actually
@@ -156,7 +176,7 @@ inline void EndLegacyTitleFrame() {
     LegacyTitleKeyboardLayout().store(true, std::memory_order_release);
   }
 
-  if (g_legacy_title_frame_visible) {
+  if (g_legacy_title_frame_visible && title_layout) {
     LegacyTitleLastDrawNs().store(now, std::memory_order_release);
   }
 }
