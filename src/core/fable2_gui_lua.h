@@ -807,9 +807,32 @@ local function visible_for_overlay(e)
   return true
 end
 
+local function safe_visual_parent(child)
+  local p = parent(child)
+  if not p then return nil end
+
+  -- Never climb through a wrapper that also owns another presentation branch.
+  -- Behavior/material/texture siblings are implementation helpers for the same
+  -- visual and are safe; text/components/groups are not, because hiding their
+  -- parent could erase labels or unrelated HUD content.
+  local siblings = kids(p)
+  for i = 1, #siblings do
+    local s = siblings[i]
+    if s ~= child then
+      if text_of(s) then return nil end
+      local okt, t = pcall(getElementType, s)
+      t = okt and tostring(t):lower() or ""
+      if t ~= "behavior" and t ~= "material" and t ~= "texture" then
+        return nil
+      end
+    end
+  end
+  return p
+end
+
 local function hide_for_overlay(e)
   local target = e
-  for _ = 1, 2 do
+  for _ = 1, 4 do
     if not target then break end
     if hidden_by_adapter(target) then return target end
     local opacity = tonumber(attr(target, "opacity"))
@@ -824,7 +847,7 @@ local function hide_for_overlay(e)
     if diffuse_a and diffuse_a > 0.01 then
       if remember_set(target, "diffuse.a", 0) then return target end
     end
-    target = parent(target)
+    target = safe_visual_parent(target)
   end
   return nil
 end
