@@ -250,6 +250,14 @@ static DirectMouseResult ClassifyDirectMouseCamera(rex::memory::Memory* mem,
 // pointer into host memory. Native/controller mode does not touch camera state.
 void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
   const auto& cfg = fable2::config::Get();
+
+  // Input processing finishes before CECCameraUpdateFrame. 0x832BB018 peeks
+  // the raw displacement on each of its per-frame passes; the first camera
+  // update drains it. Later camera updates in the same frame simply drain 0.
+  float frame_mouse_dx = 0.0f;
+  float frame_mouse_dy = 0.0f;
+  fable2::mouselook::take_delta(frame_mouse_dx, frame_mouse_dy);
+
   const bool special_input_fallback =
       fable2::mouselook::take_native_fallback_request();
   rex::memory::Memory* mem =
@@ -261,39 +269,54 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
   const uint32_t cam = r31.u32;
   const bool direct = REXCVAR_GET(mouse_look) &&
                       REXCVAR_GET(mouse_direct_look);
-  // This hook can run on cinematic and secondary cameras. Never carry stale
-  // SDL displacement into another camera, or back into hero control after a
-  // scripted sequence. request_reset clears the cross-thread raw accumulator.
-  static uint32_t last_cam = 0;
+  // This hook can run once for the hero camera and again for secondary /
+  // cinematic cameras in the same guest frame. Only the hero-follow camera
+  // owns the persistent routing state; non-hero updates are observational.
+  static uint32_t last_hero_cam = 0;
   static bool was_direct = false;
   static bool raw_route_active = false;
   static uint32_t clear_frames = 0;
-  const bool camera_changed = cam != last_cam;
+
   const bool mode_changed = direct != was_direct;
-  last_cam = cam;
   was_direct = direct;
-  if (camera_changed || mode_changed) {
+  if (mode_changed) {
+    last_hero_cam = 0;
+    clear_frames = 0;
+    raw_route_active = false;
+    rex::input::mnk::SetDirectMouseEligible(false);
+  }
+
+  if (!fable2::mouselook::is_plausible_guest_ptr(cam)) {
     raw_route_active = false;
     clear_frames = 0;
     rex::input::mnk::SetDirectMouseEligible(false);
-    fable2::mouselook::request_reset();
-  }
-  if (!fable2::mouselook::is_plausible_guest_ptr(cam)) {
-    rex::input::mnk::SetDirectMouseEligible(false);
     return;
   }
-  if (!direct) rex::input::mnk::SetDirectMouseEligible(false);
+  if (!direct) {
+    raw_route_active = false;
+    clear_frames = 0;
+    rex::input::mnk::SetDirectMouseEligible(false);
+  }
 
   static uint64_t calls = 0, eligible = 0, not_hero = 0, constrained = 0;
-  static uint64_t special_input = 0, invalid_output = 0;
+  static uint64_t special_input = 0, hero_changes = 0, invalid_output = 0;
   ++calls;
-  // One native frame after camera/mode changes keeps stale raw displacement
-  // from crossing into a newly selected camera. The SDK uses the result on
-  // the next poll; ineligible cameras keep ordinary virtual-stick mouse input.
-  if (direct && !(camera_changed || mode_changed)) {
-    // The input stage sees LT/LB/R3 before camera update. Keep native emulation
-    // authoritative for target lock, first-person and View Hero for the whole
-    // frame instead of allowing the camera classifier to re-enable raw input.
+
+  if (direct && !mode_changed) {
+    const DirectMouseResult result =
+        ClassifyDirectMouseCamera(mem, cam, r1.u32, raw_route_active);
+
+    switch (result) {
+      case DirectMouseResult::kEligible: ++eligible; break;
+      case DirectMouseResult::kNotHero: ++not_hero; break;
+      case DirectMouseResult::kNativeConstraint: ++constrained; break;
+      case DirectMouseResult::kInvalidOutput: ++invalid_output; break;
+    }
+
+    // LT/LB/R3 is observed in the verified XINPUT_STATE before camera update,
+    // so it can force fallback immediately even if this particular hook call
+    // belongs to a secondary camera. Re-entry still needs three clear hero
+    // frames, preventing one later hook in the same frame from undoing it.
     if (special_input_fallback) {
       ++special_input;
       clear_frames = 0;
@@ -301,40 +324,37 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
       rex::input::mnk::SetDirectMouseEligible(false);
     }
 
-    const DirectMouseResult result = special_input_fallback
-        ? DirectMouseResult::kNativeConstraint
-        : ClassifyDirectMouseCamera(mem, cam, r1.u32, raw_route_active);
-
-    // Re-enter Direct only after three consecutive clear hero-follow frames.
-    // Exiting is immediate. This prevents a wall edge / authored blend from
-    // chattering between raw and SDK-stick routes around the threshold.
-    if (!special_input_fallback && result == DirectMouseResult::kEligible) {
-      if (!raw_route_active && ++clear_frames >= 3) {
-        raw_route_active = true;
+    if (result != DirectMouseResult::kNotHero) {
+      const bool hero_changed = cam != last_hero_cam;
+      if (hero_changed) {
+        last_hero_cam = cam;
+        ++hero_changes;
         clear_frames = 0;
-        rex::input::mnk::SetDirectMouseEligible(true);
-      }
-    } else if (!special_input_fallback) {
-      clear_frames = 0;
-      if (raw_route_active) {
         raw_route_active = false;
         rex::input::mnk::SetDirectMouseEligible(false);
-        // Clear the raw side-channel exactly on the route transition; while
-        // fallback remains active the SDK no longer sends raw mouse events.
-        fable2::mouselook::request_reset();
-      } else {
-        rex::input::mnk::SetDirectMouseEligible(false);
+      }
+
+      if (!special_input_fallback && !hero_changed) {
+        if (result == DirectMouseResult::kEligible) {
+          if (!raw_route_active) {
+            ++clear_frames;
+            if (clear_frames >= 3) {
+              clear_frames = 0;
+              raw_route_active = true;
+              rex::input::mnk::SetDirectMouseEligible(true);
+            }
+          } else {
+            clear_frames = 0;
+          }
+        } else {
+          clear_frames = 0;
+          raw_route_active = false;
+          rex::input::mnk::SetDirectMouseEligible(false);
+        }
       }
     }
-    if (!special_input_fallback) {
-      switch (result) {
-        case DirectMouseResult::kEligible: ++eligible; break;
-        case DirectMouseResult::kNotHero: ++not_hero; break;
-        case DirectMouseResult::kNativeConstraint: ++constrained; break;
-        case DirectMouseResult::kInvalidOutput: ++invalid_output; break;
-      }
-    }
-    if (!special_input_fallback && cfg.mouse_look_camera_diag &&
+
+    if (cfg.mouse_look_camera_diag &&
         result == DirectMouseResult::kInvalidOutput && invalid_output == 1) {
       if (r1.u32 >= 0x10000u && (r1.u32 & 0xFu) == 0 &&
           r1.u32 <= 0xFFFF0000u) {
@@ -352,15 +372,19 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
                     r1.u32);
       }
     }
+
     if (cfg.mouse_look_camera_diag && calls % 300 == 0) {
       REXSYS_INFO(
           "[mouse-camera] enabled=1 hook={} eligible={} not-hero={} "
-          "native-constraint={} special-input={} bad-stack={} raw-events={} "
-          "native-injections={} capture-resets={} cam=0x{:08X} sp=0x{:08X}",
-          calls, eligible, not_hero, constrained, special_input, invalid_output,
+          "native-constraint={} special-input={} hero-changes={} bad-stack={} "
+          "raw-events={} native-injections={} capture-resets={} "
+          "frame-delta={:.2f},{:.2f} route={} cam=0x{:08X} sp=0x{:08X}",
+          calls, eligible, not_hero, constrained, special_input, hero_changes,
+          invalid_output,
           fable2::mouselook::raw_motion_events().load(std::memory_order_relaxed),
           fable2::mouselook::native_injections().load(std::memory_order_relaxed),
           fable2::mouselook::capture_resets().load(std::memory_order_relaxed),
+          frame_mouse_dx, frame_mouse_dy, raw_route_active ? 1 : 0,
           cam, r1.u32);
     }
   }
