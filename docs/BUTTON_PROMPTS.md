@@ -127,19 +127,33 @@ Known alternate/pressed assets such as `icon_button_a2` are normalized to the
 same logical action. The fallback still refuses to hide an element when neither
 it nor its immediate wrapper exposes a safe visibility attribute.
 
+If the presentation's pivot semantics need a small correction, the host overlay
+can be tuned live with `ui_prompt_overlay_offset_x` and
+`ui_prompt_overlay_offset_y` (both default to 0 and accept -128..128 pixels).
+Modifier chords are rendered as separate keycaps, for example
+`Shift+Up -> [S] + [Up]`, while in-GameFace text remains compact (`S+Up`).
+
 ## Remaining hard boundary
 
-Fable II still contains artwork that may be fully baked into a presentation,
-have no writable companion label, or be generated through an unidentified
-inline-sprite resolver. Those cases are intentionally left as Xbox artwork
-rather than guessed at. Replacing those last assets with true Fable-styled
-dynamic keyboard keycaps would require either a targeted hook in the
-markup-to-sprite resolver or a texture/material substitution path with
-dedicated keycap assets.
+Ordinary GameFace controller artwork no longer needs a writable companion label:
+the host-overlay fallback can replace known, currently visible icon elements
+when a safe opacity/active target exists.
 
-That is now a presentation-quality extension rather than a requirement for
-last-device switching: the current implementation covers retained source
-markup and safely adaptable live GameFace button widgets.
+The remaining hard cases are narrower:
+
+- prompt sprites produced by the separate legacy `UITextPrompt` inline-sprite
+  pipeline after their source markup has already been discarded;
+- presentation artwork that never appears in the traversable GameFace scene;
+- icon nodes whose own element and immediate wrapper expose no safe visibility
+  attribute.
+
+Those stay native rather than being guessed at. The title-screen
+`Press <a_img> to start` path is normally handled earlier by the pre-layout
+writable-string rewrite, so the unresolved legacy-renderer case is primarily a
+fallback for strings that escape that early pass.
+
+A future resolver hook at the `0x820D7B50` tag table / `UITextPrompt`
+layout boundary could close the final gap without global texture replacement.
 
 ## Diagnostics
 
