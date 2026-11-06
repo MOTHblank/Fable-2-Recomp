@@ -455,6 +455,7 @@ inline void SyncButtonPrompts(bool keyboard) {
                      (overlay_fallback ? "true" : "false") +
                      "\nlocal __labels={";
   std::string signature = keyboard ? "k|" : "c|";
+  signature += overlay_fallback ? "overlay=1|" : "overlay=0|";
   for (const auto& [name, label] : labels) {
     code += name;
     code += '=';
