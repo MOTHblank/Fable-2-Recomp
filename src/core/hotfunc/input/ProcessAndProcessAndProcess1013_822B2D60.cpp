@@ -18,6 +18,7 @@ extern "C" void Fable2StateProbeObservePad(uint32_t state_ptr);
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 
 REXCVAR_DECLARE(bool, mouse_direct_look);
@@ -31,6 +32,22 @@ extern "C" void __imp__ProcessAndProcessAndProcess1013_822B2D60(
     PPCContext& ctx, uint8_t* base);
 
 namespace {
+
+constexpr uint32_t kGamepadOffset =
+    offsetof(rex::input::X_INPUT_STATE, gamepad);
+constexpr uint32_t kButtonsOffset =
+    kGamepadOffset + offsetof(rex::input::X_INPUT_GAMEPAD, buttons);
+constexpr uint32_t kLeftTriggerOffset =
+    kGamepadOffset + offsetof(rex::input::X_INPUT_GAMEPAD, left_trigger);
+constexpr uint32_t kThumbRxOffset =
+    kGamepadOffset + offsetof(rex::input::X_INPUT_GAMEPAD, thumb_rx);
+constexpr uint32_t kThumbRyOffset =
+    kGamepadOffset + offsetof(rex::input::X_INPUT_GAMEPAD, thumb_ry);
+
+static_assert(kButtonsOffset == 4);
+static_assert(kLeftTriggerOffset == 6);
+static_assert(kThumbRxOffset == 12);
+static_assert(kThumbRyOffset == 14);
 
 uint16_t AddMouseAxis(uint16_t raw, float pixels, int32_t units_per_pixel,
                       int32_t deadzone_compensation) {
@@ -84,11 +101,10 @@ extern "C" void ProcessAndProcessAndProcess1013_822B2D60(
     return;
   }
 
-  // X_INPUT_STATE layout:
-  //   +0 packet, +4 buttons, +6 LT, +7 RT,
-  //   +8 LX, +10 LY, +12 RX, +14 RY.
-  const uint16_t buttons = REX_LOAD_U16(state_ptr + 4);
-  const uint8_t left_trigger = REX_LOAD_U8(state_ptr + 6);
+  // Offsets are derived from the pinned SDK structs above and asserted against
+  // the Xbox X_INPUT_STATE ABI, rather than duplicated as unchecked literals.
+  const uint16_t buttons = REX_LOAD_U16(state_ptr + kButtonsOffset);
+  const uint8_t left_trigger = REX_LOAD_U8(state_ptr + kLeftTriggerOffset);
   constexpr uint8_t kTriggerThreshold = 30;
   const uint16_t special_camera_buttons =
       rex::input::X_INPUT_GAMEPAD_RIGHT_THUMB |
@@ -126,8 +142,8 @@ extern "C" void ProcessAndProcessAndProcess1013_822B2D60(
     return;
   }
 
-  const uint16_t native_rx = REX_LOAD_U16(state_ptr + 12);
-  const uint16_t native_ry = REX_LOAD_U16(state_ptr + 14);
+  const uint16_t native_rx = REX_LOAD_U16(state_ptr + kThumbRxOffset);
+  const uint16_t native_ry = REX_LOAD_U16(state_ptr + kThumbRyOffset);
   const int32_t y_scale =
       REXCVAR_GET(mouse_invert_y) ? scale_y : -scale_y;
 
@@ -135,8 +151,8 @@ extern "C" void ProcessAndProcessAndProcess1013_822B2D60(
       AddMouseAxis(native_rx, mouse_dx, scale_x, deadzone);
   const uint16_t injected_ry =
       AddMouseAxis(native_ry, mouse_dy, y_scale, deadzone);
-  REX_STORE_U16(state_ptr + 12, injected_rx);
-  REX_STORE_U16(state_ptr + 14, injected_ry);
+  REX_STORE_U16(state_ptr + kThumbRxOffset, injected_rx);
+  REX_STORE_U16(state_ptr + kThumbRyOffset, injected_ry);
   fable2::mouselook::record_native_input_sample(
       static_cast<int16_t>(native_rx), static_cast<int16_t>(native_ry),
       static_cast<int16_t>(injected_rx), static_cast<int16_t>(injected_ry),
