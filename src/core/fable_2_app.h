@@ -41,6 +41,7 @@
 // #include "fps_probe.h"
 #include "mnk_config_bridge.h"
 #include "mouse_look.h"
+#include "menu_items.h"
 #include <rex/input/input_system.h>
 #include <rex/input/mnk/mnk_input_driver.h>
 #ifdef FABLE2_REMOTE_CONTROL
@@ -144,6 +145,11 @@ class Fable2App : public rex::ReXApp {
 
   void OnPostSetup() override {
     fable2::branding::Apply(window());
+    fable2::menu::SetQuitHandler([this] {
+      app_context().CallInUIThread([this] {
+        if (window()) window()->RequestClose();
+      });
+    });
     // Hero/dog black-texture fix (see plans/hero-dog-texture-readback.md).
     // Approach + guest base 0x12704000 credit just-harry's Unofficial Xenia
     // femtofork for Fable II. readback_resolve_force_addresses is defined in the
