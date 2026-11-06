@@ -591,10 +591,12 @@ local function nearby_text(icon)
   for scope = 1, 2 do
     if not p then break end
     local best, best_text, best_score = nil, nil, -1
+    local second_score, candidates = -1, 0
     local function consider(e, nested)
       if e == icon then return end
       local t = text_of(e)
       if not t then return end
+      candidates = candidates + 1
       local n = element_name(e)
       local score = nested and 5 or 20
       if n == "buttontext" then score = score + 100
@@ -603,7 +605,10 @@ local function nearby_text(icon)
         score = score + 40
       end
       if score > best_score then
+        second_score = best_score
         best, best_text, best_score = e, t, score
+      elseif score > second_score then
+        second_score = score
       end
     end
     local siblings = kids(p)
@@ -615,7 +620,18 @@ local function nearby_text(icon)
         for j = 1, #nested do consider(nested[j], true) end
       end
     end
-    if best then return best, best_text end
+
+    if best then
+      -- A single direct sibling is a safe simple pair even with a generic
+      -- name. In a busier wrapper, require a text-like name plus a meaningful
+      -- score advantage so traversal order never decides which label is
+      -- rewritten. The outer scope is intentionally stricter.
+      local single_direct = candidates == 1 and best_score >= 20
+      local unambiguous_named =
+          best_score >= (scope == 1 and 60 or 80) and
+          best_score - second_score >= 20
+      if single_direct or unambiguous_named then return best, best_text end
+    end
     p = parent(p)
   end
   return nil
@@ -707,8 +723,9 @@ end
 
 local used_text = {}
 for icon, info in pairs(P.icons) do
-  if info and info.text and
-     attr(icon, info.attr) == info.icon_value and
+  local target = info and (info.target or icon) or nil
+  if info and info.text and target and
+     attr(target, info.attr) == info.icon_value and
      text_of(info.text) == info.text_value then
     used_text[info.text] = true
   end
