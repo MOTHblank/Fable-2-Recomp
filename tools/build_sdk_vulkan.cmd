@@ -23,7 +23,7 @@ cmake -S "%WRAPPER%" -B "%BUILD%" -G "Ninja Multi-Config" ^
   -DCMAKE_C_FLAGS=-march=x86-64-v2 -DCMAKE_CXX_FLAGS=-march=x86-64-v2 ^
   -DCMAKE_CXX_STANDARD=23 -DCMAKE_CONFIGURATION_TYPES=Release ^
   -DREXGLUE_ENABLE_TRACY=OFF -DREXGLUE_ENABLE_FIDELITYFX=OFF ^
-  -DREXGLUE_BUILD_TESTS=OFF -DREXGLUE_SDK_SOURCE="%SOURCE%" || exit /b 1
+  -DREXGLUE_BUILD_TESTS=OFF -DREXGLUE_REGISTER_PACKAGE=OFF -DREXGLUE_SDK_SOURCE="%SOURCE%" || exit /b 1
 cmake --build "%BUILD%" --config Release --target rexgpu-xenos rexruntime || exit /b 1
 python "%~dp0stage_vulkan_sdk.py" "%SOURCE%" "%BUILD%" "%OUTPUT%" || exit /b 1
 echo Vulkan pair staged at %OUTPUT%
