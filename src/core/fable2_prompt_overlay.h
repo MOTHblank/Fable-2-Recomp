@@ -141,9 +141,24 @@ inline std::atomic<uint32_t>& LegacyTitleIconElementPointer() {
   static std::atomic<uint32_t> value{0};
   return value;
 }
+inline std::atomic<bool>& LegacyTitleCanvasPositionValid() {
+  static std::atomic<bool> value{false};
+  return value;
+}
+inline std::atomic<float>& LegacyTitleCanvasX() {
+  static std::atomic<float> value{640.0f};
+  return value;
+}
+inline std::atomic<float>& LegacyTitleCanvasY() {
+  static std::atomic<float> value{560.0f};
+  return value;
+}
 
 inline thread_local uint32_t g_legacy_title_frame_elements = 0;
 inline thread_local uint32_t g_legacy_title_frame_icon_candidate = 0;
+inline thread_local bool g_legacy_title_frame_position_valid = false;
+inline thread_local float g_legacy_title_frame_canvas_x = 640.0f;
+inline thread_local float g_legacy_title_frame_canvas_y = 560.0f;
 inline thread_local bool g_legacy_title_frame_visible = false;
 inline thread_local uint32_t g_legacy_title_scope_depth = 0;
 
@@ -151,6 +166,9 @@ inline void BeginLegacyTitleFrame() {
   if (g_legacy_title_scope_depth++ == 0) {
     g_legacy_title_frame_elements = 0;
     g_legacy_title_frame_icon_candidate = 0;
+    g_legacy_title_frame_position_valid = false;
+    g_legacy_title_frame_canvas_x = 640.0f;
+    g_legacy_title_frame_canvas_y = 560.0f;
     g_legacy_title_frame_visible = false;
   }
 }
@@ -164,6 +182,20 @@ inline void NoteLegacyTitleElement(uint32_t element, bool visible) {
   }
   ++g_legacy_title_frame_elements;
   g_legacy_title_frame_visible = g_legacy_title_frame_visible || visible;
+}
+
+inline void NoteLegacyTitleDrawPosition(float x, float y) {
+  if (g_legacy_title_scope_depth == 0 || !std::isfinite(x) ||
+      !std::isfinite(y)) {
+    return;
+  }
+  // This hook is title-specific today. Keep the accepted window deliberately
+  // close to the verified authored fallback so unrelated stack floats cannot
+  // relocate the keycap. The fixed (640,560) path remains the fallback.
+  if (x < 320.0f || x > 960.0f || y < 380.0f || y > 700.0f) return;
+  g_legacy_title_frame_canvas_x = x;
+  g_legacy_title_frame_canvas_y = y;
+  g_legacy_title_frame_position_valid = true;
 }
 
 inline void EndLegacyTitleFrame() {
@@ -185,6 +217,8 @@ inline void EndLegacyTitleFrame() {
       LegacyTitleBakedLayoutConfirmed().store(false,
                                               std::memory_order_release);
       LegacyTitleIconElementPointer().store(0, std::memory_order_release);
+      LegacyTitleCanvasPositionValid().store(false,
+                                             std::memory_order_release);
     }
     return;
   }
@@ -242,6 +276,14 @@ inline void EndLegacyTitleFrame() {
       LegacyTitleIconElementPointer().store(
           exact_icon ? g_legacy_title_frame_icon_candidate : 0,
           std::memory_order_release);
+      if (exact_icon && g_legacy_title_frame_position_valid) {
+        LegacyTitleCanvasX().store(g_legacy_title_frame_canvas_x,
+                                   std::memory_order_release);
+        LegacyTitleCanvasY().store(g_legacy_title_frame_canvas_y,
+                                   std::memory_order_release);
+        LegacyTitleCanvasPositionValid().store(true,
+                                               std::memory_order_release);
+      }
     } else {
       LegacyTitleBakedLayoutConfirmed().store(false,
                                               std::memory_order_release);
@@ -339,6 +381,15 @@ inline std::string_view LegacyTitleActionName() {
   }
 }
 
+inline bool LegacyTitleCanvasPosition(float& x, float& y) {
+  if (!LegacyTitleCanvasPositionValid().load(std::memory_order_acquire)) {
+    return false;
+  }
+  x = LegacyTitleCanvasX().load(std::memory_order_acquire);
+  y = LegacyTitleCanvasY().load(std::memory_order_acquire);
+  return std::isfinite(x) && std::isfinite(y);
+}
+
 inline bool ParseFloat(std::string_view text, float& out) {
   if (text.empty() || text.size() > 40) return false;
   std::string copy{text};
@@ -413,6 +464,9 @@ inline void Clear() {
   LegacyTitleBakedLayoutConfirmed().store(false, std::memory_order_release);
   LegacyTitleSpriteSuppressedNs().store(0, std::memory_order_release);
   LegacyTitleIconElementPointer().store(0, std::memory_order_release);
+  LegacyTitleCanvasPositionValid().store(false, std::memory_order_release);
+  LegacyTitleCanvasX().store(640.0f, std::memory_order_release);
+  LegacyTitleCanvasY().store(560.0f, std::memory_order_release);
   DesiredGameFaceState().store(0, std::memory_order_release);
   GameFaceTransitionStartedNs().store(0, std::memory_order_release);
 }
@@ -601,10 +655,13 @@ class PromptOverlayDialog final : public rex::ui::ImGuiDialog {
     if (legacy_fallback) {
       const std::string label = ActionLabel(LegacyTitleActionName());
       if (!label.empty()) {
-        const float cx = (640.0f - canvas_left) * canvas_to_screen +
+        float legacy_x = 640.0f;
+        float legacy_y = 560.0f;
+        LegacyTitleCanvasPosition(legacy_x, legacy_y);
+        const float cx = (legacy_x - canvas_left) * canvas_to_screen +
                          static_cast<float>(
                              REXCVAR_GET(ui_prompt_legacy_offset_x));
-        const float cy = 560.0f * canvas_to_screen +
+        const float cy = legacy_y * canvas_to_screen +
                          static_cast<float>(
                              REXCVAR_GET(ui_prompt_legacy_offset_y));
         const bool sprite_suppressed = LegacyTitleSpriteRecentlySuppressed();
