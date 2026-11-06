@@ -50,12 +50,22 @@ common controller-icon names for A/B/X/Y, shoulders, triggers, Start/Back,
 stick clicks and D-pad directions. It also recognizes the documented
 `AButton` / `BButton` / `XButton` / `YButton` style widget names.
 
+The adapter also rewrites exposed live `textstring` values. That catches
+markup which survived into the presentation (`<a_img>`, etc.) and conservative
+literal instruction forms such as `Press A`, `Hold X`, `Tap RT` or
+`Press Start`. Unlike the fixed-size heap rewrite, `setAttribute` can trigger
+GameFace relayout, so these replacements may use the natural compact form
+`[key]`.
+
 The adapter does **not** blindly suppress controller textures. It changes an
 icon only when it can find a nearby writable text label (for example the
 documented `AButton` + `ButtonText` pairing). In keyboard mode it hides that
 specific icon and prefixes the label with the live binding, such as
-`[E] Travel`. It stores the original icon visibility and text in the
-presentation's Lua state. Switching back to controller mode restores both.
+`[E] Travel`. Texture paths ending in `icon_button_*.tex`, named
+`AButton/BButton/XButton/YButton` widgets, and the documented
+`Material2270` A-button material are recognized. It stores the original icon
+visibility and text in the presentation's Lua state. Switching back to
+controller mode restores both.
 
 This gives non-string UI a practical PC representation without globally
 replacing `icon_button_a.tex` or repainting every use of `Material2270`.
