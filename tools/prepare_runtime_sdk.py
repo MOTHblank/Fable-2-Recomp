@@ -59,6 +59,7 @@ BAKED_FOLLOWUP_MARKERS = {
         "mnk_mouse_flick_buffer_polls",
         "mnk_direct_mouse",
         "mouse_motion_callback.store(callback",
+        "MarkKeyboardPromptDevice",
     ),
     "src/ui/keybinds.cpp": ("kXButton1",),
     "include/rex/input/mnk/mnk_input_driver.h": ("using MouseMotionCallback",),
