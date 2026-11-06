@@ -13,6 +13,7 @@
 #include <rex/ui/imgui_drawer.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -24,10 +25,13 @@
 #include <utility>
 #include <vector>
 
-#include "fable2_button_prompt_strings.h"
+#include "fable2_button_prompts.h"
 
 REXCVAR_DECLARE(int32_t, ui_prompt_overlay_offset_x);
 REXCVAR_DECLARE(int32_t, ui_prompt_overlay_offset_y);
+REXCVAR_DECLARE(bool, ui_prompt_legacy_fallback);
+REXCVAR_DECLARE(int32_t, ui_prompt_legacy_offset_x);
+REXCVAR_DECLARE(int32_t, ui_prompt_legacy_offset_y);
 
 namespace fable2::promptoverlay {
 
@@ -52,6 +56,34 @@ inline std::mutex& StateMutex() {
 inline std::unordered_map<uint32_t, Presentation>& States() {
   static auto* states = new std::unordered_map<uint32_t, Presentation>;
   return *states;
+}
+
+inline int64_t ClockNanoseconds() {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+             Clock::now().time_since_epoch())
+      .count();
+}
+
+inline std::atomic<int64_t>& LegacyTitleLastDrawNs() {
+  static std::atomic<int64_t> value{0};
+  return value;
+}
+
+// Called from the verified UITextPrompt per-element render path. A short
+// lifetime follows the game's own visibility/blink without keeping guest
+// pointers on the host render thread.
+inline void TouchLegacyTitleDraw() {
+  LegacyTitleLastDrawNs().store(ClockNanoseconds(), std::memory_order_release);
+}
+
+inline bool LegacyTitleRecentlyDrawn() {
+  constexpr int64_t kAliveNs =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::milliseconds(110))
+          .count();
+  const int64_t last =
+      LegacyTitleLastDrawNs().load(std::memory_order_acquire);
+  return last != 0 && ClockNanoseconds() - last <= kAliveNs;
 }
 
 inline bool ParseFloat(std::string_view text, float& out) {
@@ -104,8 +136,11 @@ inline void UpdatePresentation(uint32_t lua_state, std::string_view result) {
 }
 
 inline void Clear() {
-  std::lock_guard lock(StateMutex());
-  States().clear();
+  {
+    std::lock_guard lock(StateMutex());
+    States().clear();
+  }
+  LegacyTitleLastDrawNs().store(0, std::memory_order_release);
 }
 
 inline std::vector<Entry> Snapshot() {
@@ -171,14 +206,21 @@ class PromptOverlayDialog final : public rex::ui::ImGuiDialog {
 
  protected:
   void OnDraw(ImGuiIO& io) override {
-    if (rex::cvar::GetFlagByName("ui_prompt_overlay_fallback") != "true" ||
-        !KeyboardModeActive() || io.DisplaySize.x <= 0.0f ||
+    if (!KeyboardModeActive() || io.DisplaySize.x <= 0.0f ||
         io.DisplaySize.y <= 0.0f) {
       return;
     }
 
-    const std::vector<Entry> entries = Snapshot();
-    if (entries.empty()) return;
+    const bool gameface_fallback =
+        rex::cvar::GetFlagByName("ui_prompt_overlay_fallback") == "true";
+    const bool legacy_fallback =
+        REXCVAR_GET(ui_prompt_legacy_fallback) &&
+        LegacyTitleRecentlyDrawn() &&
+        !fable2::buttonprompts::TitleSourceRewriteActive();
+
+    const std::vector<Entry> entries =
+        gameface_fallback ? Snapshot() : std::vector<Entry>{};
+    if (entries.empty() && !legacy_fallback) return;
 
     ImDrawList* draw = ImGui::GetForegroundDrawList();
     ImFont* font = ImGui::GetFont();
@@ -267,6 +309,36 @@ class PromptOverlayDialog final : public rex::ui::ImGuiDialog {
                         kBorder, "+");
           cursor += plus_size.x + kGap;
         }
+      }
+    }
+
+    if (legacy_fallback) {
+      const std::string label = ActionLabel("A");
+      if (!label.empty()) {
+        const float cx = (640.0f - canvas_left) * canvas_to_screen +
+                         static_cast<float>(
+                             REXCVAR_GET(ui_prompt_legacy_offset_x));
+        const float cy = 560.0f * canvas_to_screen +
+                         static_cast<float>(
+                             REXCVAR_GET(ui_prompt_legacy_offset_y));
+        const ImVec2 text_size =
+            font->CalcTextSizeA(font_size, 1000.0f, 0.0f, label.c_str());
+        // Opaque and a little larger than the GameFace fallback: this path is
+        // intentionally a cover for an already-baked Xbox face-button sprite.
+        const float box_w = std::max(34.0f, text_size.x + 16.0f);
+        const float box_h = std::max(27.0f, text_size.y + 10.0f);
+        const ImVec2 p0(cx - box_w * 0.5f, cy - box_h * 0.5f);
+        const ImVec2 p1(cx + box_w * 0.5f, cy + box_h * 0.5f);
+        constexpr ImU32 kLegacyFill = IM_COL32(28, 25, 21, 255);
+        draw->AddRectFilled(ImVec2(p0.x + 1.5f, p0.y + 2.0f),
+                            ImVec2(p1.x + 1.5f, p1.y + 2.0f),
+                            kShadow, 4.0f);
+        draw->AddRectFilled(p0, p1, kLegacyFill, 4.0f);
+        draw->AddRect(p0, p1, kBorder, 4.0f, 0, 1.2f);
+        draw->AddText(font, font_size,
+                      ImVec2(cx - text_size.x * 0.5f,
+                             cy - text_size.y * 0.5f),
+                      kText, label.c_str());
       }
     }
   }
