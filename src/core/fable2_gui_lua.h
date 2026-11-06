@@ -774,6 +774,9 @@ local function walk(e, depth)
   local n = element_name(e):gsub("\\", "/")
   n = n:match("([^/]+)$") or n
   n = n:gsub("%.tex$", "")
+  -- The BGF asset table contains pressed/alternate variants such as
+  -- icon_button_a2. They represent the same logical control.
+  if n:find("^icon_button_") then n = n:gsub("2$", "") end
   local action = aliases[n]
   local label = action and __labels[action] or nil
   if label and label ~= "" then
