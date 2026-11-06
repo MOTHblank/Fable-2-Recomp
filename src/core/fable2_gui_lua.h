@@ -418,9 +418,10 @@ inline std::string prompt_lua_quote(std::string_view value) {
 }
 
 // Extends source-string prompt rewriting into live GameFace presentations.
-// Only icon widgets with a nearby writable text label are adapted. Ambiguous
-// or baked controller artwork stays native instead of being hidden blindly.
-// Originals are retained per Lua state, making controller switching reversible.
+// Prefer writable text/paired widgets, then safely hide known controller
+// artwork for a host keycap when no native text target exists. Unknown visuals
+// are left native rather than hidden by guesswork. Originals are retained per
+// Lua state, making controller switching reversible.
 inline void SyncButtonPrompts(bool keyboard) {
   if (!bridge_enabled()) return;
   S().armed.store(true, std::memory_order_relaxed);
