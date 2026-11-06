@@ -751,6 +751,20 @@ local function hidden_by_adapter(target)
   return false
 end
 
+local function visible_for_overlay(e)
+  local cur = e
+  for _ = 1, 4 do
+    if not cur then break end
+    local ours = hidden_by_adapter(cur)
+    local opacity = tonumber(attr(cur, "opacity"))
+    if opacity and opacity <= 0.01 and not ours then return false end
+    local active = attr(cur, "active")
+    if (active == false or active == 0) and not ours then return false end
+    cur = parent(cur)
+  end
+  return true
+end
+
 local function hide_for_overlay(e)
   local target = e
   for _ = 1, 2 do
@@ -770,7 +784,8 @@ local function hide_for_overlay(e)
 end
 
 local function emit_overlay(action, e, target)
-  if not (__overlay and e and target and hidden_by_adapter(target)) then
+  if not (__overlay and e and target and hidden_by_adapter(target) and
+          visible_for_overlay(e)) then
     return false
   end
   local x, y = world_pos(e)
@@ -790,7 +805,7 @@ local function emit_overlay(action, e, target)
 end
 
 local function add_overlay(action, e)
-  if not __overlay then return false end
+  if not __overlay or not visible_for_overlay(e) then return false end
   local tracked = P.overlay_icons[e]
   if tracked and tracked.action == action and tracked.target and
      hidden_by_adapter(tracked.target) then
