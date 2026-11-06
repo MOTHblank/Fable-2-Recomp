@@ -127,6 +127,8 @@ inline void SyncLiveSettings() {
   auto mouse = REXCVAR_GET(mouse_look);
   if (mouse != prev_mouse) {
     prev_mouse = mouse;
+    fable2::mouselook::request_reset();
+    rex::input::mnk::SetDirectMouseEligible(false);
     rex::cvar::SetFlagByName("mnk_mouse", mouse ? "true" : "false");
   }
   auto direct = REXCVAR_GET(mouse_direct_look);
