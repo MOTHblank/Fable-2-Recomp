@@ -16,9 +16,10 @@ of applying old patches again. Five Fable-specific follow-up patch sets have
 also been incorporated into the SDK fork, and are verified rather than
 reapplied at its pinned revision.
 
-The prebuilt official ReXGlue v0.10.0 SDK remains separate, solely to
-provide compatible code generation tools. Game disc images and saves
-are not part of the SDK.
+The pinned SDK fork now builds the ReXGlue codegen executable itself. The
+Windows workflow installs `rexglue.exe`, runtime/plugin binaries, headers and
+CMake package from one source revision; no prebuilt SDK is mixed into the
+native package. Game disc images and saves are not part of the SDK.
 
 ## Build
 
@@ -30,8 +31,9 @@ build.cmd
 ```
 
 The default Release workflow builds and stages the launcher in `out/game`,
-extracts a user-supplied retail ISO there if needed, generates guest code,
-builds a matched native SDK and game, then stages the renderer pair. The
+extracts a user-supplied retail ISO there if needed, builds and installs the
+matched source SDK (including `rexglue.exe`), generates guest code with that
+matched tool, then builds the game and stages the renderer pair. The
 launcher and game executable are both in `out/game`. The Release preset
 enables post-build PE cleaning; profiling can opt out.
 
