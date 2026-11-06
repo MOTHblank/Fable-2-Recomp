@@ -137,20 +137,31 @@ inline std::atomic<int64_t>& LegacyTitleSpriteSuppressedNs() {
   static std::atomic<int64_t> value{0};
   return value;
 }
+inline std::atomic<uint32_t>& LegacyTitleIconElementPointer() {
+  static std::atomic<uint32_t> value{0};
+  return value;
+}
 
 inline thread_local uint32_t g_legacy_title_frame_elements = 0;
+inline thread_local uint32_t g_legacy_title_frame_icon_candidate = 0;
 inline thread_local bool g_legacy_title_frame_visible = false;
 inline thread_local uint32_t g_legacy_title_scope_depth = 0;
 
 inline void BeginLegacyTitleFrame() {
   if (g_legacy_title_scope_depth++ == 0) {
     g_legacy_title_frame_elements = 0;
+    g_legacy_title_frame_icon_candidate = 0;
     g_legacy_title_frame_visible = false;
   }
 }
 
-inline void NoteLegacyTitleElement(bool visible) {
+inline void NoteLegacyTitleElement(uint32_t element, bool visible) {
   if (g_legacy_title_scope_depth == 0) return;
+  const uint32_t expected =
+      fable2::buttonprompts::TitleExpectedIconElementOrdinal();
+  if (expected != UINT32_MAX && g_legacy_title_frame_elements == expected) {
+    g_legacy_title_frame_icon_candidate = element;
+  }
   ++g_legacy_title_frame_elements;
   g_legacy_title_frame_visible = g_legacy_title_frame_visible || visible;
 }
@@ -173,6 +184,7 @@ inline void EndLegacyTitleFrame() {
       LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
       LegacyTitleBakedLayoutConfirmed().store(false,
                                               std::memory_order_release);
+      LegacyTitleIconElementPointer().store(0, std::memory_order_release);
     }
     return;
   }
@@ -215,18 +227,25 @@ inline void EndLegacyTitleFrame() {
       LegacyTitleKeyboardLayout().store(true, std::memory_order_release);
       LegacyTitleBakedLayoutConfirmed().store(false,
                                               std::memory_order_release);
+      LegacyTitleIconElementPointer().store(0, std::memory_order_release);
     } else if (count <= expected_baked + 1) {
       LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
       // Element suppression is allowed only when the localized source scanner
       // also identified the exact image-tag ordinal. Count-only fallback is
       // intentionally not enough to skip a guest renderer element.
-      LegacyTitleBakedLayoutConfirmed().store(
+      const bool exact_icon =
           fable2::buttonprompts::TitleExpectedIconElementOrdinal() !=
-              UINT32_MAX,
+              UINT32_MAX &&
+          g_legacy_title_frame_icon_candidate != 0;
+      LegacyTitleBakedLayoutConfirmed().store(exact_icon,
+                                              std::memory_order_release);
+      LegacyTitleIconElementPointer().store(
+          exact_icon ? g_legacy_title_frame_icon_candidate : 0,
           std::memory_order_release);
     } else {
       LegacyTitleBakedLayoutConfirmed().store(false,
                                               std::memory_order_release);
+      LegacyTitleIconElementPointer().store(0, std::memory_order_release);
     }
     LegacyTitleBaselineElements().store(expected_baked,
                                         std::memory_order_release);
@@ -237,6 +256,7 @@ inline void EndLegacyTitleFrame() {
     LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
     LegacyTitleBakedLayoutConfirmed().store(false,
                                             std::memory_order_release);
+    LegacyTitleIconElementPointer().store(0, std::memory_order_release);
   } else if (!source_rewritten) {
     if (count < baseline) {
       LegacyTitleBaselineElements().store(count, std::memory_order_release);
@@ -244,12 +264,14 @@ inline void EndLegacyTitleFrame() {
     LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
     LegacyTitleBakedLayoutConfirmed().store(false,
                                             std::memory_order_release);
+    LegacyTitleIconElementPointer().store(0, std::memory_order_release);
   } else if (count >= baseline + 4) {
     // Unknown localization/source: a seven-unit image tag becoming ordinary
     // glyphs still creates a clear multi-element increase.
     LegacyTitleKeyboardLayout().store(true, std::memory_order_release);
     LegacyTitleBakedLayoutConfirmed().store(false,
                                             std::memory_order_release);
+    LegacyTitleIconElementPointer().store(0, std::memory_order_release);
   }
 
   if (g_legacy_title_frame_visible && title_layout) {
@@ -275,16 +297,21 @@ inline uint32_t CurrentLegacyTitleElementOrdinal() {
   return g_legacy_title_frame_elements;
 }
 
-inline bool ShouldSuppressLegacyTitleElement(uint32_t ordinal) {
+inline bool ShouldSuppressLegacyTitleElement(uint32_t ordinal,
+                                                   uint32_t element) {
   if (g_legacy_title_scope_depth == 0 ||
       !LegacyTitleBakedLayoutConfirmed().load(std::memory_order_acquire) ||
+      !LegacyTitleRecentlyDrawn() ||
       !fable2::buttonprompts::KeyboardPromptModeActive() ||
       !REXCVAR_GET(ui_prompt_legacy_fallback)) {
     return false;
   }
   const uint32_t expected =
       fable2::buttonprompts::TitleExpectedIconElementOrdinal();
-  return expected != UINT32_MAX && ordinal == expected;
+  const uint32_t confirmed_element =
+      LegacyTitleIconElementPointer().load(std::memory_order_acquire);
+  return expected != UINT32_MAX && ordinal == expected &&
+         confirmed_element != 0 && element == confirmed_element;
 }
 
 inline void NoteLegacyTitleSpriteSuppressed() {
@@ -385,6 +412,7 @@ inline void Clear() {
   LegacyTitleKeyboardLayout().store(false, std::memory_order_release);
   LegacyTitleBakedLayoutConfirmed().store(false, std::memory_order_release);
   LegacyTitleSpriteSuppressedNs().store(0, std::memory_order_release);
+  LegacyTitleIconElementPointer().store(0, std::memory_order_release);
   DesiredGameFaceState().store(0, std::memory_order_release);
   GameFaceTransitionStartedNs().store(0, std::memory_order_release);
 }
