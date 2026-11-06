@@ -93,6 +93,7 @@ uint XeMaterialFeatures() { return asuint(xe_material_params[0].x); }
 float XeShadowSoftness() { return xe_material_params[0].y; }
 float XeSpecularIntensity() { return xe_material_params[0].z; }
 float XeRoughness() { return xe_material_params[0].w; }
+float XeShadowDistanceScale() { return xe_material_params[1].x; }
 
 // What the translator bakes into its shaders.
 #define XE_TRANSLATION_GAMMA_RT_AS_UNORM8 (1u << 0)
