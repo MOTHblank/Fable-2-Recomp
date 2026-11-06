@@ -19,7 +19,9 @@ inline std::string Trim(std::string_view v) {
 inline std::string DisplayKey(std::string_view bindings) {
   // ReXGlue bindings are comma-separated alternatives. Prefer a keyboard key
   // over a mouse button, but preserve compact modifier chords such as
-  // Shift+Up -> S+Up so D-pad and menu prompts can be represented too.
+  // Shift+Up -> S+Up so D-pad and menu prompts can be represented too. SDK
+  // parser names longer than five characters are compacted to PC-facing
+  // labels (PageDown -> PgDn, Numpad7 -> N7, PrintScreen -> PrtSc, etc.).
   auto compact = [](std::string_view raw, bool& mouse_key) -> std::string {
     std::string token = Trim(raw);
     mouse_key = false;
@@ -44,22 +46,46 @@ inline std::string DisplayKey(std::string_view bindings) {
     if (key.empty()) return {};
     std::string u;
     for (unsigned char ch : key) u += static_cast<char>(std::toupper(ch));
-    if (prefix.empty() &&
-        (u == "SHIFT" || u == "CTRL" || u == "CONTROL" || u == "ALT")) {
-      return {};
-    }
-
     std::string shown = key;
-    if (u == "RETURN") shown = "Enter";
+    if (u == "SHIFT") shown = "Shift";
+    else if (u == "CTRL" || u == "CONTROL") shown = "Ctrl";
+    else if (u == "ALT") shown = "Alt";
+    else if (u == "RETURN") shown = "Enter";
     else if (u == "SPACE") shown = "Space";
     else if (u == "ESCAPE") shown = "Esc";
     else if (u == "BACKSPACE") shown = "Bksp";
+    else if (u == "DELETE") shown = "Del";
+    else if (u == "INSERT") shown = "Ins";
+    else if (u == "PAGEUP") shown = "PgUp";
+    else if (u == "PAGEDOWN") shown = "PgDn";
+    else if (u == "PRINTSCREEN") shown = "PrtSc";
+    else if (u == "CAPSLOCK") shown = "Caps";
+    else if (u == "NUMLOCK") shown = "Num";
+    else if (u == "SCROLLLOCK") shown = "ScrL";
+    else if (u == "BACKTICK") shown = "`";
+    else if (u == "MINUS") shown = "-";
+    else if (u == "PLUS") shown = "+";
+    else if (u == "COMMA") shown = ",";
+    else if (u == "PERIOD") shown = ".";
     else if (u == "SEMICOLON") shown = ";";
+    else if (u == "SLASH") shown = "/";
+    else if (u == "BACKSLASH") shown = "\\";
+    else if (u == "LBRACKET") shown = "[";
+    else if (u == "RBRACKET") shown = "]";
     else if (u == "QUOTE") shown = "'";
     else if (u == "LEFT") shown = prefix.empty() ? "Left" : "Lt";
     else if (u == "RIGHT") shown = prefix.empty() ? "Right" : "Rt";
     else if (u == "DOWN") shown = prefix.empty() ? "Down" : "Dn";
     else if (u == "UP") shown = "Up";
+    else if (u.size() == 7 && u.rfind("NUMPAD", 0) == 0 &&
+             u[6] >= '0' && u[6] <= '9') {
+      shown = "N";
+      shown += u[6];
+    } else if (u == "NUMPADENTER") shown = "NEnt";
+    else if (u == "NUMPADPLUS") shown = "N+";
+    else if (u == "NUMPADMINUS") shown = "N-";
+    else if (u == "NUMPADSTAR") shown = "N*";
+    else if (u == "NUMPADSLASH") shown = "N/";
     else if (u == "LMB" || u == "RMB" || u == "MMB" ||
              u == "XMB1" || u == "XMB2") {
       mouse_key = true;
