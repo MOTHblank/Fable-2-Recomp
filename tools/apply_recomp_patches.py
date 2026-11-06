@@ -70,6 +70,20 @@ def _patch_direct_mouse_native_camera(files) -> int:
                 f"({DIRECT_MOUSE_STATE_ANCHOR!r}), found {anchor_count}"
             )
 
+        anchor_pos = body.index(DIRECT_MOUSE_STATE_ANCHOR)
+        input_window = body[anchor_pos:anchor_pos + 5000]
+        expected_axis_reads = (
+            "REX_LOAD_U16(ctx.r10.u32 + 12)",
+            "REX_LOAD_U16(ctx.r10.u32 + 14)",
+        )
+        missing_reads = [read for read in expected_axis_reads
+                         if read not in input_window]
+        if missing_reads:
+            raise RuntimeError(
+                f"{DIRECT_MOUSE_FUNCTION}: r1+708 no longer looks like the "
+                f"expected XINPUT_STATE; missing nearby reads: {missing_reads}"
+            )
+
         # Keep the declarations in the same TU as the generated function.
         # Key this on our cvar declaration rather than the header include so a
         # future codegen/PCH change cannot leave the injected body undeclared.
