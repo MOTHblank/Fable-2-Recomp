@@ -46,6 +46,13 @@ struct Entry {
 struct Presentation {
   std::vector<Entry> entries;
   Clock::time_point updated{};
+  // These are acknowledgements from the GameFace Lua adapter, not merely the
+  // host's desired cvar state. Keeping them with the entries lets the overlay
+  // bridge device/fallback transitions without a one-frame duplicate or gap:
+  // draw until GameFace confirms it restored the Xbox icon, and don't draw a
+  // new keycap until GameFace confirms it hid that icon.
+  bool keyboard_applied = false;
+  bool overlay_applied = false;
 };
 
 inline std::mutex& StateMutex() {
@@ -215,6 +222,17 @@ inline void UpdatePresentation(uint32_t lua_state, std::string_view result) {
   if (!result.starts_with(kPrefix)) return;
   result.remove_prefix(kPrefix.size());
 
+  // Wire format: "<mode><overlay>|entries", where mode is k/c and overlay is
+  // 1/0. This is emitted only after the Lua adapter has restored/applied the
+  // corresponding GameFace attributes, so it doubles as a transition ack.
+  if (result.size() < 3 || (result[0] != 'k' && result[0] != 'c') ||
+      (result[1] != '0' && result[1] != '1') || result[2] != '|') {
+    return;
+  }
+  const bool keyboard_applied = result[0] == 'k';
+  const bool overlay_applied = result[1] == '1';
+  result.remove_prefix(3);
+
   std::vector<Entry> parsed;
   while (!result.empty() && parsed.size() < 128) {
     const size_t semi = result.find(';');
@@ -244,7 +262,8 @@ inline void UpdatePresentation(uint32_t lua_state, std::string_view result) {
   }
 
   std::lock_guard lock(StateMutex());
-  States()[lua_state] = Presentation{std::move(parsed), Clock::now()};
+  States()[lua_state] = Presentation{
+      std::move(parsed), Clock::now(), keyboard_applied, overlay_applied};
 }
 
 inline void Clear() {
@@ -267,6 +286,14 @@ inline std::vector<Entry> Snapshot() {
   for (auto it = States().begin(); it != States().end();) {
     if (now - it->second.updated > kAliveFor) {
       it = States().erase(it);
+      continue;
+    }
+    // Entries describe icons the adapter has actually hidden. Ignore host
+    // desired state here: during keyboard->controller or fallback-off handoff,
+    // continuing to draw these old entries is what covers the icon until the
+    // controller/restore acknowledgement arrives.
+    if (!it->second.keyboard_applied || !it->second.overlay_applied) {
+      ++it;
       continue;
     }
     for (const Entry& entry : it->second.entries) {
@@ -322,20 +349,22 @@ class PromptOverlayDialog final : public rex::ui::ImGuiDialog {
 
  protected:
   void OnDraw(ImGuiIO& io) override {
-    if (!KeyboardModeActive() || io.DisplaySize.x <= 0.0f ||
-        io.DisplaySize.y <= 0.0f) {
+    if (io.DisplaySize.x <= 0.0f || io.DisplaySize.y <= 0.0f) {
       return;
     }
 
-    const bool gameface_fallback =
-        rex::cvar::GetFlagByName("ui_prompt_overlay_fallback") == "true";
+    const bool desired_keyboard = KeyboardModeActive();
+    // GameFace overlay entries are acknowledgement-driven (Snapshot()), not
+    // desired-state-driven. This keeps the old keycap covering an icon until
+    // GameFace restores it, and waits to draw a new keycap until GameFace has
+    // hidden the Xbox artwork. The legacy title cover never hides guest art,
+    // so it can still follow desired mode immediately.
     const bool legacy_fallback =
-        REXCVAR_GET(ui_prompt_legacy_fallback) &&
+        desired_keyboard && REXCVAR_GET(ui_prompt_legacy_fallback) &&
         LegacyTitleRecentlyDrawn() &&
         !LegacyTitleUsesKeyboardLayout();
 
-    const std::vector<Entry> entries =
-        gameface_fallback ? Snapshot() : std::vector<Entry>{};
+    const std::vector<Entry> entries = Snapshot();
     if (entries.empty() && !legacy_fallback) return;
 
     ImDrawList* draw = ImGui::GetForegroundDrawList();
