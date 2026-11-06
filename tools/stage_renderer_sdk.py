@@ -1,65 +1,94 @@
-"""Stage matched fork headers/runtime/plugin with an official codegen package.
+"""Validate and fingerprint an installed source-built ReXGlue SDK.
 
-Usage: python tools/stage_renderer_sdk.py OFFICIAL_SDK SDK_SOURCE BUILD_DIR OUTPUT
+Usage: python tools/stage_renderer_sdk.py SDK_SOURCE BUILD_DIR OUTPUT
        [--configuration Release|Debug]
-The native application must be rebuilt against OUTPUT. Codegen continues using
-OFFICIAL_SDK/bin/rexglue.exe with its original runtime, not OUTPUT/bin/rexglue.exe.
-Only SDK files are copied; game dumps and saves are never packaged.
+
+The SDK itself is installed into OUTPUT by CMake before this script runs. This
+script refuses mixed or incomplete packages and writes renderer provenance.
+Release packages must include the source-built rexglue.exe used for game
+codegen, so codegen/runtime/plugin all come from the same SDK revision.
 """
 import argparse
 import json
 from pathlib import Path
-import shutil
+
+from renderer_provenance import build_identity, digest
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("official", "source", "build", "output"):
+    for name in ("source", "build", "output"):
         parser.add_argument(name, type=Path)
     parser.add_argument("--configuration", choices=("Release", "Debug"), default="Release")
     args = parser.parse_args()
-    official, source, build, output = (getattr(args, name).resolve()
-        for name in ("official", "source", "build", "output"))
-    if any(output == path or path.is_relative_to(output) or output.is_relative_to(path)
-           for path in (official, source, build)):
+    source, build, output = (
+        getattr(args, name).resolve() for name in ("source", "build", "output")
+    )
+    if any(
+        output == path or path.is_relative_to(output) or output.is_relative_to(path)
+        for path in (source, build)
+    ):
         raise SystemExit("Output must be separate from every input tree")
+
     native = source / "out/win-amd64"
     suffix = "d" if args.configuration == "Debug" else ""
-    runtime = f"rexruntime{suffix}"
-    plugin = f"rexgpu-xenos{suffix}"
-    required = [native / f"{runtime}.dll", native / f"{plugin}.dll",
-                native / f"{runtime}.lib", native / f"{plugin}.lib", build / "include/rex/version.h",
-                official / "bin/rexglue.exe"]
+    runtime_name = f"rexruntime{suffix}.dll"
+    plugin_name = f"rexgpu-xenos{suffix}.dll"
+    runtime = native / runtime_name
+    plugin = native / plugin_name
+    staged_runtime = output / "bin" / runtime_name
+    staged_plugin = output / "bin" / plugin_name
+
+    required = [
+        runtime,
+        plugin,
+        native / f"rexruntime{suffix}.lib",
+        native / f"rexgpu-xenos{suffix}.lib",
+        build / "include/rex/version.h",
+        output / "include/rex/version.h",
+        output / "lib/cmake/rexglue/rexglueConfig.cmake",
+        staged_runtime,
+        staged_plugin,
+    ]
+    if args.configuration == "Release":
+        required.extend((native / "rexglue.exe", output / "bin/rexglue.exe"))
+
     for path in required:
         if not path.is_file():
-            raise SystemExit(f"Missing build input: {path}")
-    shutil.copytree(official, output, dirs_exist_ok=True)
-    shutil.copytree(source / "include/rex", output / "include/rex", dirs_exist_ok=True)
-    shutil.copy2(build / "include/rex/version.h", output / "include/rex/version.h")
-    shutil.copytree(source / "thirdparty/sdl3/include/SDL3", output / "include/SDL3", dirs_exist_ok=True)
-    for path in native.glob("*.lib"):
-        shutil.copy2(path, output / "lib" / path.name)
-    for name in (f"{runtime}.dll", f"{plugin}.dll"):
-        shutil.copy2(native / name, output / "bin" / name)
-    # Carry the PDBs (when present) so the host build can stage them next to
-    # the exe for debugger/profiler symbolization.
-    for name in (f"{runtime}.pdb", f"{plugin}.pdb"):
-        if (native / name).is_file():
-            shutil.copy2(native / name, output / "bin" / name)
-    for name in ("rex_app.cpp", "windowed_app_main_sdl.cpp"):
-        shutil.copy2(source / "src/ui" / name, output / "share/rexglue" / name)
-    # Record the same source, patch fingerprint and compiler identity as
-    # the Vulkan builder, so launch-time selection can reject stale pairs.
-    from renderer_provenance import build_identity
+            raise SystemExit(f"Missing source-built SDK artifact: {path}")
+
+    if digest(runtime) != digest(staged_runtime):
+        raise SystemExit("Installed ReXGlue runtime does not match the source build")
+    if digest(plugin) != digest(staged_plugin):
+        raise SystemExit("Installed ReXGlue GPU plugin does not match the source build")
+
     provenance = build_identity(
-        source, build, "d3d12", args.configuration,
-        native / f"{runtime}.dll", native / f"{plugin}.dll"
+        source, build, "d3d12", args.configuration, runtime, plugin
     )
-    provenance["codegen_tool"] = str(official / "bin/rexglue.exe")
-    provenance["note"] = "Native SDK headers and runtime/plugin must match; codegen uses the official tool."
-    (output / "renderer-sdk-provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
-    print(f"Matched native SDK staged at {output}")
-    print(f"Configure host with -DFABLE2_CODEGEN_TOOL={official / 'bin/rexglue.exe'}")
+    codegen = output / "bin/rexglue.exe"
+    if codegen.is_file():
+        source_codegen = native / "rexglue.exe"
+        if source_codegen.is_file() and digest(source_codegen) != digest(codegen):
+            raise SystemExit("Installed rexglue.exe does not match the source build")
+        provenance["codegen_tool"] = str(codegen)
+        provenance["codegen_sha256"] = digest(codegen)
+        provenance["note"] = (
+            "Headers, runtime, GPU plugin and codegen tool are installed from "
+            "the same source-built SDK."
+        )
+    else:
+        provenance["codegen_tool"] = None
+        provenance["note"] = (
+            "Debug runtime package; game codegen should use the matched Release "
+            "source-built rexglue tool."
+        )
+
+    (output / "renderer-sdk-provenance.json").write_text(
+        json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
+    )
+    print(f"Verified source-built SDK at {output}")
+    if codegen.is_file():
+        print(f"Codegen tool: {codegen}")
 
 
 if __name__ == "__main__":
