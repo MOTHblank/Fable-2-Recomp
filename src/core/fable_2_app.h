@@ -32,6 +32,7 @@
 #include "dir_manifest_heal.h"
 #include "fable2_address_scan.h"
 #include "fable2_config.h"
+#include "fable2_console.h"
 #include "fable2_fit_window.h"
 #include "fable2_patches.h"
 #include "fable2_button_prompts.h"
@@ -109,7 +110,7 @@ class Fable2App : public rex::ReXApp {
 #endif  // FABLE2_REMOTE_CONTROL
 
   // Emulate the Xbox 360 Xenos GPU. Two plugins are staged next to the exe:
-  //   rexgpu-xenos[d].dll        -> D3D12 (prebuilt SDK plugin; the default)
+  //   rexgpu-xenos[d].dll        -> D3D12 (matched source-built SDK; default)
   //   rexgpu-xenos-vulkan[d].dll -> Vulkan (built from the SDK source via
   //                                   tools/build_sdk_vulkan.cmd)
   // Swap the renderer at launch with --gpu_plugin, no rebuild required:
@@ -125,7 +126,7 @@ class Fable2App : public rex::ReXApp {
       config.graphics = rex::system::LoadGpuPlugin("xenos-vulkan", "vulkan");
     }
     // Otherwise leave config.graphics null so ReXApp loads
-    // LoadGpuPlugin("xenos") -> the prebuilt D3D12 plugin.
+    // LoadGpuPlugin("xenos") -> the matched source-built D3D12 plugin.
 
     // The SDK default input system already registers its event-driven
     // MnkInputDriver alongside physical SDL/XInput pads. Do not add the old
