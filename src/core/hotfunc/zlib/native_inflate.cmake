@@ -14,6 +14,12 @@ set(ZLIB_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
 set(ZLIBNG_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
 set(WITH_GTEST OFF CACHE BOOL "" FORCE)
 set(WITH_GZFILEOP OFF CACHE BOOL "" FORCE)
+# Keep portable binaries while allowing zlib-ng to select SSE/AVX paths for the
+# actual host CPU at runtime. FORCE prevents a stale parent CMake cache from
+# accidentally turning the native inflate bridge into a generic-only build.
+set(WITH_OPTIM ON CACHE BOOL "" FORCE)
+set(WITH_NATIVE_INSTRUCTIONS OFF CACHE BOOL "" FORCE)
+set(WITH_RUNTIME_CPU_DETECTION ON CACHE BOOL "" FORCE)
 set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
 
 FetchContent_Declare(zlibng
