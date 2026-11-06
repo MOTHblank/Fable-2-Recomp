@@ -131,18 +131,10 @@ inline void take_delta(float& out_dx, float& out_dy) {
   out_dx = dx_acc().exchange(0.0f, std::memory_order_relaxed);
   out_dy = dy_acc().exchange(0.0f, std::memory_order_relaxed);
 }
-inline std::atomic<bool>& reset_requested() {
-  static std::atomic<bool> pending{true};
-  return pending;
-}
 inline void request_reset() {
   capture_resets().fetch_add(1, std::memory_order_relaxed);
   dx_acc().store(0.0f, std::memory_order_relaxed);
   dy_acc().store(0.0f, std::memory_order_relaxed);
-  reset_requested().store(true, std::memory_order_release);
-}
-inline bool take_reset_request() {
-  return reset_requested().exchange(false, std::memory_order_acq_rel);
 }
 
 // Guest memory, set once at image load (Fable2App::OnPostLoadXexImage) so the
@@ -162,26 +154,9 @@ inline float read_guest_float(rex::memory::Memory* mem, uint32_t guest_addr) {
   std::memcpy(&f, &bits, 4);
   return f;
 }
-inline void write_guest_float(rex::memory::Memory* mem, uint32_t guest_addr, float value) {
-  uint32_t bits;
-  std::memcpy(&bits, &value, 4);
-  uint32_t* p = mem->TranslateVirtual<uint32_t*>(guest_addr);
-  *p = __builtin_bswap32(bits);
-}
 inline uint32_t read_guest_u32(rex::memory::Memory* mem, uint32_t guest_addr) {
   const uint32_t* p = mem->TranslateVirtual<const uint32_t*>(guest_addr);
   return __builtin_bswap32(*p);
-}
-// Big-endian guest u16 access (matches REX_LOAD_U16 / REX_STORE_U16).
-// Keep this helper layout-agnostic; the standard X_INPUT_STATE layout is
-// documented at the user-0 wrapper that actually consumes it.
-inline uint16_t read_guest_u16(rex::memory::Memory* mem, uint32_t guest_addr) {
-  const uint16_t* p = mem->TranslateVirtual<const uint16_t*>(guest_addr);
-  return static_cast<uint16_t>(__builtin_bswap16(*p));
-}
-inline void write_guest_u16(rex::memory::Memory* mem, uint32_t guest_addr, uint16_t value) {
-  uint16_t* p = mem->TranslateVirtual<uint16_t*>(guest_addr);
-  *p = static_cast<uint16_t>(__builtin_bswap16(value));
 }
 // True if guest_addr points into a plausibly-valid guest region. Two ranges
 // matter: the recompiled image (code + data + globals) is mapped at 0x82xxxxxx,
@@ -213,11 +188,6 @@ inline Vec3 read_guest_vec3(rex::memory::Memory* mem, uint32_t guest_addr) {
   return Vec3{read_guest_float(mem, guest_addr + 0),
               read_guest_float(mem, guest_addr + 4),
               read_guest_float(mem, guest_addr + 8)};
-}
-inline void write_guest_vec3(rex::memory::Memory* mem, uint32_t guest_addr, const Vec3& v) {
-  write_guest_float(mem, guest_addr + 0, v.x);
-  write_guest_float(mem, guest_addr + 4, v.y);
-  write_guest_float(mem, guest_addr + 8, v.z);
 }
 inline float vec3_len(const Vec3& v) {
   return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
