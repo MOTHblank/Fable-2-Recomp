@@ -40,6 +40,8 @@
 #include <utility>
 #include <vector>
 
+#include <rex/cvar.h>
+
 #include "fable2_f5_lua.h"
 #include "fable2_button_prompt_strings.h"
 
