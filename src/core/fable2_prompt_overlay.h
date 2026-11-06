@@ -267,15 +267,26 @@ inline void EndLegacyTitleFrame() {
       // Element suppression is allowed only when the localized source scanner
       // also identified the exact image-tag ordinal. Count-only fallback is
       // intentionally not enough to skip a guest renderer element.
+      const uint32_t prior_icon =
+          LegacyTitleIconElementPointer().load(std::memory_order_acquire);
+      const bool same_confirmed_icon =
+          prior_icon != 0 && prior_icon == g_legacy_title_frame_icon_candidate;
+      // Learning a *new* guest element identity requires the title source to
+      // be actively tracked by the scanner. Once learned, the same pointer can
+      // remain valid after that heap allocation disappears. This stops a later
+      // same-sized generic UITextPrompt from replacing the title identity.
       const bool exact_icon =
           fable2::buttonprompts::TitleExpectedIconElementOrdinal() !=
               UINT32_MAX &&
-          g_legacy_title_frame_icon_candidate != 0;
+          g_legacy_title_frame_icon_candidate != 0 &&
+          (same_confirmed_icon || source_rewritten);
       LegacyTitleBakedLayoutConfirmed().store(exact_icon,
                                               std::memory_order_release);
-      LegacyTitleIconElementPointer().store(
-          exact_icon ? g_legacy_title_frame_icon_candidate : 0,
-          std::memory_order_release);
+      if (exact_icon) {
+        LegacyTitleIconElementPointer().store(
+            g_legacy_title_frame_icon_candidate,
+            std::memory_order_release);
+      }
       if (exact_icon && g_legacy_title_frame_position_valid) {
         LegacyTitleCanvasX().store(g_legacy_title_frame_canvas_x,
                                    std::memory_order_release);
