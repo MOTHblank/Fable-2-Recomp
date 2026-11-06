@@ -213,18 +213,23 @@ The verified title-screen prompt has a separate renderer:
 `Press <a_img> to start` source string may already have been discarded and
 the renderer receives only laid-out element/drawable data.
 
-`src/diagnostics/fable2_legacy_prompt.h` now bridges that specific path. It
-always forwards to the original renderer first, then uses the documented
-post-render element state only as a visibility/blink signal. No legacy draw
-object, material, texture or element list is rewritten.
+`src/diagnostics/fable2_legacy_prompt.h` bridges that specific path.
+The scanner now publishes both the localized layout counts and the exact
+0-based baked element ordinal/action of the first verified `<x_img>` tag.
+A stock seven-character image tag occupies one laid-out sprite, while the same
+seven code units become seven ordinary glyphs after the native keycap rewrite.
+`UITextPrompt_Render` is bracketed per invocation and its element calls are
+counted, so the adapter can prove whether the rendered layout actually consumed
+the source rewrite.
 
-The scanner publishes the exact expected element counts from the localized
-source string: a stock seven-character `<a_img>` tag occupies one laid-out
-sprite, while the same seven code units become seven ordinary glyphs after the
-native keycap rewrite. `UITextPrompt_Render` is bracketed per invocation and
-its element calls are counted. This proves whether the rendered layout actually
-consumed the source rewrite instead of assuming that a scanner hit happened
-early enough.
+The conservative path still forwards every element to the original renderer
+and uses documented post-render state only as a visibility/blink signal. After
+one frame positively matches the source-derived baked layout, the adapter also
+records the **exact guest element pointer** seen at the source-derived image
+ordinal. Only that same pointer at that same ordinal may have its next image
+draw skipped in keyboard mode. Text glyphs, unknown layouts, different element
+objects and controller mode always continue through the stock renderer. No
+material, texture bank, tag table or interaction behavior is modified.
 
 The legacy host keycap is allowed only when all of the following are true:
 
@@ -233,28 +238,37 @@ The legacy host keycap is allowed only when all of the following are true:
 - one `UITextPrompt_Render` invocation matches the localized title prompt's
   expected baked/rewritten structure;
 - that invocation has just rendered a visible drawable;
-- the observed element count still matches the baked controller-sprite layout.
+- the observed element count still matches the baked controller-sprite layout;
+- for renderer-level sprite suppression, the source scanner identified the
+  image-tag ordinal and the current guest element pointer is the exact pointer
+  learned from a previously confirmed baked title frame.
 
 As soon as a later title layout matches the expanded keyboard-glyph count, the
 fallback disables itself. The visibility pulse expires after roughly 110 ms,
 so it follows the title prompt's original blink instead of remaining
-continuously visible. It covers the already-baked A sprite at the authored
-bottom-center title position. `ui_prompt_legacy_offset_x` and
+continuously visible. When the exact sprite is safely suppressed, the host
+draws a normal compact keycap at the authored bottom-center title position.
+When only count-level evidence exists, it retains the larger opaque cover
+instead of risking a guest-renderer skip. `ui_prompt_legacy_offset_x` and
 `ui_prompt_legacy_offset_y` (default 0, range -128..128) allow live alignment
 correction without a code change.
 
-This is deliberately a cover/fallback, not a global controller-texture
-replacement. Switching back to a controller makes it disappear immediately,
-and other legacy prompt invocations cannot trigger the fixed title position
-because their element counts do not match the localized title structure.
+This remains a targeted fallback rather than a global controller-texture
+replacement. Switching back to a controller immediately uses the stock
+renderer. Other `UITextPrompt` invocations cannot inherit title suppression
+merely by sharing an element count: the current element must also match the
+source-derived ordinal **and** the exact guest pointer learned from the
+confirmed title layout.
 
 ## Remaining hard boundary
 
 Ordinary GameFace controller artwork and the verified legacy title prompt are
-now covered. The remaining unknown cases are narrower:
+now covered. The title path also removes its own baked face-button draw when
+source-derived element identity is available. The remaining unknown cases are
+narrower:
 
 - other legacy `UITextPrompt` / inline-sprite users for which no stable
-  element-to-screen-position contract has yet been identified;
+  action/element-to-screen-position contract has yet been identified;
 - presentation artwork that never appears in the traversable GameFace scene;
 - GameFace icon nodes whose own element and immediate wrapper expose no safe
   visibility attribute.
