@@ -210,6 +210,13 @@ dog_fur_depth_bias = true
 # every call); 0 = never yield; larger = fewer context switches.
 # Default: 4
 hotfunc_yield_every = 4
+
+# Native mapped game reads: memory-map read-only game:/d: files and satisfy
+# guest reads directly from the host OS page cache. Saves and any writable
+# files continue through ordinary file I/O. Disable this if you intentionally
+# replace game-content files while the game is running.
+# Default: true
+native_mapped_game_reads = true
 )TOML_EOF";
 
 std::string_view TypeName(toml::node_type t) {
@@ -361,6 +368,9 @@ bool Load(const std::filesystem::path& path) {
     values.hotfunc_yield_every = static_cast<int32_t>(Read<int64_t>(
         perf_table, "perf", "hotfunc_yield_every", "integer",
         values.hotfunc_yield_every));
+    values.native_mapped_game_reads = Read<bool>(
+        perf_table, "perf", "native_mapped_game_reads", "boolean",
+        values.native_mapped_game_reads);
   }
 
   g_values = values;
