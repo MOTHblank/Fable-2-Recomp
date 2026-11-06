@@ -44,6 +44,25 @@ native_save_snapshots = false
 #   Up:Up,Down:Down,Left:Left,Right:Right
 keyboard_gamepad_map = "LMB:X,RMB:Y,MMB:B,Shift:A,E:A,Q:LT,Tab:RB,R:RT,Z:LB,B:B,W:StickUp,S:StickDown,A:StickLeft,D:StickRight,Escape:Pause,M:Select,Up:Up,Down:Down,Left:Left,Right:Right"
 
+# Controller prompt presentation: "auto" follows the last meaningful physical
+# keyboard/mouse or controller input; "keyboard" and "controller" force one.
+# Default: "auto"
+prompt_mode = "auto"
+
+# Replace GameFace controller icons that have no writable companion text with
+# compact host-rendered keycaps. Default: true.
+prompt_overlay_fallback = true
+# Fine alignment in physical host pixels; range -128..128.
+prompt_overlay_offset_x = 0
+prompt_overlay_offset_y = 0
+
+# Last-resort title-screen fallback for a baked legacy <a_img> prompt that did
+# not consume the early native source rewrite. Default: true.
+prompt_legacy_fallback = true
+# Fine alignment in physical host pixels; range -128..128.
+prompt_legacy_offset_x = 0
+prompt_legacy_offset_y = 0
+
 # Map mouse movement to the guest right stick (camera look): sweep to look,
 # stop to stop. false disables mouse look entirely.
 # Default: true
