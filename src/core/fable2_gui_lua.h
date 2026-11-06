@@ -346,14 +346,18 @@ inline void drain(PPCContext& ctx, uint8_t* base) {
 
 inline void note_main_thread() { S().main_tid = std::this_thread::get_id(); }
 
-// Called by the console every frame (game thread).
-inline void poll(PPCContext& ctx, uint8_t* base) {
-  State& s = S();
-  static const bool bridge_on = [] {
+inline bool bridge_enabled() {
+  static const bool enabled = [] {
     const char* e = std::getenv("FABLE2_GUI_BRIDGE");
     return !(e && *e == '0');
   }();
-  if (!bridge_on) return;
+  return enabled;
+}
+
+// Called by the console every frame (game thread).
+inline void poll(PPCContext& ctx, uint8_t* base) {
+  State& s = S();
+  if (!bridge_enabled()) return;
   s.armed.store(true, std::memory_order_relaxed);
   s.main_tid = std::this_thread::get_id();
   s.frame.fetch_add(1, std::memory_order_relaxed);
@@ -414,6 +418,7 @@ inline std::string prompt_lua_quote(std::string_view value) {
 // or baked controller artwork stays native instead of being hidden blindly.
 // Originals are retained per Lua state, making controller switching reversible.
 inline void SyncButtonPrompts(bool keyboard) {
+  if (!bridge_enabled()) return;
   S().armed.store(true, std::memory_order_relaxed);
 
   const auto key = [](const char* cvar) {
