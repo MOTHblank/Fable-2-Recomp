@@ -96,6 +96,37 @@ The current pinned SDK revision is checked by
 `tools/prepare_runtime_sdk.py` for `MarkKeyboardPromptDevice`, so a partially
 updated SDK cannot silently lose this behavior.
 
+## Texture-only fallback
+
+Some GameFace button elements expose controller artwork but no writable text
+label. With `ui_prompt_overlay_fallback = true` (default), the adapter now
+handles those separately instead of leaving them permanently Xbox-only.
+
+For an unresolved known controller icon, the GameFace pass:
+
+1. computes its live position through the parent transform chain on the authored
+   1280x720 canvas;
+2. hides that specific icon using its own (or immediate wrapper's) opacity /
+   active attribute;
+3. returns the action and canvas position to the host;
+4. draws a compact, Fable-compatible dark/ivory keycap at that position through
+   the existing ImGui foreground layer.
+
+The host uses the same wide-window canvas transform as the game's HUD fitting
+code, so these keycaps follow arbitrary aspect ratios instead of assuming a
+fixed 16:9 framebuffer. Presentation reports expire automatically after roughly
+two seconds, which prevents stale overlays surviving screen changes.
+
+The fallback remains last-device aware. Controller mode restores the GameFace
+attributes and clears the host entries. Changing
+`ui_prompt_overlay_fallback` also participates in the adapter signature, so
+turning it off restores unresolved Xbox artwork on the next synchronization
+rather than merely hiding the host keycap.
+
+Known alternate/pressed assets such as `icon_button_a2` are normalized to the
+same logical action. The fallback still refuses to hide an element when neither
+it nor its immediate wrapper exposes a safe visibility attribute.
+
 ## Remaining hard boundary
 
 Fable II still contains artwork that may be fully baked into a presentation,
