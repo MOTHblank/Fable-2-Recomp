@@ -16,19 +16,38 @@ inline std::string Trim(std::string_view v) {
 }
 
 inline std::string DisplayKey(std::string_view bindings) {
-  // The native ReXGlue binding is an ordered comma-separated list of keys.
-  // Prefer a normal key over a mouse button, and skip bare modifiers (the
-  // native driver's modifier-matching rules make bare Shift/Ctrl unusable).
-  std::string mouse;
-  while (!bindings.empty()) {
-    const size_t comma = bindings.find(',');
-    const std::string key = Trim(bindings.substr(0, comma));
-    bindings = comma == std::string_view::npos ? std::string_view{} :
-                                                    bindings.substr(comma + 1);
-    if (key.empty() || key.find('+') != std::string::npos) continue;
+  // ReXGlue bindings are comma-separated alternatives. Prefer a keyboard key
+  // over a mouse button, but preserve compact modifier chords such as
+  // Shift+Up -> S+Up so D-pad and menu prompts can be represented too.
+  auto compact = [](std::string_view raw, bool& mouse_key) -> std::string {
+    std::string token = Trim(raw);
+    mouse_key = false;
+    if (token.empty()) return {};
+
+    std::string prefix;
+    std::string_view rest = token;
+    for (;;) {
+      const size_t plus = rest.find('+');
+      if (plus == std::string_view::npos) break;
+      std::string mod = Trim(rest.substr(0, plus));
+      std::string u;
+      for (unsigned char ch : mod) u += static_cast<char>(std::toupper(ch));
+      if (u == "SHIFT") prefix += "S+";
+      else if (u == "CTRL" || u == "CONTROL") prefix += "C+";
+      else if (u == "ALT") prefix += "A+";
+      else return {};
+      rest.remove_prefix(plus + 1);
+    }
+
+    std::string key = Trim(rest);
+    if (key.empty()) return {};
     std::string u;
-    for (unsigned char c : key) u += static_cast<char>(std::toupper(c));
-    if (u == "SHIFT" || u == "CTRL" || u == "CONTROL" || u == "ALT") continue;
+    for (unsigned char ch : key) u += static_cast<char>(std::toupper(ch));
+    if (prefix.empty() &&
+        (u == "SHIFT" || u == "CTRL" || u == "CONTROL" || u == "ALT")) {
+      return {};
+    }
+
     std::string shown = key;
     if (u == "RETURN") shown = "Enter";
     else if (u == "SPACE") shown = "Space";
@@ -36,14 +55,37 @@ inline std::string DisplayKey(std::string_view bindings) {
     else if (u == "BACKSPACE") shown = "Bksp";
     else if (u == "SEMICOLON") shown = ";";
     else if (u == "QUOTE") shown = "'";
+    else if (u == "LEFT") shown = prefix.empty() ? "Left" : "Lt";
+    else if (u == "RIGHT") shown = prefix.empty() ? "Right" : "Rt";
+    else if (u == "DOWN") shown = prefix.empty() ? "Down" : "Dn";
+    else if (u == "UP") shown = "Up";
     else if (u == "LMB" || u == "RMB" || u == "MMB" ||
              u == "XMB1" || u == "XMB2") {
-      if (mouse.empty()) mouse = u;
+      mouse_key = true;
+      shown = u;
+    }
+
+    shown = prefix + shown;
+    return shown.size() <= 5 ? shown : std::string{};
+  };
+
+  std::string mouse;
+  while (!bindings.empty()) {
+    const size_t comma = bindings.find(',');
+    const std::string_view raw = bindings.substr(0, comma);
+    bindings = comma == std::string_view::npos
+                   ? std::string_view{}
+                   : bindings.substr(comma + 1);
+    bool is_mouse = false;
+    std::string shown = compact(raw, is_mouse);
+    if (shown.empty()) continue;
+    if (is_mouse) {
+      if (mouse.empty()) mouse = std::move(shown);
       continue;
     }
-    if (shown.size() <= 5) return shown;
+    return shown;
   }
-  return mouse;  // empty means leave the original Xbox icon untouched
+  return mouse;  // empty means preserve the native Xbox artwork
 }
 
 using KeyLabels = std::array<std::string, 4>;  // A, B, X, Y
