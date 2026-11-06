@@ -26,6 +26,9 @@
 
 #include "fable2_button_prompt_strings.h"
 
+REXCVAR_DECLARE(int32_t, ui_prompt_overlay_offset_x);
+REXCVAR_DECLARE(int32_t, ui_prompt_overlay_offset_y);
+
 namespace fable2::promptoverlay {
 
 using Clock = std::chrono::steady_clock;
@@ -194,33 +197,77 @@ class PromptOverlayDialog final : public rex::ui::ImGuiDialog {
     constexpr ImU32 kText = IM_COL32(247, 239, 216, 255);
     constexpr ImU32 kShadow = IM_COL32(0, 0, 0, 105);
 
+    const float nudge_x =
+        static_cast<float>(REXCVAR_GET(ui_prompt_overlay_offset_x));
+    const float nudge_y =
+        static_cast<float>(REXCVAR_GET(ui_prompt_overlay_offset_y));
+
+    auto key_width = [&](std::string_view part) {
+      const ImVec2 size = font->CalcTextSizeA(
+          font_size, 1000.0f, 0.0f, part.data(), part.data() + part.size());
+      return std::max(24.0f, size.x + 12.0f);
+    };
+
     for (const Entry& entry : entries) {
       const std::string label = ActionLabel(entry.action);
       if (label.empty()) continue;
 
-      const float cx = (entry.x - canvas_left) * canvas_to_screen;
-      const float cy = entry.y * canvas_to_screen;
+      const float cx = (entry.x - canvas_left) * canvas_to_screen + nudge_x;
+      const float cy = entry.y * canvas_to_screen + nudge_y;
       if (cx < -96.0f || cy < -64.0f ||
           cx > io.DisplaySize.x + 96.0f || cy > io.DisplaySize.y + 64.0f) {
         continue;
       }
 
-      const ImVec2 text_size =
-          font->CalcTextSizeA(font_size, 1000.0f, 0.0f, label.c_str());
-      const float box_w = std::max(24.0f, text_size.x + 12.0f);
-      const float box_h = std::max(20.0f, text_size.y + 7.0f);
-      const ImVec2 p0(cx - box_w * 0.5f, cy - box_h * 0.5f);
-      const ImVec2 p1(cx + box_w * 0.5f, cy + box_h * 0.5f);
+      std::vector<std::string_view> parts;
+      std::string_view remaining = label;
+      while (!remaining.empty() && parts.size() < 3) {
+        const size_t plus = remaining.find('+');
+        parts.push_back(remaining.substr(0, plus));
+        if (plus == std::string_view::npos) break;
+        remaining.remove_prefix(plus + 1);
+      }
+      if (parts.empty()) continue;
 
-      draw->AddRectFilled(ImVec2(p0.x + 1.5f, p0.y + 2.0f),
-                          ImVec2(p1.x + 1.5f, p1.y + 2.0f),
-                          kShadow, 4.0f);
-      draw->AddRectFilled(p0, p1, kFill, 4.0f);
-      draw->AddRect(p0, p1, kBorder, 4.0f, 0, 1.0f);
-      draw->AddText(font, font_size,
-                    ImVec2(cx - text_size.x * 0.5f,
-                           cy - text_size.y * 0.5f),
-                    kText, label.c_str());
+      const ImVec2 plus_size =
+          font->CalcTextSizeA(font_size, 1000.0f, 0.0f, "+");
+      constexpr float kGap = 5.0f;
+      float total_w = 0.0f;
+      for (std::string_view part : parts) total_w += key_width(part);
+      if (parts.size() > 1) {
+        total_w += static_cast<float>(parts.size() - 1) *
+                   (plus_size.x + kGap * 2.0f);
+      }
+
+      float cursor = cx - total_w * 0.5f;
+      for (size_t i = 0; i < parts.size(); ++i) {
+        const std::string_view part = parts[i];
+        const ImVec2 text_size = font->CalcTextSizeA(
+            font_size, 1000.0f, 0.0f, part.data(), part.data() + part.size());
+        const float box_w = key_width(part);
+        const float box_h = std::max(20.0f, text_size.y + 7.0f);
+        const ImVec2 p0(cursor, cy - box_h * 0.5f);
+        const ImVec2 p1(cursor + box_w, cy + box_h * 0.5f);
+
+        draw->AddRectFilled(ImVec2(p0.x + 1.5f, p0.y + 2.0f),
+                            ImVec2(p1.x + 1.5f, p1.y + 2.0f),
+                            kShadow, 4.0f);
+        draw->AddRectFilled(p0, p1, kFill, 4.0f);
+        draw->AddRect(p0, p1, kBorder, 4.0f, 0, 1.0f);
+        draw->AddText(font, font_size,
+                      ImVec2(cursor + (box_w - text_size.x) * 0.5f,
+                             cy - text_size.y * 0.5f),
+                      kText, part.data(), part.data() + part.size());
+        cursor += box_w;
+
+        if (i + 1 < parts.size()) {
+          cursor += kGap;
+          draw->AddText(font, font_size,
+                        ImVec2(cursor, cy - plus_size.y * 0.5f),
+                        kBorder, "+");
+          cursor += plus_size.x + kGap;
+        }
+      }
     }
   }
 };
