@@ -789,6 +789,22 @@ local function hidden_by_adapter(target)
          hidden_attribute_by_adapter(target, "diffuse.a")
 end
 
+local function adapter_hide_record(target)
+  for i = 1, #P.changed do
+    local x = P.changed[i]
+    if x.e == target and
+       (x.a == "opacity" or x.a == "active" or x.a == "diffuse.a") then
+      local current = attr(target, x.a)
+      if current == x.applied or
+         (x.a == "diffuse.a" and x.applied == 0 and
+          tonumber(current) and tonumber(current) <= 0.01) then
+        return x
+      end
+    end
+  end
+  return nil
+end
+
 local function visible_for_overlay(e)
   local cur = e
   for _ = 1, 4 do
@@ -973,6 +989,22 @@ local function walk(e, depth)
       if text_el and not used_text[text_el] and visible_for_prompt(e) then
         local hide_target, icon_attr, old_icon, icon_value =
             choose_visual_hide(e)
+
+        -- A dynamic presentation may create the writable label after this
+        -- icon was already assigned to the host overlay. Reuse that exact
+        -- adapter-owned hide instead of restoring/flashing the Xbox artwork
+        -- before promoting the prompt to native GameFace text.
+        local overlay_info = P.overlay_icons[e]
+        if not hide_target and overlay_info and overlay_info.target then
+          local hidden = adapter_hide_record(overlay_info.target)
+          if hidden then
+            hide_target = overlay_info.target
+            icon_attr = hidden.a
+            old_icon = hidden.v
+            icon_value = hidden.applied
+          end
+        end
+
         if hide_target and old_icon ~= nil then
           local old_text = attr(text_el, "textstring")
           local prefix = "[" .. label .. "]"
@@ -994,6 +1026,7 @@ local function walk(e, depth)
                 target=hide_target,
                 attr=icon_attr, icon_value=icon_value
               }
+              P.overlay_icons[e] = nil
               used_text[text_el] = true
             elseif text_ok then
               pcall(setAttribute, text_el, "textstring", old_text)
