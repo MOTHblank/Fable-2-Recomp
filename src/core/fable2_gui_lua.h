@@ -763,31 +763,45 @@ local function world_pos(e)
   return x, y
 end
 
-local function hidden_by_adapter(target)
+local function hidden_attribute_by_adapter(target, attribute)
   for i = 1, #P.changed do
     local x = P.changed[i]
-    if x.e == target then
-      local current = attr(target, x.a)
-      if x.a == "opacity" and x.applied == 0 and current == 0 then return true end
-      if x.a == "active" and x.applied == false and current == false then return true end
-      if x.a == "diffuse.a" and x.applied == 0 and
-         tonumber(current) and tonumber(current) <= 0.01 then return true end
+    if x.e == target and x.a == attribute then
+      local current = attr(target, attribute)
+      if attribute == "opacity" and x.applied == 0 and current == 0 then
+        return true
+      end
+      if attribute == "active" and x.applied == false and current == false then
+        return true
+      end
+      if attribute == "diffuse.a" and x.applied == 0 and
+         tonumber(current) and tonumber(current) <= 0.01 then
+        return true
+      end
     end
   end
   return false
+end
+
+local function hidden_by_adapter(target)
+  return hidden_attribute_by_adapter(target, "opacity") or
+         hidden_attribute_by_adapter(target, "active") or
+         hidden_attribute_by_adapter(target, "diffuse.a")
 end
 
 local function visible_for_overlay(e)
   local cur = e
   for _ = 1, 4 do
     if not cur then break end
-    local ours = hidden_by_adapter(cur)
     local opacity = tonumber(attr(cur, "opacity"))
-    if opacity and opacity <= 0.01 and not ours then return false end
+    if opacity and opacity <= 0.01 and
+       not hidden_attribute_by_adapter(cur, "opacity") then return false end
     local active = attr(cur, "active")
-    if (active == false or active == 0) and not ours then return false end
+    if (active == false or active == 0) and
+       not hidden_attribute_by_adapter(cur, "active") then return false end
     local diffuse_a = tonumber(attr(cur, "diffuse.a"))
-    if diffuse_a and diffuse_a <= 0.01 and not ours then return false end
+    if diffuse_a and diffuse_a <= 0.01 and
+       not hidden_attribute_by_adapter(cur, "diffuse.a") then return false end
     cur = parent(cur)
   end
   return true
