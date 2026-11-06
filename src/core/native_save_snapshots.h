@@ -42,6 +42,7 @@ inline SnapshotResult SnapshotAtStartup(const fs::path& game_dir) {
     total += bytes;
     relative_files.push_back(it->path().lexically_relative(source));
   }
+  if (ec) return SnapshotResult::kFailed;
   if (relative_files.empty()) return SnapshotResult::kNoSaves;
 
   // Keep the last three complete snapshots. The pending directory is never
