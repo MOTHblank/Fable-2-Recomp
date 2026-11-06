@@ -563,6 +563,74 @@ local function nearby_text(icon)
   return nil
 end
 
+local function replace_plain(s, needle, replacement)
+  local out, from = {}, 1
+  while true do
+    local a, b = s:find(needle, from, true)
+    if not a then
+      out[#out + 1] = s:sub(from)
+      break
+    end
+    out[#out + 1] = s:sub(from, a - 1)
+    out[#out + 1] = replacement
+    from = b + 1
+  end
+  return table.concat(out)
+end
+
+local function instruction_replace(s, verb, token, label)
+  if not label or label == "" then return s end
+  local needle = verb .. " " .. token
+  local replacement = verb .. " [" .. label .. "]"
+  local out, from = {}, 1
+  while true do
+    local a, b = s:find(needle, from, true)
+    if not a then
+      out[#out + 1] = s:sub(from)
+      break
+    end
+    local after = s:sub(b + 1, b + 1)
+    -- Do not turn "Press A..." in an ordinary word such as "Press Alt" into
+    -- a prompt. Punctuation, whitespace and end-of-string are boundaries.
+    if after ~= "" and after:match("[%w_]") then
+      out[#out + 1] = s:sub(from, b)
+      from = b + 1
+    else
+      out[#out + 1] = s:sub(from, a - 1)
+      out[#out + 1] = replacement
+      from = b + 1
+    end
+  end
+  return table.concat(out)
+end
+
+local function rewrite_prompt_text(t)
+  local r = t
+  local tag_actions = {
+    {"<a_img>", "A"}, {"<b_img>", "B"},
+    {"<c_img>", "X"}, {"<d_img>", "Y"},
+    {"<x_img>", "X"}, {"<y_img>", "Y"},
+  }
+  for i = 1, #tag_actions do
+    local x = tag_actions[i]
+    local label = __labels[x[2]]
+    if label and label ~= "" then
+      r = replace_plain(r, x[1], "[" .. label .. "]")
+    end
+  end
+  local tokens = {
+    {"A", "A"}, {"B", "B"}, {"X", "X"}, {"Y", "Y"},
+    {"Start", "START"}, {"Back", "BACK"},
+  }
+  for _, verb in ipairs({"Press", "Hold", "Tap"}) do
+    for i = 1, #tokens do
+      local x = tokens[i]
+      r = instruction_replace(r, verb, x[1], __labels[x[2]])
+    end
+  end
+  return r
+end
+
 local used_text = {}
 local ok_scene, scene = pcall(getElement, "Scene")
 if not ok_scene or not scene then scene = rawget(_G, "SCENE") end
@@ -572,6 +640,11 @@ local seen = 0
 local function walk(e, depth)
   if depth > 16 or seen > 2500 then return end
   seen = seen + 1
+  local raw_text = text_of(e)
+  if raw_text then
+    local rewritten = rewrite_prompt_text(raw_text)
+    if rewritten ~= raw_text then remember_set(e, "textstring", rewritten) end
+  end
   local n = element_name(e):gsub("\\", "/")
   n = n:match("([^/]+)$") or n
   local action = aliases[n]
