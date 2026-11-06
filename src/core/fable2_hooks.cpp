@@ -21,15 +21,11 @@
 
 REXCVAR_DECLARE(bool, mouse_direct_look);
 REXCVAR_DECLARE(bool, mouse_look);
-REXCVAR_DECLARE(int32_t, mouse_look_scale);
-REXCVAR_DECLARE(int32_t, mouse_look_scale_y);
-REXCVAR_DECLARE(bool, mouse_invert_y);
 
 #include <fmt/format.h>
 
 #include "fable2_config.h"
 #include "mouse_look.h"  // guest camera memory read helpers for diagnostics
-#include <rex/input/mnk/mnk_input_driver.h>
 
 // ---------------------------------------------------------------------------
 // Guild chest unlock (fable2.com website items + Collectors Edition content).
