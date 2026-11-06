@@ -16,6 +16,7 @@
 #include <array>
 #include <format>
 #include <fstream>
+#include <limits>
 
 #include <rex/logging/macros.h>
 #include <rex/system.h>
@@ -429,15 +430,23 @@ bool Load(const std::filesystem::path& path) {
   g_values = values;
   if (values.native_save_snapshots) {
     constexpr std::uintmax_t kMiB = 1024ull * 1024ull;
-    const std::uintmax_t max_bytes =
-        values.native_save_snapshot_max_mib > 0
-            ? static_cast<std::uintmax_t>(values.native_save_snapshot_max_mib) *
-                  kMiB
-            : 0;
-    const std::size_t max_files =
-        values.native_save_snapshot_max_files > 0
-            ? static_cast<std::size_t>(values.native_save_snapshot_max_files)
-            : 0;
+    std::uintmax_t max_bytes = 0;
+    if (values.native_save_snapshot_max_mib > 0) {
+      const auto mib =
+          static_cast<std::uintmax_t>(values.native_save_snapshot_max_mib);
+      max_bytes =
+          mib > std::numeric_limits<std::uintmax_t>::max() / kMiB
+              ? std::numeric_limits<std::uintmax_t>::max()
+              : mib * kMiB;
+    }
+    std::size_t max_files = 0;
+    if (values.native_save_snapshot_max_files > 0) {
+      const auto files =
+          static_cast<std::uintmax_t>(values.native_save_snapshot_max_files);
+      max_files = files > std::numeric_limits<std::size_t>::max()
+                      ? std::numeric_limits<std::size_t>::max()
+                      : static_cast<std::size_t>(files);
+    }
     const auto result =
         native_saves::SnapshotAtStartup(path.parent_path(), max_bytes, max_files);
     if (result == native_saves::SnapshotResult::kCreated)
