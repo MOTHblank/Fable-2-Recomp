@@ -334,6 +334,8 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
   std::vector<Patched> patches;
   ActionLabels previous_actions{};
   bool previous_keyboard = false;
+  bool previous_overlay = false;
+  bool have_previous = false;
   auto next_title = std::chrono::steady_clock::now();
   auto next_fast = next_title;
   auto next_full = next_title;
@@ -348,9 +350,17 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
     // conservative auto fallback instead of silently hiding the feature.
     const bool keyboard = mode == "keyboard" ||
         (mode != "controller" && active != "false");
+    const bool overlay =
+        rex::cvar::GetFlagByName("ui_prompt_overlay_fallback") != "false";
     const auto actions = keyboard ? CurrentActions() : ActionLabels{};
     const auto keys = FaceKeys(actions);
-    if (keyboard != previous_keyboard || actions != previous_actions) {
+    const bool source_changed =
+        !have_previous || keyboard != previous_keyboard ||
+        actions != previous_actions;
+    const bool graphical_changed =
+        source_changed || overlay != previous_overlay;
+
+    if (source_changed) {
       Restore(patches);
       previous_actions = actions;
       previous_keyboard = keyboard;
@@ -359,6 +369,10 @@ inline void Loop(std::stop_token stop, uint8_t* arena) {
       Log(keyboard ? "keyboard mode" : "controller mode",
           "input=" + active + " A=" + keys[0] +
           " B=" + keys[1] + " X=" + keys[2] + " Y=" + keys[3]);
+    }
+    if (graphical_changed) {
+      previous_overlay = overlay;
+      have_previous = true;
       SyncGraphicalPrompts(keyboard);
       next_gui_sync = std::chrono::steady_clock::now() +
                       std::chrono::milliseconds(750);
