@@ -190,9 +190,10 @@ inline void NoteLegacyTitleDrawPosition(float x, float y) {
     return;
   }
   // This hook is title-specific today. Keep the accepted window deliberately
-  // close to the verified authored fallback so unrelated stack floats cannot
-  // relocate the keycap. The fixed (640,560) path remains the fallback.
-  if (x < 320.0f || x > 960.0f || y < 380.0f || y > 700.0f) return;
+  // tight around the verified authored fallback (±160 X, ±120 Y) so unrelated
+  // stack floats cannot relocate the keycap. The fixed (640,560) path remains
+  // the fallback whenever no trustworthy pair is observed.
+  if (x < 480.0f || x > 800.0f || y < 440.0f || y > 680.0f) return;
   g_legacy_title_frame_canvas_x = x;
   g_legacy_title_frame_canvas_y = y;
   g_legacy_title_frame_position_valid = true;
