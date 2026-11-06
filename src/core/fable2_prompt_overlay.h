@@ -660,26 +660,15 @@ inline std::vector<Entry> Snapshot() {
 }
 
 inline std::string ActionLabel(std::string_view action) {
-  const char* cvar = nullptr;
-  if (action == "A") cvar = "keybind_a";
-  else if (action == "B") cvar = "keybind_b";
-  else if (action == "X") cvar = "keybind_x";
-  else if (action == "Y") cvar = "keybind_y";
-  else if (action == "LB") cvar = "keybind_left_shoulder";
-  else if (action == "RB") cvar = "keybind_right_shoulder";
-  else if (action == "LT") cvar = "keybind_left_trigger";
-  else if (action == "RT") cvar = "keybind_right_trigger";
-  else if (action == "START") cvar = "keybind_start";
-  else if (action == "BACK") cvar = "keybind_back";
-  else if (action == "LS") cvar = "keybind_lstick_press";
-  else if (action == "RS") cvar = "keybind_rstick_press";
-  else if (action == "UP") cvar = "keybind_dpad_up";
-  else if (action == "DOWN") cvar = "keybind_dpad_down";
-  else if (action == "LEFT") cvar = "keybind_dpad_left";
-  else if (action == "RIGHT") cvar = "keybind_dpad_right";
-  return cvar ? fable2::buttonprompts::DisplayKey(
-                    rex::cvar::GetFlagByName(cvar), 20)
-              : std::string{};
+  static constexpr std::array<std::string_view, 16> names{
+      "A", "B", "X", "Y", "LB", "RB", "LT", "RT",
+      "START", "BACK", "LS", "RS", "UP", "DOWN", "LEFT", "RIGHT"};
+  for (size_t i = 0; i < names.size(); ++i) {
+    if (action == names[i]) {
+      return fable2::buttonprompts::CurrentActionLabel(i, 20);
+    }
+  }
+  return {};
 }
 
 inline bool KeyboardModeActive() {
