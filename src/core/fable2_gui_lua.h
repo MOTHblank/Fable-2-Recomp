@@ -841,10 +841,15 @@ end
 local full_scan = not P.discovered or not __overlay or
                   (P.refresh_count % 8) == 0
 
-local seen = 0
+local seen, truncated = 0, false
+local present = {}
 local function walk(e, depth)
-  if depth > 16 or seen > 2500 then return end
+  if depth > 16 or seen >= 2500 then
+    truncated = true
+    return
+  end
   seen = seen + 1
+  present[e] = true
   local raw_text = text_of(e)
   if raw_text then
     local rewritten = rewrite_prompt_text(raw_text)
@@ -909,6 +914,35 @@ end
 if full_scan then
   walk(scene, 0)
   P.discovered = true
+
+  -- Dynamic presentations may destroy/recreate nodes without changing Lua
+  -- state. If this walk covered the whole bounded scene, safely restore and
+  -- forget tracked elements that are no longer attached. Restoration keeps the
+  -- usual exact-applied-value rule so a detached element modified by the game
+  -- is never overwritten. If the safety depth/count limit truncated the walk,
+  -- skip reconciliation because absence from 'present' is not evidence.
+  if not truncated then
+    for i = #P.changed, 1, -1 do
+      local x = P.changed[i]
+      if x and x.e and not present[x.e] then
+        local current = attr(x.e, x.a)
+        if x.applied == nil or current == x.applied then
+          pcall(setAttribute, x.e, x.a, x.v)
+        end
+        table.remove(P.changed, i)
+      end
+    end
+    for icon, info in pairs(P.icons) do
+      if not present[icon] or not (info and info.text and present[info.text]) then
+        P.icons[icon] = nil
+      end
+    end
+    for icon, info in pairs(P.overlay_icons) do
+      if not present[icon] or not (info and info.target and present[info.target]) then
+        P.overlay_icons[icon] = nil
+      end
+    end
+  end
 end
 return "__f2_prompt_overlay|k" .. (__overlay and "1" or "0") ..
        "|" .. table.concat(overlay_out, ";")
