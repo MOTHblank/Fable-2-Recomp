@@ -12,8 +12,7 @@ never writes `cam+144/160/176`.
 
 The active Direct pipeline is now:
 
-1. SDL relative mouse motion enters the SDK raw-motion side channel only while the previous
-   hero-follow frame is eligible for Direct input.
+1. SDL relative mouse motion enters the SDK raw-motion side channel while Direct is eligible.
 2. The strong-symbol override
    `src/core/hotfunc/input/ProcessAndProcessAndProcess1013_822B2D60.cpp` calls the original
    11-line guest `XamInputGetState` wrapper, then modifies **only guest user 0's** successful
@@ -21,22 +20,21 @@ The active Direct pipeline is now:
 3. Mouse X/Y are added to that state's native `sThumbRX` / `sThumbRY`. Physical controller,
    keyboard, and other merged input remain additive; guest users 1-3 are returned byte-for-byte
    unchanged.
-4. The game may poll user 0 more than once before camera update, so the wrapper **peeks** the
+4. The user-0 wrapper owns route eligibility. Ordinary polls enable Direct. LT (Look-At / Target
+   Lock), LB (first-person), and R3 (View Hero / vanity camera) disable Direct and use the SDK's
+   ordinary virtual-stick mouse mapping until those controls are released.
+5. The game may poll user 0 more than once before camera update, so the wrapper **peeks** the
    frame's raw displacement rather than consuming it. The first later `CECCameraUpdateFrame`
    hook drains the displacement; subsequent camera updates in the same frame drain zero.
-5. The original game therefore owns the camera result after input: easing, native bounds,
-   collision/obstruction behavior, authored framing, lock-ons and special-camera handling all
-   remain downstream.
-6. The `0x822A47F8` hook classifies camera state for routing. Persistent route state belongs
-   only to the hero-follow camera; secondary/cinematic camera updates are observational and no
-   longer look like false "camera changes" when two cameras update in one frame.
-7. Native fallback is explicit at the verified user-0 `X_INPUT_STATE`: LT (Look-At / Target
-   Lock), LB (first-person), and R3 (View Hero / vanity camera) immediately disable raw routing
-   and latch that decision through the later camera hook.
-8. Route selection has hysteresis: leave Direct when native pose correction exceeds 0.50; while
-   fallback is active require correction below 0.20 for three consecutive clear hero-follow
-   frames before re-entering Direct. SDK/raw accumulators are invalidated at route handoffs so
-   no old displacement can reappear as a snap.
+6. `fable2_hook_direct_mouse_look` at `0x822A47F8` is now **observational only**. It never
+   changes Direct eligibility and never writes camera state. It correlates user-0 injections with
+   the native camera result for RE/diagnostics.
+7. Collision, obstruction, authored/scripted framing, easing, camera bounds and other camera
+   constraints stay downstream in the original game code. They no longer trigger a fallback,
+   because Direct input reaches them as the same native right-stick state a physical pad uses.
+8. Live Direct/Native mode changes explicitly clear Direct eligibility and raw accumulated motion;
+   the next successful user-0 Direct poll re-authorizes the raw side channel. No camera pointer
+   tracking or correction-threshold hysteresis is required.
 
 ### Why `0x832BB018` is no longer the injection site
 
@@ -60,8 +58,10 @@ mouse injection.
 
 Direct mode still enters the native pipeline as signed 16-bit `sThumbRX/sThumbRY`, so a
 sufficiently large mouse delta can saturate at the same instantaneous axis limit as a real stick.
-This is intentionally preferable to inventing a parallel camera pose. A genuinely uncapped mouse
-path requires a verified **post-deadzone / pre-camera angular or normalized input stage**.
+This is intentionally preferable to inventing a parallel camera pose. Optional mouse-only
+deadzone compensation now matches the SDK Native mapping, which fixes the separate low-speed
+problem without buffering or touching physical-pad axes. A genuinely uncapped mouse path still
+requires a verified **post-deadzone / pre-camera angular or normalized input stage**.
 
 The next RE target is therefore no longer "find a safe place to inject a pad": that is solved.
 It is specifically to trace user-0 right-stick RX/RY from the wrapper into the first normalized
