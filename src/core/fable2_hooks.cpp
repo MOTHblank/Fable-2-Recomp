@@ -198,6 +198,7 @@ bool fable2_hook_high_hf_tick_rate_skip_store() {
 enum class DirectMouseResult {
   kApplied,
   kNotHero,
+  kNativeConstraint,
   kInvalidPose,
   kInvalidOutput,
   kInvalidInput
@@ -232,8 +233,23 @@ static DirectMouseResult ApplyDirectMouseOrbit(rex::memory::Memory* mem,
     return DirectMouseResult::kInvalidOutput;
   const Vec3 view_delta{view_out.x - eye.x, view_out.y - eye.y,
                         view_out.z - eye.z};
-  if (vec3_len(view_delta) > 12.0f)
+  const float native_correction = vec3_len(view_delta);
+  if (native_correction > 12.0f)
     return DirectMouseResult::kInvalidOutput;
+
+  // cam+0x90 is the camera's requested eye while r1+0x60 is the eye produced
+  // by the native frame update. A meaningful disagreement means the original
+  // camera has already corrected its requested pose (for example obstruction,
+  // collision avoidance or authored framing). Do not overwrite that resolved
+  // frame with the unconstrained direct orbit: yielding here makes the SDK
+  // route subsequent mouse motion through the game's native right-stick path.
+  //
+  // The threshold is intentionally conservative relative to the ~3.1-unit
+  // hero-follow radius: small interpolation noise is accepted, but a correction
+  // large enough to be perceptible returns control to the native camera.
+  constexpr float kNativeCorrectionLimit = 0.50f;
+  if (native_correction > kNativeCorrectionLimit)
+    return DirectMouseResult::kNativeConstraint;
 
   const Quat native_q = read_guest_quat(mem, cam + 160);
   const float norm = native_q.x * native_q.x + native_q.y * native_q.y +
@@ -341,7 +357,7 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
   }
   if (!direct) rex::input::mnk::SetDirectMouseEligible(false);
 
-  static uint64_t calls = 0, applied = 0, not_hero = 0;
+  static uint64_t calls = 0, applied = 0, not_hero = 0, constrained = 0;
   static uint64_t invalid_pose = 0, invalid_output = 0, invalid_input = 0;
   ++calls;
   // One native frame after camera/mode changes avoids applying stale mouse
@@ -357,6 +373,7 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
     switch (result) {
       case DirectMouseResult::kApplied: ++applied; break;
       case DirectMouseResult::kNotHero: ++not_hero; break;
+      case DirectMouseResult::kNativeConstraint: ++constrained; break;
       case DirectMouseResult::kInvalidPose: ++invalid_pose; break;
       case DirectMouseResult::kInvalidOutput: ++invalid_output; break;
       case DirectMouseResult::kInvalidInput: ++invalid_input; break;
@@ -393,9 +410,9 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
     if (cfg.mouse_look_camera_diag && calls % 300 == 0) {
       REXSYS_INFO(
           "[mouse-camera] enabled=1 hook={} applied={} not-hero={} "
-          "bad-pose={} bad-stack={} bad-input={} raw-events={} capture-resets={} "
-          "cam=0x{:08X} sp=0x{:08X}",
-          calls, applied, not_hero, invalid_pose, invalid_output, invalid_input,
+          "native-constraint={} bad-pose={} bad-stack={} bad-input={} "
+          "raw-events={} capture-resets={} cam=0x{:08X} sp=0x{:08X}",
+          calls, applied, not_hero, constrained, invalid_pose, invalid_output, invalid_input,
           fable2::mouselook::raw_motion_events().load(std::memory_order_relaxed),
           fable2::mouselook::capture_resets().load(std::memory_order_relaxed),
           cam, r1.u32);
