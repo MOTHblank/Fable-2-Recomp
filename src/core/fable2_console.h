@@ -46,6 +46,7 @@
 #include <thread>
 #include <vector>
 
+#include "console_gamepad_state.h"
 #include "fable2_f5_lua.h"
 #include "fable2_fit_window.h"
 #include "fable2_gui_lua.h"
@@ -66,19 +67,6 @@ REXCVAR_DEFINE_BOOL(console_enabled, true, "Input",
                     "next to the game data). On by default; false or FABLE2_CONSOLE=0 turns it off.");
 
 namespace fable2::console {
-
-// Console gamepad: `pad` presses guest buttons through a synthetic pad that
-// fable_2_app.h always registers (the remote-pad driver, fed from this store),
-// so menus and the intro can be driven from console\in.txt or autoexec.txt
-// without window focus.
-inline fable2::remote::InputStateStore& PadStore() {
-  static fable2::remote::InputStateStore s;
-  return s;
-}
-inline std::atomic<bool>& PadEnabled() {
-  static std::atomic<bool> on{true};
-  return on;
-}
 
 // Every UI aspect change (window resize, ws on/off/aspect) goes to all GUI
 // screens as __fitwin_A, which the fit-window layout script re-reads each
