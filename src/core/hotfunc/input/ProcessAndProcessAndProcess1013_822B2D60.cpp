@@ -113,7 +113,13 @@ extern "C" void ProcessAndProcessAndProcess1013_822B2D60(
   const int32_t y_scale =
       REXCVAR_GET(mouse_invert_y) ? scale_y : -scale_y;
 
-  REX_STORE_U16(state_ptr + 12, AddMouseAxis(native_rx, mouse_dx, scale_x));
-  REX_STORE_U16(state_ptr + 14, AddMouseAxis(native_ry, mouse_dy, y_scale));
+  const uint16_t injected_rx = AddMouseAxis(native_rx, mouse_dx, scale_x);
+  const uint16_t injected_ry = AddMouseAxis(native_ry, mouse_dy, y_scale);
+  REX_STORE_U16(state_ptr + 12, injected_rx);
+  REX_STORE_U16(state_ptr + 14, injected_ry);
+  fable2::mouselook::record_native_input_sample(
+      static_cast<int16_t>(native_rx), static_cast<int16_t>(native_ry),
+      static_cast<int16_t>(injected_rx), static_cast<int16_t>(injected_ry),
+      mouse_dx, mouse_dy);
   fable2::mouselook::note_native_injection();
 }
