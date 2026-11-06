@@ -118,6 +118,17 @@ inline uint16_t Be16(const uint8_t* p) {
   return static_cast<uint16_t>((uint16_t(p[0]) << 8) | p[1]);
 }
 
+inline bool BeAsciiAt(const uint8_t* p, size_t bytes, std::string_view ascii) {
+  if (bytes < ascii.size() * 2) return false;
+  for (size_t i = 0; i < ascii.size(); ++i) {
+    if (p[i * 2] != 0 ||
+        p[i * 2 + 1] != static_cast<uint8_t>(ascii[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 inline bool HasKnownTag(const uint8_t* p, size_t length) {
   static constexpr std::array<std::string_view, 6> tags{
       "<a_img>", "<b_img>", "<c_img>", "<d_img>",
@@ -189,8 +200,11 @@ inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
       const bool tag_candidate =
           data[i + 1] == '<' &&
           HasKnownTag(data + i, std::min(size_t(14), length - i));
+      const size_t remaining = length - i;
       const bool instruction_candidate =
-          data[i + 1] == 'P' || data[i + 1] == 'H' || data[i + 1] == 'T';
+          BeAsciiAt(data + i, remaining, "Press ") ||
+          BeAsciiAt(data + i, remaining, "Hold ") ||
+          BeAsciiAt(data + i, remaining, "Tap ");
       if (!tag_candidate && !instruction_candidate) continue;
 
       size_t start = i;
