@@ -165,6 +165,16 @@ code, so these keycaps follow arbitrary aspect ratios instead of assuming a
 fixed 16:9 framebuffer. Presentation reports expire automatically after roughly
 two seconds, which prevents stale overlays surviving screen changes.
 
+Unresolved icons retained by the adapter are refreshed separately from full
+scene discovery. While keyboard mode and the overlay fallback are active,
+their live GameFace transform/visibility is sampled at about 10 Hz, while the
+full up-to-2500-element discovery/text-rewrite walk runs only about every
+eighth refresh (~0.7–0.8 s). This lets animated HUD or world-following prompt
+keycaps track their source without repeatedly traversing the entire scene.
+If a game-owned ancestor becomes inactive or transparent, the host keycap is
+suppressed immediately; the adapter's own hidden opacity/active attribute is
+ignored for that visibility test.
+
 The fallback remains last-device aware. Controller mode restores the GameFace
 attributes and clears the host entries. Changing
 `ui_prompt_overlay_fallback` also participates in the adapter signature, so
