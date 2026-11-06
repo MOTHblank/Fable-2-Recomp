@@ -426,28 +426,16 @@ inline void SyncButtonPrompts(bool keyboard) {
   if (!bridge_enabled()) return;
   S().armed.store(true, std::memory_order_relaxed);
 
-  const auto key = [](const char* cvar) {
-    return fable2::buttonprompts::DisplayKey(
-        rex::cvar::GetFlagByName(cvar), 20);
-  };
-  const std::array<std::pair<const char*, std::string>, 16> labels{{
-      {"A", key("keybind_a")},
-      {"B", key("keybind_b")},
-      {"X", key("keybind_x")},
-      {"Y", key("keybind_y")},
-      {"LB", key("keybind_left_shoulder")},
-      {"RB", key("keybind_right_shoulder")},
-      {"LT", key("keybind_left_trigger")},
-      {"RT", key("keybind_right_trigger")},
-      {"START", key("keybind_start")},
-      {"BACK", key("keybind_back")},
-      {"LS", key("keybind_lstick_press")},
-      {"RS", key("keybind_rstick_press")},
-      {"UP", key("keybind_dpad_up")},
-      {"DOWN", key("keybind_dpad_down")},
-      {"LEFT", key("keybind_dpad_left")},
-      {"RIGHT", key("keybind_dpad_right")},
+  const std::array<const char*, 16> action_names{{
+      "A", "B", "X", "Y", "LB", "RB", "LT", "RT",
+      "START", "BACK", "LS", "RS", "UP", "DOWN", "LEFT", "RIGHT",
   }};
+  std::array<std::pair<const char*, std::string>, 16> labels{};
+  for (size_t i = 0; i < labels.size(); ++i) {
+    labels[i] = {
+        action_names[i],
+        fable2::buttonprompts::CurrentActionLabel(i, 20)};
+  }
 
   const bool overlay_fallback =
       rex::cvar::GetFlagByName("ui_prompt_overlay_fallback") == "true";
