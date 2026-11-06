@@ -33,9 +33,6 @@ constexpr uint32_t kIconSlot = 100;
 constexpr uint32_t kParentSlot = 104;
 constexpr uint32_t kTextSlot = 108;
 constexpr uint32_t kTextHandle = 112;
-constexpr uint32_t kNameChars = 0x100;
-constexpr uint32_t kParentChars = 0x120;
-constexpr uint32_t kIconChars = 0x130;
 
 // The game's main-menu items all use event type 2, hang off the "Root" item
 // and show an icon.
@@ -43,12 +40,12 @@ constexpr uint32_t kMenuButtonEventType = 2;
 constexpr std::string_view kRootParent = "Root";
 constexpr std::string_view kIcon = "Art\\GUI\\icon_options.tga";
 
-void WriteString(uint8_t* base, uint32_t addr, std::string_view text, size_t max_length) {
-  text = text.substr(0, max_length);
+void WriteString(uint8_t* base, uint32_t addr, std::string_view text) {
   for (size_t i = 0; i < text.size(); ++i) {
-    REX_STORE_U8(addr + i, static_cast<uint8_t>(text[i]));
+    REX_STORE_U8(addr + static_cast<uint32_t>(i),
+                 static_cast<uint8_t>(text[i]));
   }
-  REX_STORE_U8(addr + text.size(), 0);
+  REX_STORE_U8(addr + static_cast<uint32_t>(text.size()), 0);
 }
 
 void WriteWideString(uint8_t* base, uint32_t addr, std::u16string_view text) {
@@ -63,6 +60,15 @@ uint32_t AllocateGuest(PPCContext& ctx, uint8_t* base, uint32_t size) {
   ctx.r3.u64 = size;
   Allocate_SizeBucketed_Thunk_8221F3F0(ctx, base);
   return ctx.r3.u32;
+}
+
+uint32_t AllocateString(PPCContext& ctx, uint8_t* base,
+                        std::string_view text) {
+  if (text.size() >= UINT32_MAX) return 0;
+  const uint32_t address =
+      AllocateGuest(ctx, base, static_cast<uint32_t>(text.size() + 1u));
+  if (address) WriteString(base, address, text);
+  return address;
 }
 
 void FreeGuest(PPCContext& ctx, uint8_t* base, uint32_t address) {
@@ -95,9 +101,16 @@ void AddItem(PPCContext& ctx, uint8_t* base, uint32_t menu, const MenuItem& item
   const uint32_t text_bytes =
       static_cast<uint32_t>((label.size() + 1u) * sizeof(char16_t));
   const uint32_t text_chars = AllocateGuest(ctx, base, text_bytes);
-  if (!text_chars) {
-    REXSYS_WARN("[main-menu] could not allocate {} bytes for label '{}'",
-                text_bytes, item.label);
+  const uint32_t name_chars = AllocateString(ctx, base, item.id);
+  const uint32_t parent_chars = AllocateString(ctx, base, kRootParent);
+  const uint32_t icon_chars = AllocateString(ctx, base, kIcon);
+  if (!text_chars || !name_chars || !parent_chars || !icon_chars) {
+    REXSYS_WARN("[main-menu] could not allocate transient strings for item '{}'",
+                item.id);
+    FreeGuest(ctx, base, icon_chars);
+    FreeGuest(ctx, base, parent_chars);
+    FreeGuest(ctx, base, name_chars);
+    FreeGuest(ctx, base, text_chars);
     return;
   }
   WriteWideString(base, text_chars, label);
@@ -106,16 +119,13 @@ void AddItem(PPCContext& ctx, uint8_t* base, uint32_t menu, const MenuItem& item
   const uint32_t sp = caller_sp - kFrameSize;
   REX_STORE_U32(sp, caller_sp);
   REX_STORE_U32(sp + 84, 0);
-  WriteString(base, sp + kNameChars, item.id, kParentChars - kNameChars - 1);
-  WriteString(base, sp + kParentChars, kRootParent, kIconChars - kParentChars - 1);
-  WriteString(base, sp + kIconChars, kIcon, kFrameSize - kIconChars - 1);
   REX_STORE_U32(sp + kTextSlot, sp + kTextHandle);
   REX_STORE_U32(sp + kTextHandle, text_chars);
   ctx.r1.u64 = sp;
 
-  ConstructString(ctx, base, sp + kNameSlot, sp + kNameChars);
-  ConstructString(ctx, base, sp + kIconSlot, sp + kIconChars);
-  ConstructString(ctx, base, sp + kParentSlot, sp + kParentChars);
+  ConstructString(ctx, base, sp + kNameSlot, name_chars);
+  ConstructString(ctx, base, sp + kIconSlot, icon_chars);
+  ConstructString(ctx, base, sp + kParentSlot, parent_chars);
 
   ctx.r3.u64 = menu;
   ctx.r4.u64 = sp + kNameSlot;
@@ -131,6 +141,9 @@ void AddItem(PPCContext& ctx, uint8_t* base, uint32_t menu, const MenuItem& item
   DestructString(ctx, base, sp + kIconSlot);
   DestructString(ctx, base, sp + kNameSlot);
   ctx.r1.u64 = caller_sp;
+  FreeGuest(ctx, base, icon_chars);
+  FreeGuest(ctx, base, parent_chars);
+  FreeGuest(ctx, base, name_chars);
   FreeGuest(ctx, base, text_chars);
 }
 
