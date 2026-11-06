@@ -280,7 +280,7 @@
                            Margin="0,14,0,5" />
                 <ComboBox x:Name="MouseCameraModeCombo" SelectionChanged="MouseCameraModeChanged">
                   <ComboBoxItem Content="Native stick (original)" Tag="native" />
-                  <ComboBoxItem Content="Direct mouse orbit (experimental)" Tag="direct" />
+                  <ComboBoxItem Content="Direct mouse via native camera (hybrid)" Tag="direct" />
                 </ComboBox>
                 <TextBlock Text="Direct mode applies raw motion to the hero camera output without the virtual-stick speed limit. Experimental: collisions and scripted framing may differ."
                            FontSize="12" Foreground="{StaticResource MutedTextBrush}"
