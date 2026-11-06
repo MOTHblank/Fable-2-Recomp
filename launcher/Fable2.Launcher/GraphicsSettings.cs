@@ -5,6 +5,7 @@ namespace Fable2Launcher;
 
 public static class GraphicsSettings
 {
+    public const int MaxInternalRenderScale = 7;
     public static readonly string[] ManagedKeys =
     [
         "resolution", "window_width", "window_height", "resolution_scale",
@@ -26,7 +27,9 @@ public static class GraphicsSettings
             "1440p" => (2560, 1440), "4k" => (3840, 2160),
             _ => throw new ArgumentException("Unknown output resolution")
         };
-        if (!new[] { "1", "2", "3", "4" }.Contains(scale) ||
+        bool validScale = int.TryParse(scale, NumberStyles.Integer, CultureInfo.InvariantCulture,
+            out int scaleValue) && scaleValue >= 1 && scaleValue <= MaxInternalRenderScale;
+        if (!validScale ||
             !new[] { "-1", "1", "2", "3", "4", "5" }.Contains(anisotropic) ||
             !new[] { "none", "fxaa", "fxaa_extreme" }.Contains(antiAliasing) ||
             !new[] { "windowed", "borderless", "exclusive" }.Contains(displayMode) ||
