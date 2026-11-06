@@ -205,9 +205,13 @@ rather than merely hiding the host keycap.
 
 Known alternate/pressed assets such as `icon_button_a2` are normalized to the
 same logical action. Safe visual hiding now tries the GameFace attributes
-`opacity`, `active`, then `diffuse.a` on the icon/immediate wrapper. All
-three are exposed by the verified GameFace element API and are restored only
-while their current value still exactly matches the adapter-applied value.
+`opacity`, `active`, then `diffuse.a`. All three are exposed by the
+verified GameFace element API and are restored only while their current value
+still exactly matches the adapter-applied value. If the icon itself lacks all
+three, the adapter may climb up to three wrapper levels, but only through a
+**single-visual-wrapper chain**: sibling behavior/material/texture helpers are
+allowed, while sibling text/components/groups stop the climb so unrelated UI
+can never be hidden with the icon.
 Visibility ownership is attribute-specific: if the adapter owns `opacity=0`
 but the game independently sets `active=false` or `diffuse.a=0`, that
 game-owned hide still suppresses the host keycap. Elements exposing none of
@@ -218,6 +222,8 @@ can be tuned live with `ui_prompt_overlay_offset_x` and
 `ui_prompt_overlay_offset_y` (both default to 0 and accept -128..128 pixels).
 Modifier chords are rendered as separate keycaps, for example
 `Shift+Up -> [S] + [Up]`, while in-GameFace text remains compact (`S+Up`).
+Mouse side buttons are presented as `M4` / `M5` rather than the SDK's
+internal `XMB1` / `XMB2` binding names.
 
 ## Legacy UITextPrompt title fallback
 
@@ -292,8 +298,8 @@ narrower:
 - other legacy `UITextPrompt` / inline-sprite users for which no stable
   action/element-to-screen-position contract has yet been identified;
 - presentation artwork that never appears in the traversable GameFace scene;
-- GameFace icon nodes whose own element and immediate wrapper expose no safe
-  visibility attribute.
+- GameFace icon nodes for which neither the element nor any conservative
+  single-visual-wrapper chain exposes `opacity`, `active`, or `diffuse.a`.
 
 Those remain native rather than being assigned the title prompt's fixed
 position, interpreting UIContract behavior names as visual controls, or
