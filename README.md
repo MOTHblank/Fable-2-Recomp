@@ -278,8 +278,11 @@ Enable **Log mouse input and camera hook diagnostics** in Advanced → Mouse
 (`mouse_look_camera_diag = true`) to write periodic `[mouse-camera]` lines
 plus capped `[mouse-native]` correlation records to the normal game logs.
 The latter pair each successful guest-user-0 injection (raw mouse plus pre/post
-RX/RY) with the next hero-camera native correction/classification. Camera
-telemetry (`mouse_look_camera_dump`) remains available for deeper RE.
+RX/RY) with the next hero-camera native correction/classification. The same
+diagnostic toggle also enables a capped `[mouse-normalize-candidate]` trace
+around `0x832C13A8`; that wrapper is observational only and is being used to
+determine whether the function is the first post-pack normalized input stage.
+Camera telemetry (`mouse_look_camera_dump`) remains available for deeper RE.
 
 
 The defaults come from `[input] mouse_look` / `[input] mouse_look_scale` in
