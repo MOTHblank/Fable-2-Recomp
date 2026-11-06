@@ -629,6 +629,8 @@ local function visible_for_prompt(e)
     if opacity and opacity <= 0.01 then return false end
     local active = attr(cur, "active")
     if active == false or active == 0 then return false end
+    local diffuse_a = tonumber(attr(cur, "diffuse.a"))
+    if diffuse_a and diffuse_a <= 0.01 then return false end
     cur = parent(cur)
   end
   return true
@@ -768,6 +770,8 @@ local function hidden_by_adapter(target)
       local current = attr(target, x.a)
       if x.a == "opacity" and x.applied == 0 and current == 0 then return true end
       if x.a == "active" and x.applied == false and current == false then return true end
+      if x.a == "diffuse.a" and x.applied == 0 and
+         tonumber(current) and tonumber(current) <= 0.01 then return true end
     end
   end
   return false
@@ -782,6 +786,8 @@ local function visible_for_overlay(e)
     if opacity and opacity <= 0.01 and not ours then return false end
     local active = attr(cur, "active")
     if (active == false or active == 0) and not ours then return false end
+    local diffuse_a = tonumber(attr(cur, "diffuse.a"))
+    if diffuse_a and diffuse_a <= 0.01 and not ours then return false end
     cur = parent(cur)
   end
   return true
@@ -799,6 +805,10 @@ local function hide_for_overlay(e)
     local active = attr(target, "active")
     if active == true or active == 1 then
       if remember_set(target, "active", false) then return target end
+    end
+    local diffuse_a = tonumber(attr(target, "diffuse.a"))
+    if diffuse_a and diffuse_a > 0.01 then
+      if remember_set(target, "diffuse.a", 0) then return target end
     end
     target = parent(target)
   end
@@ -910,6 +920,10 @@ local function walk(e, depth)
         local icon_value = 0
         if old_icon == nil then
           icon_attr, old_icon, icon_value = "active", attr(e, "active"), false
+        end
+        if old_icon == nil then
+          icon_attr, old_icon, icon_value =
+              "diffuse.a", attr(e, "diffuse.a"), 0
         end
         if old_icon ~= nil then
           local old_text = attr(text_el, "textstring")
