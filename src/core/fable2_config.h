@@ -45,8 +45,8 @@ struct Values {
   bool mouse_look = true;
   bool mouse_direct_look = false;  // Opt-in raw mouse -> native camera input.
   // Both modes keep the game's right-stick camera pipeline authoritative.
-  // Direct mode injects raw deltas into the camera's local XINPUT_STATE;
-  // fallback mode lets the SDK synthesize the right stick normally.
+  // Direct mode adds raw deltas to guest user 0's final merged XINPUT_STATE
+  // at the XamInputGetState boundary; fallback lets the SDK synthesize it.
   // Sensitivity is guest stick units per host mouse pixel (1..4096).
   int32_t mouse_look_scale = 256;
   int32_t mouse_look_scale_y = 256;
