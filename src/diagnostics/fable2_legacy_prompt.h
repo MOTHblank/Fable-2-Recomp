@@ -145,7 +145,7 @@ inline bool ExtractPreparedCanvasPosition(uint32_t scratch, uint8_t* base,
 }  // namespace fable2::legacyprompt
 
 extern "C" void UITextPrompt_Render(PPCContext& ctx, uint8_t* base) {
-  fable2::promptoverlay::BeginLegacyTitleFrame();
+  fable2::promptoverlay::BeginLegacyTitleFrame(ctx.r3.u32);
   __imp__UITextPrompt_Render(ctx, base);
   fable2::promptoverlay::EndLegacyTitleFrame();
 }
