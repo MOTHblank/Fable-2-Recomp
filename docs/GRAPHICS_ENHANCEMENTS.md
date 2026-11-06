@@ -53,7 +53,7 @@ game's HDR scene before its own bloom, exposure and tonemapping.
 | Sharpening | Contrast-adaptive sharpening of the final image (no upscaling). | Off |
 | Color grading | Exposure, contrast, saturation, vibrance, temperature, tint, gamma, shadow lift, vignette, film grain. | Off |
 | Texture filtering | Anisotropic filtering override (2x-16x). | Game's |
-| Internal resolution | 1x-3x render scale (restart). | 1x |
+| Internal resolution | 1x-7x render scale (restart, device-dependent). 3x is 3840×2160 from the 1280×720 guest image; 4x-7x are supersampling modes. | 1x |
 | Anti-aliasing | FXAA on the output (restart). | Off |
 
 The **Debug** section shows each effect's buffer on its own (split view,
