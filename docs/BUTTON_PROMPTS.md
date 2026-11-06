@@ -89,6 +89,13 @@ This gives non-string UI a practical PC representation without globally
 replacing `icon_button_a.tex` or repainting every use of `Material2270`.
 Ambiguous/baked elements with no safe text partner deliberately stay native.
 
+GameFace `behavior` elements are explicitly traversal-only. Contract/event
+nodes such as the reverse-engineered `PressA`, `OnPressB`,
+`FillWorldIcon`, and `FillWorldIconButton` are never rewritten, hidden, or
+used as overlay targets even if a future artwork alias shares their name. The
+adapter acts on the separate visual/material elements instead; this prevents
+prompt presentation work from disabling the interaction behavior itself.
+
 The prompt worker re-broadcasts the current mode periodically. Broadcasts are
 coalesced, and the Lua side is idempotent for an unchanged presentation/mode,
 so newly created HUD/menu states can receive the current device choice without
@@ -253,8 +260,9 @@ now covered. The remaining unknown cases are narrower:
   visibility attribute.
 
 Those remain native rather than being assigned the title prompt's fixed
-position or globally replacing a shared Xbox texture. A future targeted hook at
-the `0x820D7B50` tag resolver/layout boundary could generalize the legacy
+position, interpreting UIContract behavior names as visual controls, or
+globally replacing a shared Xbox texture. A future targeted hook at the
+`0x820D7B50` tag resolver/layout boundary could generalize the legacy
 fallback once the other call sites and their position data are identified.
 
 ## Scanner cadence and diagnostics
