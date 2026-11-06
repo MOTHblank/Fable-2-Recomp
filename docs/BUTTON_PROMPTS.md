@@ -46,13 +46,18 @@ the guest allocation still contains exactly the bytes written by the recomp,
 which avoids writing through stale/reused heap addresses.
 
 The same bounded worker now also handles conservative fixed-width literal
-instructions such as `Press A`, `Hold LT`, `Tap Start`, etc. These use the
-game's own font and are rewritten only when the current keyboard label fits in
-the original controller token width. For example, `Press A to confirm` can
-become `Press E to confirm` without changing the allocation. A mouse-only
-`X -> LMB` mapping cannot fit in a one-character `X` token, so that source
-string is intentionally left untouched here and may be adapted later by a
-relayout-capable GameFace path.
+instructions using the verified verbs `Press`, `Hold`, `Tap`, and
+`Select`. These use the game's own font and are rewritten only when the
+current keyboard label fits in the original controller token width. For
+example, `Press A to confirm` can become `Press E to confirm`, and the
+observed book-footer `Select A` can become `Select E`, without changing the
+allocation. A mouse-only `X -> LMB` mapping cannot fit in a one-character
+`X` token, so that source string is intentionally left untouched here and
+may be adapted later by a relayout-capable GameFace path.
+
+Every native source rewrite is required to preserve the **exact** UTF-16 code
+unit count. The scanner will reject both growth and shortening rather than
+changing a guest allocation or relying on stale cached lengths.
 
 ## Layer 2: live GameFace icon widgets
 
@@ -64,8 +69,9 @@ stick clicks and D-pad directions. It also recognizes the documented
 
 The adapter also rewrites exposed live `textstring` values. That catches
 markup which survived into the presentation (`<a_img>`, etc.) and conservative
-literal instruction forms such as `Press A`, `Hold X`, `Tap RT` or
-`Press Start`. Unlike the fixed-size heap rewrite, `setAttribute` can trigger
+literal instruction forms such as `Press A`, `Hold X`, `Tap RT`,
+`Press Start`, or the verified book-footer form `Select A`. Unlike the
+fixed-size heap rewrite, `setAttribute` can trigger
 GameFace relayout, so these replacements may use the natural compact form
 `[key]`.
 
@@ -233,7 +239,22 @@ position or globally replacing a shared Xbox texture. A future targeted hook at
 the `0x820D7B50` tag resolver/layout boundary could generalize the legacy
 fallback once the other call sites and their position data are identified.
 
-## Diagnostics
+## Scanner cadence and diagnostics
+
+The worker prioritizes the title allocation without periodically walking the
+entire front-end heap in one burst:
+
+- `0x42660000..0x42670000`: 64 KiB title fast path, approximately every
+  15 ms;
+- `0x42600000..0x42700000`: 1 MiB title-neighborhood safety pass every
+  120 ms;
+- `0x40000000..0x44000000`: rolling 2 MiB slices every 60 ms, completing
+  the 64 MiB fallback range in about two seconds.
+
+Broad slices overlap by 320 bytes (the maximum supported 160 UTF-16 code
+units), so a prompt crossing a slice boundary is still examined as one string.
+This preserves the previous broad coverage while avoiding a single large
+two-second scan burst.
 
 `fable2_button_prompts.log` reports source-string scanning and active prompt
 mode/key changes. `known_strings`, `replaced` and `tracked` refer to the
