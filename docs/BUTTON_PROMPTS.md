@@ -116,7 +116,14 @@ oscillate. Keyboard presses and mouse buttons still switch immediately.
 Physical controller ownership has its own noise floor: stick activity must
 clear the normal thumb deadzone and change by at least 3500 units, while
 buttons and trigger-threshold crossings switch immediately. Synthetic debug
-pads do not participate.
+pads do not participate. Held buttons and stationary sticks are not repeated
+activity, so they cannot steal prompt ownership back from a mouse that was
+used afterward.
+
+Per-device comparison history belongs to the current SDK `InputSystem`
+instance and is erased when a device disappears or input shuts down. A
+reconnected pad/device ID therefore starts with a clean baseline instead of
+inheriting stale buttons or stick positions from its previous lifetime.
 
 Mouse-wheel input does not invent a guest-gamepad binding; it only counts as
 unambiguous physical mouse activity for last-used-device ownership.
@@ -141,8 +148,9 @@ decision.
 
 The current pinned SDK revision is checked by
 `tools/prepare_runtime_sdk.py` for `MarkKeyboardPromptDevice`, the
-mouse-motion accumulator, and the `OnMouseWheel` ownership hook, so a
-partially updated SDK cannot silently lose the stable switching behavior.
+mouse-motion accumulator, the `OnMouseWheel` ownership hook, and
+disconnect-time prompt-history cleanup, so a partially updated SDK cannot
+silently lose the stable switching behavior.
 
 ## Texture-only fallback
 
