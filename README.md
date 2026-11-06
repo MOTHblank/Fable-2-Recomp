@@ -251,16 +251,20 @@ horizontal yaw and vertical pitch instead of converting movement into a capped
 Xbox right-stick value. The existing sensitivity X/Y and invert-Y controls
 apply to either mode. Deadzone compensation and flick buffering apply **only
 to Native stick mode** and are disabled in the launcher while Direct is selected.
-Direct mode uses the observed hero-follow camera layout and may not preserve
-wall collision or special scene framing; switch back to Native if necessary.
-The camera hook now drops accumulated raw input and resets orbit offsets when
-camera objects or input modes change. It leaves the game's native camera output
-untouched on non-hero cameras, invalid input, and rejected view transforms, and
-skips direct modification on the first frame of a newly selected camera. This
-prevents stale mouse movement from carrying into scripted camera transitions;
-it does **not** yet route direct input through native collision constraints or
-switch mouse input automatically to stick emulation. Native stick mode remains
-the recommended choice for cinematic framing and tight spaces.
+Direct mode uses the observed hero-follow camera layout. It now switches
+mouse input back to the game's native right-stick path whenever the frame's
+resolved camera eye differs meaningfully from the camera object's requested
+eye, treating that correction as native obstruction/collision/authored framing
+that direct orbit must not overwrite. The camera hook also drops accumulated
+raw input and resets orbit offsets when camera objects or input modes change.
+It leaves the game's native camera output untouched on non-hero cameras,
+constraint-corrected frames, invalid input, and rejected view transforms, and
+skips direct modification on the first frame of a newly selected camera.
+This makes Direct mode a hybrid rather than an all-or-nothing replacement:
+normal hero-follow frames use raw mouse yaw/pitch, while constrained or special
+camera states fall back automatically to native stick behavior. The direct
+path is still a post-camera transform rather than a verified pre-constraint
+injection point, so Native stick remains the most conservative option.
 No gamepad controller input is changed.
 
 Enable **Log mouse input and camera hook diagnostics** in Advanced → Mouse
