@@ -4,6 +4,35 @@ Goal: make the mouse drive the third-person camera orbit **exactly** like the ri
 there is no perceptible difference between the two inputs, and combining them (mouse + stick
 simultaneously) just works — same angle, same feel, same native limits.
 
+## Current implementation (November 6)
+
+The external orbit described in the historical sections below is **retired from the normal
+Direct path**. `fable2_hook_direct_mouse_look` is classification-only and never writes
+`cam+144/160/176`.
+
+The active Direct pipeline is now:
+
+1. SDL relative mouse motion enters the SDK raw-motion side channel only while the previous
+   camera frame was classified as an ordinary, unconstrained hero-follow camera.
+2. `tools/apply_recomp_patches.py` patches the generated
+   `ProcessAndProcessAndProcess1253_832BB018` (`0x832BB018`) at its local `XINPUT_STATE`
+   construction (`r1+708`).
+3. Mouse X/Y are added to that local state's native `sThumbRX` / `sThumbRY` fields before the
+   original consumer runs. Existing controller stick input is additive.
+4. The original game then owns the camera result: easing, bounds, collision/obstruction,
+   authored framing, lock-ons and special-camera handling remain downstream.
+5. The `0x822A47F8` hook only classifies the resolved camera. Secondary/scripted cameras or
+   meaningful native pose corrections disable the raw side channel, causing the SDK's ordinary
+   virtual-stick mouse path to resume on the next poll. Route changes clear pending raw motion.
+
+The old `LookStickProcess_83045778` HotFunc was an ambiguous earlier candidate and is no longer
+the intended injection site. The stale `RightStickLookProcess_832BB018` generator alias was also
+removed because the manifest's actual function name is
+`ProcessAndProcessAndProcess1253_832BB018`; the small generated-code patch is preferable to
+checking in a 4,700+ line strong override.
+
+Everything below this section is retained as reverse-engineering history unless explicitly
+marked current.
 ## Why the current (re-implemented) orbit feels off
 
 The current hook (6th iteration) re-implements the orbit externally: it rotates the eye at
