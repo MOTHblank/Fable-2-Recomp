@@ -43,6 +43,13 @@ REXCVAR_DEFINE_BOOL(
     "Draw compact keyboard keycaps over GameFace controller icons that have "
     "no writable text-label replacement; false keeps unresolved Xbox artwork.");
 
+REXCVAR_DEFINE_INT32(ui_prompt_overlay_offset_x, 0, "Input",
+                     "Horizontal pixel nudge for fallback keyboard keycaps")
+    .range(-128, 128);
+REXCVAR_DEFINE_INT32(ui_prompt_overlay_offset_y, 0, "Input",
+                     "Vertical pixel nudge for fallback keyboard keycaps")
+    .range(-128, 128);
+
 // Host keyboard -> guest gamepad map (see src/input/keyboard_gamepad.h).
 // Format: "Key:Button,Key:Button,...".
 // The default layout is NOT baked in here: it lives in the config layer
