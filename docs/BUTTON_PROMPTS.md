@@ -56,8 +56,16 @@ allocation. A mouse-only `X -> LMB` mapping cannot fit in a one-character
 may be adapted later by a relayout-capable GameFace path.
 
 Every native source rewrite is required to preserve the **exact** UTF-16 code
-unit count. The scanner will reject both growth and shortening rather than
-changing a guest allocation or relying on stale cached lengths.
+unit count. Source-layer labels therefore keep a five-character ceiling (the
+space inside a seven-unit `<a_img>` replacement). The scanner will reject
+both growth and shortening rather than changing a guest allocation or relying
+on stale cached lengths.
+
+That ceiling is **not** applied to relayout-capable presentation layers.
+GameFace text and host keycaps request labels up to 20 characters and share the
+same action-to-CVar map as the source scanner. This allows bindings such as
+`Shift+Space` or multi-modifier chords to remain visible even when no
+fixed-width guest rewrite can represent them.
 
 ## Layer 2: live GameFace icon widgets
 
@@ -246,9 +254,14 @@ the renderer receives only laid-out element/drawable data.
 
 `src/diagnostics/fable2_legacy_prompt.h` bridges that specific path.
 The scanner now publishes both the localized layout counts and the exact
-0-based baked element ordinal/action of the first verified `<x_img>` tag.
+0-based baked element ordinal/action of the first verified `<x_img>` tag
+**before** deciding whether the current binding fits the source allocation.
 A stock seven-character image tag occupies one laid-out sprite, while the same
 seven code units become seven ordinary glyphs after the native keycap rewrite.
+For bindings too wide to rewrite in place, repeated sightings of the verified
+`0x4266xxxx` title source provide a short-lived proof that lets the drawable
+fallback learn the real title item/sprite and render the full presentation
+label instead.
 `UITextPrompt_Render` is bracketed per invocation and its element calls are
 counted, so the adapter can prove whether the rendered layout actually consumed
 the source rewrite.
