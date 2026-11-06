@@ -87,12 +87,11 @@ FUNCTIONS = {
     "UITextItem_Dispatch": dict(dir="ui_rendering", hand_tuned=True),
     "ConstructString_8217AB58": dict(dir="ui_rendering", hand_tuned=True),
     "Trampoline_8217A978": dict(dir="ui_rendering", hand_tuned=True),
-    # Look-stick (right-stick) input handler in the 8304x per-controller cluster.
-    # Reads RY (at *(r31+24)+10), normalizes it via VectorMathThunk_821F4D88, and
-    # caches the result at handler+56 to drive the hero-camera orbit. Pulled in as a
-    # strong-symbol override so the mouse look offset can be folded into the stick
-    # RY before the native pipeline (normalize -> controller -> orbit) runs, giving
-    # 1:1 native behavior.
+    # Recursive 8304x input-tree handler. Older notes misidentified
+    # *(r31+24)+10/+12 as raw right-stick axes; inspection shows +10 is an entry
+    # count, +12 contributes a table offset, and handler+56 is later used as a
+    # result-table byte offset. Keep this override behavior-identical. Direct
+    # mouse injection belongs to the verified local XINPUT_STATE in 0x832BB018.
     "LookStickProcess_83045778": dict(dir="camera", nv=True),
     # 0x832BB018 is intentionally NOT copied as a HotFunc override. It is the
     # 4,700+ line ProcessAndProcessAndProcess1253_832BB018 in the manifest; the
