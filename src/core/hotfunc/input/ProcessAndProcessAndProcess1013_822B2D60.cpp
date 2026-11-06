@@ -2,9 +2,10 @@
 //
 // The original 11-line wrapper is still executed through its __imp__ symbol.
 // After it fills the caller's final merged X_INPUT_STATE, this override adds
-// raw mouse displacement to user 0's right stick only. That keeps physical
-// controller input additive, avoids contaminating guest users 1-3, and feeds
-// the exact state every downstream native input/camera consumer already uses.
+// raw mouse displacement to user 0's right stick only. This is intentionally
+// AFTER ReXGlue's device merge: its normal MergeInto() selects the larger-
+// magnitude stick axis across devices, whereas Direct needs mouse + physical
+// stick to add/subtract as one camera input. Users 1-3 remain untouched.
 #include "fable_2_pch.h"
 #include "mouse_look.h"
 
@@ -70,6 +71,9 @@ uint16_t AddMouseAxis(uint16_t raw, float pixels, int32_t units_per_pixel,
     mouse_axis = sign * std::clamp(compensated, 1, 32767);
   }
 
+  // native_axis is already the final merged user-0 stick value. Add the
+  // mouse here so simultaneous physical-stick + mouse motion combines instead
+  // of ReXGlue's ordinary larger-magnitude device arbitration.
   const int32_t combined =
       std::clamp(native_axis + mouse_axis, -32768, 32767);
   return static_cast<uint16_t>(static_cast<int16_t>(combined));
