@@ -4,6 +4,7 @@
 
 // F5 polling is independent of the input driver (MainRenderLoop hook).
 #include "fable2_f5_lua.h"
+#include "fable2_console.h"  // opt-in developer command line
 
 #include "fable_2_app.h"
 #include "fable2_button_prompts.h"
