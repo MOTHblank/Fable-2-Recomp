@@ -188,10 +188,10 @@ bool fable2_hook_high_hf_tick_rate_skip_store() {
 
 // This hook observes the finished native camera frame only to decide whether
 // raw mouse input may use the direct side-channel on the *next* input poll.
-// It no longer rewrites the eye or orientation. Raw mouse deltas are injected
-// earlier into the local XINPUT_STATE consumed by 0x832BB018, so the game's own
-// camera controller remains authoritative for collision, obstruction handling,
-// authored framing, lock-ons, easing and clamps.
+// It no longer rewrites the eye or orientation. Raw mouse deltas are added
+// earlier to guest user 0's final merged X_INPUT_STATE at the XamInputGetState
+// boundary, so the game's own camera controller remains authoritative for
+// collision, obstruction handling, authored framing, lock-ons, easing and clamps.
 enum class DirectMouseResult {
   kEligible,
   kNotHero,
@@ -202,8 +202,10 @@ enum class DirectMouseResult {
 static DirectMouseResult ClassifyDirectMouseCamera(rex::memory::Memory* mem,
                                                    uint32_t cam,
                                                    uint32_t sp,
-                                                   bool raw_route_active) {
+                                                   bool raw_route_active,
+                                                   float* correction_out = nullptr) {
   using namespace fable2::mouselook;
+  if (correction_out) *correction_out = -1.0f;
 
   // The ordinary hero-follow camera has a 1.0f marker at +0x6c. Secondary,
   // cinematic and most scripted cameras fail this gate and therefore use the
@@ -230,6 +232,7 @@ static DirectMouseResult ClassifyDirectMouseCamera(rex::memory::Memory* mem,
                         resolved_eye.y - requested_eye.y,
                         resolved_eye.z - requested_eye.z};
   const float native_correction = vec3_len(correction);
+  if (correction_out) *correction_out = native_correction;
   if (!std::isfinite(native_correction) || native_correction > 12.0f)
     return DirectMouseResult::kInvalidOutput;
 
@@ -251,9 +254,9 @@ static DirectMouseResult ClassifyDirectMouseCamera(rex::memory::Memory* mem,
 void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
   const auto& cfg = fable2::config::Get();
 
-  // Input processing finishes before CECCameraUpdateFrame. 0x832BB018 peeks
-  // the raw displacement on each of its per-frame passes; the first camera
-  // update drains it. Later camera updates in the same frame simply drain 0.
+  // Input processing finishes before CECCameraUpdateFrame. Guest-user-0
+  // XamInputGetState polls peek the raw displacement; the first camera update
+  // drains it. Later camera updates in the same frame simply drain 0.
   float frame_mouse_dx = 0.0f;
   float frame_mouse_dy = 0.0f;
   fable2::mouselook::take_delta(frame_mouse_dx, frame_mouse_dy);
@@ -303,8 +306,9 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
   ++calls;
 
   if (direct && !mode_changed) {
-    const DirectMouseResult result =
-        ClassifyDirectMouseCamera(mem, cam, r1.u32, raw_route_active);
+    float native_correction = -1.0f;
+    const DirectMouseResult result = ClassifyDirectMouseCamera(
+        mem, cam, r1.u32, raw_route_active, &native_correction);
 
     switch (result) {
       case DirectMouseResult::kEligible: ++eligible; break;
@@ -351,6 +355,28 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
           raw_route_active = false;
           rex::input::mnk::SetDirectMouseEligible(false);
         }
+      }
+    }
+
+    if (cfg.mouse_look_camera_diag &&
+        result != DirectMouseResult::kNotHero) {
+      const auto input_sample = fable2::mouselook::latest_native_input_sample();
+      static uint64_t last_logged_input_sample = 0;
+      static uint32_t correlation_logs = 0;
+      if (input_sample.sequence != 0 &&
+          input_sample.sequence != last_logged_input_sample &&
+          correlation_logs < 400) {
+        last_logged_input_sample = input_sample.sequence;
+        ++correlation_logs;
+        REXSYS_INFO(
+            "[mouse-native] seq={} mouse={:.3f},{:.3f} "
+            "rx={}->{} ry={}->{} correction={:.4f} class={} route={} "
+            "cam=0x{:08X}",
+            input_sample.sequence, input_sample.mouse_dx, input_sample.mouse_dy,
+            input_sample.native_rx, input_sample.injected_rx,
+            input_sample.native_ry, input_sample.injected_ry,
+            native_correction, static_cast<int>(result),
+            raw_route_active ? 1 : 0, cam);
       }
     }
 
