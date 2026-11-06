@@ -296,7 +296,7 @@ Optional (not currently included): `fable2_list_dump.h`,
 | `UITextPrompt_Render` | 0x82C44CF0 | **Title prompt's slot-4 render**: no effective args; loops element list @ `0x83334E20` via `sub_82B458C0`, draws each via `UITextPrompt_RenderElement` |
 | `UITextPrompt_RenderElement` | 0x82C44B50 | Prompt per-element draw: visibility check (`sub_82C44688(elem+8) & 0x3F`), then bctrl to `drawable.vtable[8]` = `0x82C12F18` (drawable = `*(elem+0x7C)`) |
 | `sub_82B458C0` | 0x82B458C0 | Prompt element-list fetch/next (returns element, 0 = done) |
-| `sub_82C12F18` | 0x82C12F18 | Draw-object vtable[8] — **leaf of the prompt's per-element draw** |
+| `UITextPrompt_DrawableRender` | 0x82C12F18 | Draw-object vtable[8] — **0x60-byte leaf of the prompt's per-element draw**; now named in `fable2_switch_tables.toml` so the adaptive prompt layer can observe prepared draw scratch and selectively suppress only the confirmed title sprite |
 | `UIText_RenderCurrent` | 0x82C0AD60 | Loads `*(0x83334D2C)`, calls `UIText_RenderCurrentObject` |
 | `UIText_RenderCurrentObject` | 0x82C0ACD0 | Renders the "current text" object (font slot `0x83334A08`, visible flag `+152`) |
 | `UIText_RenderSegment` | 0x82C0A8F8 | Iterates a segment's glyph linked-list (called ×3) |
