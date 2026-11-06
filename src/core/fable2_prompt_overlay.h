@@ -336,10 +336,7 @@ inline std::string ActionLabel(std::string_view action) {
 }
 
 inline bool KeyboardModeActive() {
-  const std::string mode = rex::cvar::GetFlagByName("ui_prompt_mode");
-  if (mode == "controller") return false;
-  if (mode == "keyboard") return true;
-  return rex::cvar::GetFlagByName("input_prompt_keyboard") != "false";
+  return fable2::buttonprompts::KeyboardPromptModeActive();
 }
 
 class PromptOverlayDialog final : public rex::ui::ImGuiDialog {
