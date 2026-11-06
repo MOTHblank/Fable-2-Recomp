@@ -141,7 +141,10 @@ def _patch_direct_mouse_native_camera(files) -> int:
 		} else {
 			float mouse_dx = 0.0f;
 			float mouse_dy = 0.0f;
-			fable2::mouselook::take_delta(mouse_dx, mouse_dy);
+			// 0x832BB018 is reached multiple times per guest frame. Snapshot
+			// without consuming so every relevant input pass receives the same
+			// host displacement; CECCameraUpdateFrame drains it afterwards.
+			fable2::mouselook::peek_delta(mouse_dx, mouse_dy);
 			if (std::isfinite(mouse_dx) && std::isfinite(mouse_dy)) {
 			if (mouse_dx != 0.0f || mouse_dy != 0.0f)
 				fable2::mouselook::note_native_injection();
