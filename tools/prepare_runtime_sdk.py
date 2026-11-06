@@ -33,6 +33,7 @@ BAKED_SDK_PINS = {
     "803467dbaab2f7c0a2885d1ffd249511fffc1c14",  # High-resolution scale limits and guest-space alpha coverage
     "eb0fb0a61eace14b85a7180b0c5ef90d4345959b",  # Extended shadow distance material controls
     "9540f310ad4f87813cf3f2cf21ef4de44d0bbdab",  # Stable host frame pacing and corrected presenter pacing telemetry
+    "10a5865d0fde9119794b5f6860f0d5edc8dee4ab",  # Mapped read-only host content and corrected Win32 offset I/O
 }
 
 # When these exact SDK source improvements are committed to our SDK fork,
@@ -48,6 +49,7 @@ BAKED_FOLLOWUP_PINS = {
     "803467dbaab2f7c0a2885d1ffd249511fffc1c14",  # High-resolution scale limits and guest-space alpha coverage
     "eb0fb0a61eace14b85a7180b0c5ef90d4345959b",  # Extended shadow distance material controls
     "9540f310ad4f87813cf3f2cf21ef4de44d0bbdab",  # Stable host frame pacing and corrected presenter pacing telemetry
+    "10a5865d0fde9119794b5f6860f0d5edc8dee4ab",  # Mapped read-only host content and corrected Win32 offset I/O
 }
 BAKED_FOLLOWUP_MARKERS = {
     "src/graphics/d3d12/pipeline_cache.cpp": (
@@ -83,9 +85,11 @@ GRAPHICS_SDK_PINS = {
     "803467dbaab2f7c0a2885d1ffd249511fffc1c14",  # High-resolution scale limits and guest-space alpha coverage
     "eb0fb0a61eace14b85a7180b0c5ef90d4345959b",  # Extended shadow distance material controls
     "9540f310ad4f87813cf3f2cf21ef4de44d0bbdab",  # Stable host frame pacing and corrected presenter pacing telemetry
+    "10a5865d0fde9119794b5f6860f0d5edc8dee4ab",  # Mapped read-only host content and corrected Win32 offset I/O
 }
 NATIVE_PACING_PINS = {
     "9540f310ad4f87813cf3f2cf21ef4de44d0bbdab",
+    "10a5865d0fde9119794b5f6860f0d5edc8dee4ab",
 }
 NATIVE_PACING_MARKERS = {
     "include/rex/graphics/frame_limiter.h": (
@@ -95,6 +99,24 @@ NATIVE_PACING_MARKERS = {
     "src/ui/presenter.cpp": (
         "legacy option name is retained for config compatibility",
         "guest_vblank_count_.load(std::memory_order_relaxed)",
+    ),
+}
+
+NATIVE_IO_PINS = {
+    "10a5865d0fde9119794b5f6860f0d5edc8dee4ab",
+}
+NATIVE_IO_MARKERS = {
+    "src/filesystem/devices/host_path_file.cpp": (
+        "host_path_mapped_reads",
+        "entry->device()->is_read_only()",
+        "mapped_memory_->data() + byte_offset",
+    ),
+    "include/rex/filesystem/devices/host_path_file.h": (
+        "std::unique_ptr<rex::memory::MappedMemory> mapped_memory_",
+    ),
+    "src/core/filesystem_win.cpp": (
+        "OVERLAPPED overlapped{}",
+        "overlapped.OffsetHigh",
     ),
 }
 
@@ -334,6 +356,22 @@ def main():
             fail("native frame-pacing SDK integration is incomplete:\n  "
                  + "\n  ".join(missing_pacing))
         print("Native host frame pacing is baked into the SDK (verified).")
+
+    if head in NATIVE_IO_PINS:
+        missing_io = []
+        for relative, markers in NATIVE_IO_MARKERS.items():
+            try:
+                content = (source / relative).read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                missing_io.append(f"{relative} (missing or unreadable)")
+                continue
+            for marker in markers:
+                if marker not in content:
+                    missing_io.append(f"{relative}: {marker}")
+        if missing_io:
+            fail("native host-I/O SDK integration is incomplete:\n  "
+                 + "\n  ".join(missing_io))
+        print("Native mapped host reads and Win32 offset I/O are baked into the SDK (verified).")
 
     if head in GRAPHICS_SDK_PINS:
         missing_graphics = []
