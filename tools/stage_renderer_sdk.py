@@ -11,6 +11,7 @@ codegen, so codegen/runtime/plugin all come from the same SDK revision.
 import argparse
 import json
 from pathlib import Path
+import shutil
 
 from renderer_provenance import build_identity, digest
 
@@ -61,6 +62,18 @@ def main():
         raise SystemExit("Installed ReXGlue runtime does not match the source build")
     if digest(plugin) != digest(staged_plugin):
         raise SystemExit("Installed ReXGlue GPU plugin does not match the source build")
+
+    # CMake's target install does not consistently carry Clang/lld PDBs.
+    # Preserve source-built symbols beside the corresponding staged binaries.
+    staged_bin = output / "bin"
+    for name in (
+        f"rexruntime{suffix}.pdb",
+        f"rexgpu-xenos{suffix}.pdb",
+        "rexglue.pdb",
+    ):
+        source_pdb = native / name
+        if source_pdb.is_file():
+            shutil.copy2(source_pdb, staged_bin / name)
 
     provenance = build_identity(
         source, build, "d3d12", args.configuration, runtime, plugin
