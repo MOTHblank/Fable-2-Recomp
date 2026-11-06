@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -13,9 +14,9 @@ namespace fs = std::filesystem;
 
 enum class SnapshotResult { kNoSaves, kCreated, kSkipped, kFailed };
 
-inline SnapshotResult SnapshotAtStartup(const fs::path& game_dir) {
-  constexpr std::uintmax_t kMaxBytes = 256ull * 1024 * 1024;
-  constexpr std::size_t kMaxFiles = 4096;
+inline SnapshotResult SnapshotAtStartup(
+    const fs::path& game_dir, std::uintmax_t max_bytes = 0,
+    std::size_t max_files = 0) {
   const fs::path source = game_dir / "saves";
   const fs::path backups = game_dir / "save_backups";
   std::error_code ec;
@@ -37,8 +38,14 @@ inline SnapshotResult SnapshotAtStartup(const fs::path& game_dir) {
     if (fs::is_directory(status)) continue;
     if (!fs::is_regular_file(status)) return SnapshotResult::kFailed;
     const auto bytes = it->file_size(ec);
-    if (ec || bytes > kMaxBytes - total ||
-        relative_files.size() >= kMaxFiles) return SnapshotResult::kSkipped;
+    if (ec) return SnapshotResult::kFailed;
+    if ((max_bytes != 0 &&
+         (bytes > max_bytes || total > max_bytes - bytes)) ||
+        (max_files != 0 && relative_files.size() >= max_files)) {
+      return SnapshotResult::kSkipped;
+    }
+    if (bytes > std::numeric_limits<std::uintmax_t>::max() - total)
+      return SnapshotResult::kFailed;
     total += bytes;
     relative_files.push_back(it->path().lexically_relative(source));
   }
