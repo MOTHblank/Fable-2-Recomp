@@ -18,6 +18,8 @@
 #include "fable2_button_prompts.h"
 #include "fable2_prompt_overlay.h"
 
+extern "C" void __imp__UITextPrompt_Render(PPCContext& ctx,
+                                            uint8_t* base);
 extern "C" void __imp__UITextPrompt_RenderElement(PPCContext& ctx,
                                                    uint8_t* base);
 
@@ -46,6 +48,12 @@ inline bool WasVisibleAfterRender(uint32_t element, uint8_t* base) {
 }
 
 }  // namespace fable2::legacyprompt
+
+extern "C" void UITextPrompt_Render(PPCContext& ctx, uint8_t* base) {
+  fable2::promptoverlay::BeginLegacyTitleFrame();
+  __imp__UITextPrompt_Render(ctx, base);
+  fable2::promptoverlay::EndLegacyTitleFrame();
+}
 
 extern "C" void UITextPrompt_RenderElement(PPCContext& ctx, uint8_t* base) {
   const uint32_t element = ctx.r3.u32;
