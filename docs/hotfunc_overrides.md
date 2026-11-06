@@ -53,6 +53,7 @@ are hand-written readable C++ rewrites (see
 | `entity/ProcessGameStateUpdate_821C9008.cpp` | **hand-tuned** (was nv (34)) |
 | `yield/Yield_82CBD098.cpp` | nv (3) + batched yield |
 | `vblank/FrameLimiterWait_82242628.cpp` | **hand-tuned** (goto-free rewrite, volatile guest access; see below) |
+| `zlib/NativeInflate.cpp` | **native replacement** — host zlib-ng for Fable VFS/Scaleform zlib 1.2.3 and libpng zlib 1.1.4; repeated stream lookups use a thread-local weak cache rather than a global mutex per inflate call |
 
 Transforms:
 - **nv** — non-volatile `GV*/SV*` guest-RAM access (rules below).
