@@ -25,18 +25,34 @@ REXCVAR_DECLARE(bool, mouse_look);
 REXCVAR_DECLARE(int32_t, mouse_look_scale);
 REXCVAR_DECLARE(int32_t, mouse_look_scale_y);
 REXCVAR_DECLARE(bool, mouse_invert_y);
+REXCVAR_DECLARE(int32_t, mouse_deadzone_compensation);
 
 extern "C" void __imp__ProcessAndProcessAndProcess1013_822B2D60(
     PPCContext& ctx, uint8_t* base);
 
 namespace {
 
-uint16_t AddMouseAxis(uint16_t raw, float pixels, int32_t units_per_pixel) {
+uint16_t AddMouseAxis(uint16_t raw, float pixels, int32_t units_per_pixel,
+                      int32_t deadzone_compensation) {
   const int32_t native_axis =
       static_cast<int32_t>(static_cast<int16_t>(raw));
   const double scaled = std::clamp(
       double(pixels) * double(units_per_pixel), -32767.0, 32767.0);
-  const int32_t mouse_axis = static_cast<int32_t>(std::lround(scaled));
+  int32_t mouse_axis = static_cast<int32_t>(std::lround(scaled));
+
+  // Match ReXGlue's Native-stick mouse mapping: compensation affects only the
+  // mouse component, not the physical controller. It remaps non-zero motion
+  // from [1..32767] into [deadzone+1..32767], preserving fine relative motion
+  // after the game's stick deadzone without adding delayed/flick buffering.
+  const int32_t deadzone = std::clamp(deadzone_compensation, 0, 12000);
+  if (mouse_axis != 0 && deadzone > 0) {
+    const int32_t sign = mouse_axis < 0 ? -1 : 1;
+    const int32_t magnitude = std::abs(mouse_axis);
+    const int32_t compensated = static_cast<int32_t>(std::lround(
+        deadzone + double(magnitude) * double(32767 - deadzone) / 32767.0));
+    mouse_axis = sign * std::clamp(compensated, 1, 32767);
+  }
+
   const int32_t combined =
       std::clamp(native_axis + mouse_axis, -32768, 32767);
   return static_cast<uint16_t>(static_cast<int16_t>(combined));
@@ -100,7 +116,9 @@ extern "C" void ProcessAndProcessAndProcess1013_822B2D60(
 
   const int32_t scale_x = REXCVAR_GET(mouse_look_scale);
   const int32_t scale_y = REXCVAR_GET(mouse_look_scale_y);
-  if (scale_x < 1 || scale_x > 4096 || scale_y < 1 || scale_y > 4096) {
+  const int32_t deadzone = REXCVAR_GET(mouse_deadzone_compensation);
+  if (scale_x < 1 || scale_x > 4096 || scale_y < 1 || scale_y > 4096 ||
+      deadzone < 0 || deadzone > 12000) {
     return;
   }
 
@@ -113,8 +131,10 @@ extern "C" void ProcessAndProcessAndProcess1013_822B2D60(
   const int32_t y_scale =
       REXCVAR_GET(mouse_invert_y) ? scale_y : -scale_y;
 
-  const uint16_t injected_rx = AddMouseAxis(native_rx, mouse_dx, scale_x);
-  const uint16_t injected_ry = AddMouseAxis(native_ry, mouse_dy, y_scale);
+  const uint16_t injected_rx =
+      AddMouseAxis(native_rx, mouse_dx, scale_x, deadzone);
+  const uint16_t injected_ry =
+      AddMouseAxis(native_ry, mouse_dy, y_scale, deadzone);
   REX_STORE_U16(state_ptr + 12, injected_rx);
   REX_STORE_U16(state_ptr + 14, injected_ry);
   fable2::mouselook::record_native_input_sample(
