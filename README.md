@@ -237,7 +237,7 @@ camera pipeline authoritative:
 | Argument | Effect |
 |---|---|
 | `--mouse_look <bool>` | Enable/disable mouse look (default `true`) |
-| `--mouse_direct_look <bool>` | Use raw mouse deltas through the native camera input consumer on ordinary hero-follow frames (default `false`); constrained/special cameras fall back automatically to SDK stick emulation. |
+| `--mouse_direct_look <bool>` | Add raw mouse deltas to guest user 0's final native right-stick state (default `false`); LT/LB/R3 camera modes temporarily use SDK stick emulation. |
 | `--mouse_look_scale <n>` | Horizontal sensitivity (default `256`) |
 | `--mouse_look_scale_y <n>` | Vertical sensitivity (default `256`) |
 | `--mouse_invert_y <bool>` | Invert vertical movement (default `false`) |
@@ -258,16 +258,17 @@ handling, authored framing, lock-on behavior, easing, camera limits, and other
 special camera rules remain downstream in the original game code. Existing
 controller stick input is combined with mouse input rather than replaced.
 
-The camera hook at `0x822A47F8` is now classification-only. It verifies the
-ordinary hero-follow camera and watches for meaningful native camera
-corrections. If the game switches to a secondary/scripted camera or resolves a
-constrained pose, the SDK automatically resumes its ordinary virtual-stick
-mouse route. The verified user-0 `XINPUT_STATE` also makes special controls
-explicit: **LT target lock, LB first-person, and R3 View Hero** force Native
-stick immediately. Direct re-entry uses hysteresis (leave on a >0.50 native
-pose correction, re-enter only below 0.20 for three clear hero-follow frames),
-and every route change clears pending displacement so no input can accumulate
-and snap when hero-follow resumes.
+The camera hook at `0x822A47F8` is now **observational only**. It drains
+the raw per-frame accumulator after input processing and records native camera
+telemetry, but it never decides routing and never edits the camera. Collision,
+obstruction, scripted framing and other camera constraints therefore remain in
+the normal downstream game pipeline exactly as they do for a physical stick.
+
+Routing belongs to the verified guest-user-0 `X_INPUT_STATE` boundary.
+**LT target lock, LB first-person, and R3 View Hero** temporarily force the
+SDK's ordinary virtual-stick mouse path. Releasing those controls lets the next
+successful user-0 poll re-enable Direct mode; live mode changes clear eligibility
+first so stale raw motion cannot cross the transition.
 
 Deadzone compensation applies to **both** modes and remaps only the mouse
 component before it is combined with the physical stick. Flick buffering
