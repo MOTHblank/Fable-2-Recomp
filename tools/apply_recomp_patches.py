@@ -18,7 +18,6 @@ Set FABLE2_RECOMP_PATCHES=0 to skip all patches (used for A/B runs).
 """
 
 import os
-import re
 import sys
 
 GENERATED_DIR = sys.argv[1] if len(sys.argv) > 1 else "generated/default"
@@ -72,7 +71,10 @@ def _patch_direct_mouse_native_camera(files) -> int:
             )
 
         # Keep the declarations in the same TU as the generated function.
+        # Key this on our cvar declaration rather than the header include so a
+        # future codegen/PCH change cannot leave the injected body undeclared.
         include_anchor = '#include "fable_2_pch.h"\n'
+        declaration_marker = 'REXCVAR_DECLARE(bool, mouse_direct_look);'
         declarations = (
             '#include "fable_2_pch.h"\n'
             '#include "mouse_look.h"\n'
@@ -85,7 +87,7 @@ def _patch_direct_mouse_native_camera(files) -> int:
             'REXCVAR_DECLARE(int32_t, mouse_look_scale_y);\n'
             'REXCVAR_DECLARE(bool, mouse_invert_y);\n'
         )
-        if '#include "mouse_look.h"' not in data:
+        if declaration_marker not in data:
             if include_anchor not in data:
                 raise RuntimeError(f"{fname}: generated PCH include anchor missing")
             data = data.replace(include_anchor, declarations, 1)
