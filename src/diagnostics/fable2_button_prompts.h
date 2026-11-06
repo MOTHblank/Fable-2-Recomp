@@ -50,6 +50,25 @@ inline bool KeyboardPromptModeActive() {
   return rex::cvar::GetFlagByName("input_prompt_keyboard") != "false";
 }
 
+inline const char* ActionCvarName(size_t action) {
+  static constexpr std::array<const char*, 16> names{
+      "keybind_a", "keybind_b", "keybind_x", "keybind_y",
+      "keybind_left_shoulder", "keybind_right_shoulder",
+      "keybind_left_trigger", "keybind_right_trigger",
+      "keybind_start", "keybind_back",
+      "keybind_lstick_press", "keybind_rstick_press",
+      "keybind_dpad_up", "keybind_dpad_down",
+      "keybind_dpad_left", "keybind_dpad_right"};
+  return action < names.size() ? names[action] : nullptr;
+}
+
+inline std::string CurrentActionLabel(size_t action,
+                                      size_t max_length = 5) {
+  const char* cvar = ActionCvarName(action);
+  return cvar ? DisplayKey(rex::cvar::GetFlagByName(cvar), max_length)
+              : std::string{};
+}
+
 #ifdef _WIN32
 struct Patched {
   uint8_t* address;
@@ -65,6 +84,28 @@ inline std::atomic<bool>& TitleSourceActive() {
 
 inline bool TitleSourceRewriteActive() {
   return TitleSourceActive().load(std::memory_order_acquire);
+}
+
+inline std::atomic<int64_t>& TitleSourceSeenNs() {
+  static std::atomic<int64_t> value{0};
+  return value;
+}
+inline int64_t PromptClockNanoseconds() {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+inline void NoteTitleSourceSeen() {
+  TitleSourceSeenNs().store(PromptClockNanoseconds(),
+                            std::memory_order_release);
+}
+inline bool TitleSourceRecentlySeen() {
+  constexpr int64_t kAliveNs =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::milliseconds(500))
+          .count();
+  const int64_t last = TitleSourceSeenNs().load(std::memory_order_acquire);
+  return last != 0 && PromptClockNanoseconds() - last <= kAliveNs;
 }
 
 inline std::atomic<uint32_t>& TitleExpectedBakedElements() {
@@ -296,15 +337,12 @@ inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
       const bool title = starts_press && has_tag && in_title_page;
       if (!title && !nul_boundary) continue;
 
-      const auto tag_rewritten = Rewrite(text, labels);
-      const auto rewritten = RewriteFixedInstructions(tag_rewritten, actions);
-      if (rewritten == text) {
-        i = end;
-        continue;
-      }
-
-      ++matches;
+      // Layout metadata is useful even when the current binding cannot fit in
+      // the seven-unit source tag. The legacy drawable fallback has no such
+      // width constraint, so publish verified title structure before deciding
+      // whether an in-place source rewrite is possible.
       if (title) {
+        NoteTitleSourceSeen();
         const size_t tag_count = KnownTagCount(text);
         if (tag_count != 0 && text.size() >= tag_count * 6) {
           // Each seven-character <x_img> tag is one laid-out sprite in the
@@ -326,6 +364,15 @@ inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
           }
         }
       }
+
+      const auto tag_rewritten = Rewrite(text, labels);
+      const auto rewritten = RewriteFixedInstructions(tag_rewritten, actions);
+      if (rewritten == text) {
+        i = end;
+        continue;
+      }
+
+      ++matches;
       // Guest allocations and cached lengths are never resized here. Every
       // source-layer rewrite must preserve the exact UTF-16 code-unit count;
       // reject future rewrite rules that would shorten as well as grow it.
@@ -356,24 +403,11 @@ inline void Scan(uint8_t* arena, uintptr_t kStart, uintptr_t kEnd,
 }
 
 inline ActionLabels CurrentActions() {
-  return {
-      DisplayKey(rex::cvar::GetFlagByName("keybind_a")),
-      DisplayKey(rex::cvar::GetFlagByName("keybind_b")),
-      DisplayKey(rex::cvar::GetFlagByName("keybind_x")),
-      DisplayKey(rex::cvar::GetFlagByName("keybind_y")),
-      DisplayKey(rex::cvar::GetFlagByName("keybind_left_shoulder")),
-      DisplayKey(rex::cvar::GetFlagByName("keybind_right_shoulder")),
-      DisplayKey(rex::cvar::GetFlagByName("keybind_left_trigger")),
-      DisplayKey(rex::cvar::GetFlagByName("keybind_right_trigger")),
-      DisplayKey(rex::cvar::GetFlagByName("keybind_start")),
-      DisplayKey(rex::cvar::GetFlagByName("keybind_back")),
-      DisplayKey(rex::cvar::GetFlagByName("keybind_lstick_press")),
-      DisplayKey(rex::cvar::GetFlagByName("keybind_rstick_press")),
-      DisplayKey(rex::cvar::GetFlagByName("keybind_dpad_up")),
-      DisplayKey(rex::cvar::GetFlagByName("keybind_dpad_down")),
-      DisplayKey(rex::cvar::GetFlagByName("keybind_dpad_left")),
-      DisplayKey(rex::cvar::GetFlagByName("keybind_dpad_right")),
-  };
+  ActionLabels labels{};
+  for (size_t i = 0; i < labels.size(); ++i) {
+    labels[i] = CurrentActionLabel(i);
+  }
+  return labels;
 }
 
 inline KeyLabels FaceKeys(const ActionLabels& actions) {
