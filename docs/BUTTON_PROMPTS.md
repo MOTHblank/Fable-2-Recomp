@@ -222,14 +222,17 @@ seven code units become seven ordinary glyphs after the native keycap rewrite.
 counted, so the adapter can prove whether the rendered layout actually consumed
 the source rewrite.
 
-The conservative path still forwards every element to the original renderer
-and uses documented post-render state only as a visibility/blink signal. After
-one frame positively matches the source-derived baked layout, the adapter also
+Every prompt element still runs through the complete stock
+`UITextPrompt_RenderElement` path, including visibility, animation and
+bookkeeping. The manifest now names its indirect drawable vtable slot 8 target,
+`UITextPrompt_DrawableRender` at `0x82C12F18..0x82C12F78` (0x60 bytes).
+After one frame positively matches the source-derived baked layout, the adapter
 records the **exact guest element pointer** seen at the source-derived image
-ordinal. Only that same pointer at that same ordinal may have its next image
-draw skipped in keyboard mode. Text glyphs, unknown layouts, different element
-objects and controller mode always continue through the stock renderer. No
-material, texture bank, tag table or interaction behavior is modified.
+ordinal. Only when that same pointer reaches that same ordinal again in
+keyboard mode is its final drawable-leaf call skipped. Text glyphs, unknown
+layouts, different element objects and controller mode always continue through
+the stock renderer. No material, texture bank, tag table or interaction
+behavior is modified.
 
 The legacy host keycap is allowed only when all of the following are true:
 
@@ -247,11 +250,15 @@ As soon as a later title layout matches the expanded keyboard-glyph count, the
 fallback disables itself. The visibility pulse expires after roughly 110 ms,
 so it follows the title prompt's original blink instead of remaining
 continuously visible. When the exact sprite is safely suppressed, the host
-draws a normal compact keycap at the authored bottom-center title position.
-When only count-level evidence exists, it retains the larger opaque cover
+draws a normal compact keycap. The named drawable leaf also exposes the
+caller's already-prepared scratch object; the adapter inspects only its first
+96 bytes for an adjacent float/integer canvas-coordinate pair within ±160 X
+and ±120 Y of the verified authored `(640,560)` title position. A trustworthy
+pair becomes the keycap anchor; otherwise `(640,560)` remains the fallback.
+When only count-level evidence exists, the larger opaque cover is retained
 instead of risking a guest-renderer skip. `ui_prompt_legacy_offset_x` and
-`ui_prompt_legacy_offset_y` (default 0, range -128..128) allow live alignment
-correction without a code change.
+`ui_prompt_legacy_offset_y` (default 0, range -128..128) still allow live
+alignment correction.
 
 This remains a targeted fallback rather than a global controller-texture
 replacement. Switching back to a controller immediately uses the stock
