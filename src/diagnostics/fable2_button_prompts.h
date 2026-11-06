@@ -320,6 +320,7 @@ inline void Stop() {
   }
 }
 #else
+inline bool TitleSourceRewriteActive() { return false; }
 inline void OnFrame(uint8_t*) {}
 inline void Stop() {}
 #endif
