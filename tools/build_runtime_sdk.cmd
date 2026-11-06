@@ -60,7 +60,7 @@ cmake -S "%SOURCE%" -B "%BUILD%" -G Ninja ^
   -DCMAKE_C_FLAGS="-march=x86-64-v2 -g" -DCMAKE_CXX_FLAGS="-march=x86-64-v2 -g" ^
   -DREXGLUE_USE_D3D12=ON -DREXGLUE_USE_VULKAN=OFF ^
   -DREXGLUE_ENABLE_TRACY=OFF -DREXGLUE_ENABLE_FIDELITYFX=OFF ^
-  -DREXGLUE_BUILD_TESTS=OFF || exit /b 1
+  -DREXGLUE_BUILD_TESTS=OFF -DREXGLUE_REGISTER_PACKAGE=OFF || exit /b 1
 cmake --build "%BUILD%" --target rexruntime rexgpu-xenos || exit /b 1
 python "%~dp0stage_renderer_sdk.py" "%OFFICIAL%" "%SOURCE%" "%BUILD%" "%STAGED%" --configuration %CONFIGURATION% || exit /b 1
 exit /b 0
