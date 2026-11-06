@@ -520,7 +520,9 @@ void XeAlphaTest(float alpha) {
 uint XeAlphaToCoverage(float alpha, float4 position) {
   uint coverage = 0xFFFFFFFFu;
   if (xe_alpha_to_mask) {
-    uint2 pixel = uint2(position.xy);
+    // Alpha-to-coverage is guest raster state. Keep its 2x2 threshold pattern
+    // stable when one guest pixel is expanded to multiple host pixels.
+    uint2 pixel = uint2(floor(position.xy / XeDrawResolutionScale()));
     uint offset_index = (pixel.y & 1u) | ((pixel.x & 1u) << 1);
     float offset = float((xe_alpha_to_mask >> (offset_index * 2u)) & 3u);
     coverage = 0u;
