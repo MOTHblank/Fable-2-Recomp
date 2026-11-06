@@ -1,13 +1,15 @@
 // fable_2 - ReXGlue Recompiled Project
 //
-// Fit the game to the window, part 2: the HUD on a wide window.
+// Fit the game to the window, part 2: HUD and native 2D layout across
+// supported wide and narrow window aspects.
 //
 // The HUD, the title screen and the menus are Anark Gameface presentations
 // (Art\GUI\Gameface\*.bgf, Lua in guiscripts.bnk). They are laid out on a
 // 1280x720 canvas, and the GUI camera follows the same aspect as the 3D view,
 // so on a window of aspect A the visible canvas runs from 640 - 360*A to
-// 640 + 360*A. Nothing moves the HUD out of the centre 0..1280 part, so it
-// sits in a 16:9 box in the middle of a wide window.
+// 640 + 360*A. These are logical GameFace coordinates, not physical output
+// pixels. Without adaptation, edge elements remain anchored to the authored
+// 16:9 region instead of following the actual visible canvas.
 //
 // The HUD already has a widescreen layout. Each edge element carries a
 // WidescreenAdapter behaviour (Scripts\Gameface\HUD\WidescreenAdapter.lua):
