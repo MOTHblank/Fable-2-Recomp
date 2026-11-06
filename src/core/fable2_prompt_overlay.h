@@ -605,18 +605,28 @@ class PromptOverlayDialog final : public rex::ui::ImGuiDialog {
                              REXCVAR_GET(ui_prompt_legacy_offset_y));
         const ImVec2 text_size =
             font->CalcTextSizeA(font_size, 1000.0f, 0.0f, label.c_str());
-        // Opaque and a little larger than the GameFace fallback: this path is
-        // intentionally a cover for an already-baked Xbox face-button sprite.
-        const float box_w = std::max(34.0f, text_size.x + 16.0f);
-        const float box_h = std::max(27.0f, text_size.y + 10.0f);
+        const bool sprite_suppressed = LegacyTitleSpriteRecentlySuppressed();
+
+        // When the exact baked image element is known, its guest draw has
+        // already been suppressed and this can look like an ordinary keycap.
+        // Count-only/unknown layouts keep the larger opaque cover so the
+        // conservative fallback still masks the native Xbox sprite.
+        const float box_w = sprite_suppressed
+                                ? std::max(24.0f, text_size.x + 12.0f)
+                                : std::max(34.0f, text_size.x + 16.0f);
+        const float box_h = sprite_suppressed
+                                ? std::max(20.0f, text_size.y + 7.0f)
+                                : std::max(27.0f, text_size.y + 10.0f);
         const ImVec2 p0(cx - box_w * 0.5f, cy - box_h * 0.5f);
         const ImVec2 p1(cx + box_w * 0.5f, cy + box_h * 0.5f);
         constexpr ImU32 kLegacyFill = IM_COL32(28, 25, 21, 255);
+        const ImU32 fill = sprite_suppressed ? kFill : kLegacyFill;
         draw->AddRectFilled(ImVec2(p0.x + 1.5f, p0.y + 2.0f),
                             ImVec2(p1.x + 1.5f, p1.y + 2.0f),
                             kShadow, 4.0f);
-        draw->AddRectFilled(p0, p1, kLegacyFill, 4.0f);
-        draw->AddRect(p0, p1, kBorder, 4.0f, 0, 1.2f);
+        draw->AddRectFilled(p0, p1, fill, 4.0f);
+        draw->AddRect(p0, p1, kBorder, 4.0f, 0,
+                      sprite_suppressed ? 1.0f : 1.2f);
         draw->AddText(font, font_size,
                       ImVec2(cx - text_size.x * 0.5f,
                              cy - text_size.y * 0.5f),
