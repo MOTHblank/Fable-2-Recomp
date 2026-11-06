@@ -32,6 +32,15 @@ const bool kPromptGuiBridgeInstalled = [] {
 }();
 }  // namespace
 
+#ifdef FABLE2_REMOTE_CONTROL
+// Keep fable2_state_probe.h single-TU: it contains other strong guest-function
+// overrides. Hotfuncs that need to feed it use this narrow bridge instead of
+// including the probe header themselves.
+extern "C" void Fable2StateProbeObservePad(uint32_t state_ptr) {
+  fable2::stateprobe::observe_a_button(state_ptr);
+}
+#endif
+
 // Native guest UI button markup: automatic last-active device, or a manual
 // override when the user wants only keyboard or only controller prompts.
 REXCVAR_DEFINE_STRING(ui_prompt_mode, "auto", "Input",
