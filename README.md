@@ -241,7 +241,7 @@ camera pipeline authoritative:
 | `--mouse_look_scale <n>` | Horizontal sensitivity (default `256`) |
 | `--mouse_look_scale_y <n>` | Vertical sensitivity (default `256`) |
 | `--mouse_invert_y <bool>` | Invert vertical movement (default `false`) |
-| `--mouse_deadzone_compensation <n>` | Optional mouse-only deadzone compensation for Native stick mode, 0..12000 (default `0`) |
+| `--mouse_deadzone_compensation <n>` | Optional mouse-only stick-deadzone compensation in both modes, 0..12000 (default `0`); physical controller input is unchanged. |
 | `--mouse_flick_buffer_polls <n>` | Retain clipped mouse flick movement for 0..12 extra Native-stick input polls (default `4`). |
 
 The launcher exposes **Advanced → Mouse → Camera input mode**. **Native stick**
@@ -269,9 +269,10 @@ pose correction, re-enter only below 0.20 for three clear hero-follow frames),
 and every route change clears pending displacement so no input can accumulate
 and snap when hero-follow resumes.
 
-Deadzone compensation and flick buffering apply only to **Native stick** mode;
-Direct mode deliberately feeds the current raw displacement to the native
-camera consumer without those delayed-input helpers.
+Deadzone compensation applies to **both** modes and remaps only the mouse
+component before it is combined with the physical stick. Flick buffering
+remains **Native stick only**: Direct mode deliberately feeds only the current
+raw displacement, so it never continues moving after the mouse has stopped.
 
 Enable **Log mouse input and camera hook diagnostics** in Advanced → Mouse
 (`mouse_look_camera_diag = true`) to write periodic `[mouse-camera]` lines
