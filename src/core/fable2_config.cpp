@@ -82,11 +82,12 @@ keyboard_gamepad_map = "LMB:X,RMB:Y,MMB:B,Shift:A,E:A,Q:LT,Tab:RB,R:RT,Z:LB,B:B,
 mouse_look = true
 
 # Hybrid raw mouse input through the game's native camera pipeline.
-# On verified ordinary hero-follow frames, raw SDL deltas are injected into
-# the local XINPUT_STATE consumed by the native camera controller. Collision,
-# obstruction handling, authored framing, lock-ons, easing and clamps remain
-# game-owned. Special/constrained cameras automatically use the SDK's ordinary
-# virtual right-stick path instead. Default: false.
+# On verified ordinary hero-follow frames, raw SDL deltas are added to the
+# final merged XINPUT_STATE returned by the game's XamInputGetState wrapper
+# for guest user 0. Physical-pad input remains additive; users 1-3 are untouched.
+# Collision, authored framing, lock-ons, easing and clamps remain game-owned.
+# Special/constrained cameras automatically use the SDK's ordinary virtual
+# right-stick path instead. Default: false.
 mouse_direct_look = false
 
 # Mouse-look sensitivity: guest right-stick units per host mouse pixel.
