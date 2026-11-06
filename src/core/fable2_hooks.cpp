@@ -254,10 +254,9 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
   const uint32_t cam = r31.u32;
   const bool direct = REXCVAR_GET(mouse_look) &&
                       REXCVAR_GET(mouse_direct_look);
-  // This hook can run on cinematic and secondary cameras. Never carry the
-  // hero's accumulated orbit or stale SDL input into another camera, or back
-  // into hero control after a scripted sequence. All state here is guest-thread
-  // local; request_reset also clears the cross-thread raw input accumulator.
+  // This hook can run on cinematic and secondary cameras. Never carry stale
+  // SDL displacement into another camera, or back into hero control after a
+  // scripted sequence. request_reset clears the cross-thread raw accumulator.
   static uint32_t last_cam = 0;
   static bool was_direct = false;
   const bool camera_changed = cam != last_cam;
@@ -317,10 +316,11 @@ void fable2_hook_direct_mouse_look(PPCRegister& r31, PPCRegister& r1) {
     if (cfg.mouse_look_camera_diag && calls % 300 == 0) {
       REXSYS_INFO(
           "[mouse-camera] enabled=1 hook={} eligible={} not-hero={} "
-          "native-constraint={} bad-stack={} raw-events={} capture-resets={} "
-          "cam=0x{:08X} sp=0x{:08X}",
+          "native-constraint={} bad-stack={} raw-events={} native-injections={} "
+          "capture-resets={} cam=0x{:08X} sp=0x{:08X}",
           calls, eligible, not_hero, constrained, invalid_output,
           fable2::mouselook::raw_motion_events().load(std::memory_order_relaxed),
+          fable2::mouselook::native_injections().load(std::memory_order_relaxed),
           fable2::mouselook::capture_resets().load(std::memory_order_relaxed),
           cam, r1.u32);
     }
